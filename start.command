@@ -5,6 +5,21 @@ cd "$(dirname "$0")"
 # ── Helpers ──
 
 fail=0
+INSTALL_WHISPER=0
+
+for arg in "$@"; do
+  case "$arg" in
+    --with-voice)
+      INSTALL_WHISPER=1
+      ;;
+    --help|-h)
+      echo "Usage: ./start.command [--with-voice]"
+      echo
+      echo "  --with-voice   Install whisper-cli via Homebrew before launch."
+      exit 0
+      ;;
+  esac
+done
 
 step() {
   echo
@@ -49,6 +64,7 @@ version_gte() {
 # ── Preflight Checks ──
 
 step "Checking environment"
+SDK_PATH=""
 
 # 0. macOS
 if [ "$(uname)" != "Darwin" ]; then
@@ -115,7 +131,8 @@ fi
 
 # 6. macOS SDK
 if xcrun --sdk macosx --show-sdk-path &>/dev/null; then
-  pass "macOS SDK at $(xcrun --sdk macosx --show-sdk-path)"
+  SDK_PATH=$(xcrun --sdk macosx --show-sdk-path)
+  pass "macOS SDK at $SDK_PATH"
 else
   fail "macOS SDK not found. Xcode Command Line Tools may be broken."
   echo
@@ -141,6 +158,8 @@ if command -v clang++ &>/dev/null; then
   echo 'int main() { return 0; }' >> "$PROBE_FILE"
   if clang++ -std=c++17 -c "$PROBE_FILE" -o "$PROBE_DIR/probe.o" 2>/dev/null; then
     pass "C++ standard headers OK"
+  elif [ -n "$SDK_PATH" ] && clang++ -std=c++17 -isysroot "$SDK_PATH" -I"$SDK_PATH/usr/include/c++/v1" -c "$PROBE_FILE" -o "$PROBE_DIR/probe.o" 2>/dev/null; then
+    pass "C++ standard headers OK (using SDK include path)"
   else
     fail "C++ headers are broken (<functional> not found)."
     echo
@@ -182,10 +201,40 @@ fi
 echo
 echo "All checks passed."
 
+# ── Optional Voice Setup ──
+
+if command -v whisper-cli &>/dev/null || command -v whisper &>/dev/null; then
+  pass "Whisper CLI found (voice input ready)"
+elif [ "$INSTALL_WHISPER" -eq 1 ]; then
+  step "Installing optional voice dependency (Whisper)"
+  if command -v brew &>/dev/null; then
+    if brew install whisper-cli; then
+      pass "Whisper CLI installed"
+    else
+      echo "  Could not install whisper-cli automatically."
+      echo "  You can retry manually: brew install whisper-cli"
+    fi
+  else
+    echo "  Homebrew not found. Install whisper manually if needed."
+    echo "  See: https://brew.sh"
+  fi
+else
+  echo
+  echo "  INFO: Voice input is optional and Whisper CLI is not installed."
+  echo "  Install anytime with:"
+  echo "    brew install whisper-cli"
+  echo "  Or run this script with:"
+  echo "    ./start.command --with-voice"
+fi
+
 # ── Install ──
 
 if [ ! -d "node_modules" ]; then
   step "Installing dependencies"
+  if [ -n "$SDK_PATH" ]; then
+    export SDKROOT="$SDK_PATH"
+    export CXXFLAGS="-isysroot $SDKROOT -I$SDKROOT/usr/include/c++/v1 ${CXXFLAGS:-}"
+  fi
   if ! npm install; then
     echo
     echo "npm install failed. Most common fixes:"

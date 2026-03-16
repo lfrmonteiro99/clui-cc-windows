@@ -6,6 +6,7 @@ echo "========================="
 echo
 
 fail=0
+SDK_PATH=""
 
 # Compare two dotted versions: returns 0 if $1 >= $2
 version_gte() {
@@ -83,7 +84,8 @@ fi
 
 # macOS SDK
 if xcrun --sdk macosx --show-sdk-path &>/dev/null; then
-  check "macOS SDK" "1" "$(xcrun --sdk macosx --show-sdk-path)"
+  SDK_PATH=$(xcrun --sdk macosx --show-sdk-path)
+  check "macOS SDK" "1" "$SDK_PATH"
 else
   check "macOS SDK" "0" "not found — reinstall Xcode CLT"
 fi
@@ -99,6 +101,8 @@ if command -v clang++ &>/dev/null; then
   echo 'int main() { return 0; }' >> "$PROBE_DIR/probe.cpp"
   if clang++ -std=c++17 -c "$PROBE_DIR/probe.cpp" -o "$PROBE_DIR/probe.o" 2>/dev/null; then
     check "C++ headers" "1" "<functional> compiles"
+  elif [ -n "$SDK_PATH" ] && clang++ -std=c++17 -isysroot "$SDK_PATH" -I"$SDK_PATH/usr/include/c++/v1" -c "$PROBE_DIR/probe.cpp" -o "$PROBE_DIR/probe.o" 2>/dev/null; then
+    check "C++ headers" "1" "<functional> compiles (using SDK include path)"
   else
     check "C++ headers" "0" "<functional> missing — reinstall Xcode CLT"
   fi

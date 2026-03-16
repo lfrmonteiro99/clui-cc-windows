@@ -82,6 +82,16 @@ Then retry:
 npm install
 ```
 
+If CLT is installed but the error still appears on newer macOS versions, compile explicitly against the SDK include path:
+
+```bash
+SDK=$(xcrun --sdk macosx --show-sdk-path)
+clang++ -std=c++17 -isysroot "$SDK" -I"$SDK/usr/include/c++/v1" -x c++ - -o /dev/null <<'EOF'
+#include <functional>
+int main() { return 0; }
+EOF
+```
+
 ## Install Fails on `node-pty`
 
 `node-pty` is native and requires macOS toolchains. Confirm:

@@ -19,6 +19,31 @@ A lightweight, transparent desktop overlay for [Claude Code](https://docs.anthro
 - **File & screenshot attachments** — paste images or attach files directly.
 - **Dual theme** — dark/light mode with system-follow option.
 
+## Why Clui CC Is Different
+
+- **Claude Code, but visual** — keep CLI power while getting a fast desktop UX for approvals, history, and multitasking.
+- **Human-in-the-loop safety** — tool calls can be reviewed/approved in-app before execution.
+- **Session-native workflow** — each tab runs an independent Claude session you can resume later.
+- **Mostly local-first** — core behavior runs through your local Claude CLI, with minimal network dependency.
+
+## Architecture At a Glance
+
+Clui CC is an Electron app with three layers:
+
+```
+Renderer (React UI) -> Preload bridge -> Main process (ControlPlane/RunManager/PermissionServer)
+```
+
+Flow:
+
+1. UI sends a prompt from a tab.
+2. Main process starts `claude -p` for that tab.
+3. Stream events are normalized and rendered live.
+4. Tool permission requests are intercepted and shown in the approval UI.
+5. Session state is tracked so you can resume work.
+
+See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full technical deep-dive.
+
 ## Quick Start (Recommended)
 
 Run these commands one at a time:
@@ -39,6 +64,12 @@ cd clui-cc
 
 ```bash
 ./start.command
+```
+
+Optional (install voice dependency automatically first):
+
+```bash
+./start.command --with-voice
 ```
 
 `start.command` runs environment checks first and prints exact fix commands if something is missing. If checks pass, it installs dependencies, builds, and launches the app.
