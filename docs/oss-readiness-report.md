@@ -54,8 +54,8 @@
 ## 3. Licensing
 
 ### Project License
-- **Current state:** No LICENSE file, no `license` field in package.json
-- **Action:** **MUST-FIX** — Add MIT license before publishing
+- **Current state:** MIT LICENSE file present in repo root
+- **Status:** Resolved
 
 ### Dependencies (all MIT-compatible)
 | Package | License | Copyleft Risk |
@@ -81,7 +81,7 @@
 | `resources/trayTemplate*.png` | Original | Document in LICENSE |
 | Root marketing screenshots | Not included in current repo root | Optional to add later if needed for release collateral |
 
-**Verdict:** Add LICENSE file. ~~Verify notification.mp3 provenance~~ — resolved (replaced with CC0 generated chime).
+**Verdict:** ~~Add LICENSE file~~ — resolved. ~~Verify notification.mp3 provenance~~ — resolved (replaced with CC0 generated chime).
 
 ---
 
@@ -98,40 +98,40 @@
 - Zero TypeScript errors confirmed
 - electron-vite handles main/preload/renderer bundling
 
-### Missing for OSS
+### OSS Documentation
 | Item | Status | Priority |
 |------|--------|----------|
-| README.md | Missing | **Must-fix** |
-| CONTRIBUTING.md | Missing | Must-fix |
-| SECURITY.md | Missing | Must-fix |
-| CODE_OF_CONDUCT.md | Missing | Must-fix |
-| Architecture docs | Missing | Must-fix |
-| .env.example | Not needed | N/A — document explicitly |
+| README.md | Present | Resolved |
+| CONTRIBUTING.md | Present | Resolved |
+| SECURITY.md | Present | Resolved |
+| CODE_OF_CONDUCT.md | Present | Resolved |
+| Architecture docs | Present (`docs/ARCHITECTURE.md`) | Resolved |
+| .env.example | Not needed | N/A — documented in README |
 
 ---
 
 ## 5. Repository Hygiene
 
 ### Files to Exclude from Public Repo
-| Path | Reason |
-|------|--------|
-| `docs/protocol-captures/` | Contains local paths, session data |
-| `docs/claude-permission-probe.md` | Contains local path references |
-| `CLUI-PRD.md` | Internal product requirements |
-| `CODEX_REPORT_INTERACTIVE_COMMANDS.md` | Internal dev report |
-| `spike/` | Experimental probes, not production code |
-| `src/main/probe/` | Internal contract/permission test utilities |
-| `soft_and_brief_notif_#2-*.mp3` | Stray temp file in root |
-| `start-pty.command` | Legacy PTY mode launcher |
-| `.claude/` | Project-scoped Claude settings |
+| Path | Reason | Current Status |
+|------|--------|----------------|
+| `docs/protocol-captures/` | Contains local paths, session data | Already removed |
+| `docs/claude-permission-probe.md` | Contains local path references | Already removed |
+| `CLUI-PRD.md` | Internal product requirements | Already removed |
+| `CODEX_REPORT_INTERACTIVE_COMMANDS.md` | Internal dev report | Already removed |
+| `spike/` | Experimental probes, not production code | Already removed |
+| `src/main/probe/` | Internal contract/permission test utilities | Already removed |
+| `soft_and_brief_notif_#2-*.mp3` | Stray temp file in root | Already removed |
+| `start-pty.command` | Legacy PTY mode launcher | Already removed |
+| `.claude/` | Project-scoped Claude settings | Gitignored |
 
-### .gitignore Gaps
-Current `.gitignore` is minimal. Should add:
-- `out/` (electron-builder output)
-- `*.log`
-- `.env*`
-- `*.swp`, `*.swo`
-- OS artifacts beyond `.DS_Store`
+### .gitignore Coverage
+Current `.gitignore` now covers all previously identified gaps:
+- `out/` (electron-builder output) — present
+- `*.log` — present
+- `.env*` — present
+- `*.swp`, `*.swo` — present
+- OS artifacts (`Thumbs.db`, `Desktop.ini`) — present
 
 ---
 
@@ -151,11 +151,11 @@ No telemetry, analytics, auto-updater, or CDN dependencies.
 
 | Risk | Severity | Status |
 |------|----------|--------|
-| No LICENSE file | **Critical** | Fix in this branch |
-| No README | **Critical** | Fix in this branch |
-| Protocol captures contain local paths | **High** | Exclude from public repo |
+| No LICENSE file | **Critical** | Resolved — MIT LICENSE added |
+| No README | **Critical** | Resolved — README.md present |
+| Protocol captures contain local paths | **High** | Resolved — excluded from repo |
 | notification.mp3 unknown provenance | **Medium** | Resolved — replaced with CC0 generated chime |
-| No CONTRIBUTING/SECURITY/COC docs | **Medium** | Fix in this branch |
-| Internal docs (PRD, Codex reports) | **Low** | Exclude from public repo |
-| Probe utilities in src/main/probe/ | **Low** | Exclude from public repo |
-| macOS-only (no Windows/Linux) | **Low** | Document as known limitation |
+| No CONTRIBUTING/SECURITY/COC docs | **Medium** | Resolved — all present |
+| Internal docs (PRD, Codex reports) | **Low** | Resolved — excluded from repo |
+| Probe utilities in src/main/probe/ | **Low** | Resolved — excluded from repo |
+| macOS-only (no Windows/Linux) | **Low** | Documented in README as known limitation |

@@ -3,6 +3,8 @@
 CLI Version: 2.1.63 | Date: 2026-03-08
 Test session: 450d2d0f-4b03-4761-8ecd-8d179998127d
 
+> **Note:** This matrix was captured against CLI 2.1.63. The project now targets 2.1.71+. Some findings (especially the `--input-format stream-json` issue) may no longer apply. Re-test before relying on these results.
+
 ## Protocol Finding
 
 `--input-format stream-json` is **completely broken** in CLI 2.1.63 (hangs forever, 0 events).
