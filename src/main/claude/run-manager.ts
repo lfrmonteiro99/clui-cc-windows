@@ -1,10 +1,10 @@
-import { spawn, execSync, ChildProcess } from 'child_process'
+import { spawn, ChildProcess } from 'child_process'
 import { EventEmitter } from 'events'
 import { homedir } from 'os'
-import { join } from 'path'
 import { StreamParser } from '../stream-parser'
 import { normalize } from './event-normalizer'
 import { log as _log } from '../logger'
+import { findClaudeBinary, getLoginShellPath, ensureBinDirInPath } from '../platform'
 import type { ClaudeEvent, NormalizedEvent, RunOptions, EnrichedError } from '../../shared/types'
 
 const MAX_RING_LINES = 100
@@ -96,33 +96,8 @@ export class RunManager extends EventEmitter {
 
   constructor() {
     super()
-    this.claudeBinary = this._findClaudeBinary()
+    this.claudeBinary = findClaudeBinary()
     log(`Claude binary: ${this.claudeBinary}`)
-  }
-
-  private _findClaudeBinary(): string {
-    const candidates = [
-      '/usr/local/bin/claude',
-      '/opt/homebrew/bin/claude',
-      join(homedir(), '.npm-global/bin/claude'),
-    ]
-
-    for (const c of candidates) {
-      try {
-        execSync(`test -x "${c}"`, { stdio: 'ignore' })
-        return c
-      } catch {}
-    }
-
-    try {
-      return execSync('/bin/zsh -lc "whence -p claude"', { encoding: 'utf-8' }).trim()
-    } catch {}
-
-    try {
-      return execSync('/bin/bash -lc "which claude"', { encoding: 'utf-8' }).trim()
-    } catch {}
-
-    return 'claude'
   }
 
   private _getEnv(): NodeJS.ProcessEnv {
@@ -130,20 +105,13 @@ export class RunManager extends EventEmitter {
     delete env.CLAUDECODE
 
     if (!this._loginShellPath) {
-      try {
-        this._loginShellPath = execSync('/bin/zsh -lc "echo $PATH"', { encoding: 'utf-8' }).trim()
-      } catch {
-        this._loginShellPath = ''
-      }
+      this._loginShellPath = getLoginShellPath()
     }
     if (this._loginShellPath) {
       env.PATH = this._loginShellPath
     }
 
-    const binDir = this.claudeBinary.substring(0, this.claudeBinary.lastIndexOf('/'))
-    if (env.PATH && !env.PATH.includes(binDir)) {
-      env.PATH = `${binDir}:${env.PATH}`
-    }
+    ensureBinDirInPath(this.claudeBinary, env)
 
     return env
   }
