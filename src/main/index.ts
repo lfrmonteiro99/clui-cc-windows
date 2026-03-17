@@ -9,6 +9,7 @@ import { fetchCatalog, listInstalled, installPlugin, uninstallPlugin } from './m
 import { log as _log, LOG_FILE, flushLogs } from './logger'
 import { getProjectSessionKey } from './session-path'
 import { getWindowConfig } from './window-config'
+import { loadShortcutConfig, saveShortcutConfig, getSafeAlternatives } from './shortcut-config'
 import { IPC } from '../shared/types'
 import type { RunOptions, NormalizedEvent, EnrichedError } from '../shared/types'
 
@@ -907,13 +908,28 @@ app.whenReady().then(() => {
   }
 
 
-  // Primary: Option+Space (2 keys, doesn't conflict with shell)
-  // Fallback: Cmd+Shift+K kept as secondary shortcut
-  const primaryShortcut = process.platform === 'win32' ? 'CommandOrControl+Space' : 'Alt+Space'
-  const registered = globalShortcut.register(primaryShortcut, () => toggleWindow(`shortcut ${primaryShortcut}`))
+  // Register user-configured shortcut with automatic fallback on conflict
+  const shortcutConfig = loadShortcutConfig()
+  let primaryShortcut = shortcutConfig.primary
+  let registered = globalShortcut.register(primaryShortcut, () => toggleWindow(`shortcut ${primaryShortcut}`))
+
   if (!registered) {
-    log(`${primaryShortcut} shortcut registration failed`)
+    log(`${primaryShortcut} shortcut registration failed — trying alternatives`)
+    // Try safe alternatives until one works
+    for (const alt of getSafeAlternatives()) {
+      registered = globalShortcut.register(alt, () => toggleWindow(`shortcut ${alt}`))
+      if (registered) {
+        primaryShortcut = alt
+        saveShortcutConfig({ primary: alt })
+        log(`Registered fallback shortcut: ${alt}`)
+        break
+      }
+    }
+    if (!registered) {
+      log('All shortcut alternatives failed')
+    }
   }
+  // Secondary shortcut always registered
   globalShortcut.register('CommandOrControl+Shift+K', () => toggleWindow('shortcut Cmd/Ctrl+Shift+K'))
 
   const trayIconPath = join(__dirname, process.platform === 'darwin' ? '../../resources/trayTemplate.png' : '../../resources/icon.png')
