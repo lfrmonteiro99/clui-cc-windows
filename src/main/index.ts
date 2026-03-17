@@ -10,6 +10,7 @@ import { log as _log, LOG_FILE, flushLogs } from './logger'
 import { getProjectSessionKey } from './session-path'
 import { getWindowConfig } from './window-config'
 import { loadShortcutConfig, saveShortcutConfig, getSafeAlternatives } from './shortcut-config'
+import { buildTerminalCommand } from './terminal-launch'
 import { IPC } from '../shared/types'
 import type { RunOptions, NormalizedEvent, EnrichedError } from '../shared/types'
 
@@ -801,29 +802,12 @@ ipcMain.handle(IPC.OPEN_IN_TERMINAL, (_event, arg: string | null | { sessionId?:
     projectPath = arg.projectPath && arg.projectPath !== '~' ? arg.projectPath : process.cwd()
   }
 
-  const baseCmd = sessionId ? `${claudeBin} --resume ${sessionId}` : claudeBin
-  const winCmd = `cd /d "${projectPath}" && ${baseCmd}`
-  const posixCmd = `cd "${projectPath.replace(/"/g, '\\"')}" && ${baseCmd}`
-
   try {
-    if (process.platform === 'darwin') {
-      const escaped = posixCmd.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
-      const script = `tell application "Terminal"\n  activate\n  do script "${escaped}"\nend tell`
-      execFile('/usr/bin/osascript', ['-e', script], (err: Error | null) => {
-        if (err) log(`Failed to open terminal: ${err.message}`)
-        else log(`Opened terminal with: ${posixCmd}`)
-      })
-    } else if (process.platform === 'win32') {
-      execFile('cmd.exe', ['/c', 'start', 'cmd.exe', '/k', winCmd], (err: Error | null) => {
-        if (err) log(`Failed to open terminal: ${err.message}`)
-        else log(`Opened terminal with: ${winCmd}`)
-      })
-    } else {
-      execFile('x-terminal-emulator', ['-e', `bash -lc '${posixCmd.replace(/'/g, `'\\''`)}'`], (err: Error | null) => {
-        if (err) log(`Failed to open terminal: ${err.message}`)
-        else log(`Opened terminal with: ${posixCmd}`)
-      })
-    }
+    const cmd = buildTerminalCommand({ projectPath, claudeBin, sessionId })
+    execFile(cmd.program, cmd.args, (err: Error | null) => {
+      if (err) log(`Failed to open terminal: ${err.message}`)
+      else log(`Opened terminal with: ${cmd.program} ${cmd.args.join(' ')}`)
+    })
     return true
   } catch (err: unknown) {
     log(`Failed to open terminal: ${err}`)
