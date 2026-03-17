@@ -189,9 +189,16 @@ gh pr create --title "WIN-XXX: <title>" --body "Closes #<issue-number>..."
 - Commit message MUST start with the issue prefix: `WIN-XXX: ...`
 - PR MUST reference the issue it closes: `Closes #N`
 - One PR per issue. Do not bundle unrelated changes.
-- Do not merge your own PR without review.
 
-### 4. PR Checklist
+### 4. Review, Fix, and Merge
+After pushing and creating the PR:
+1. **Check for reviews** — `gh api repos/<owner>/<repo>/pulls/<N>/comments`
+2. **If no reviews or only informational comments** — merge immediately: `gh pr merge <N> --merge --delete-branch`
+3. **If reviews with actionable feedback** — fix the issues, commit, push, then check again. Repeat until clean, then merge.
+
+Do not leave PRs hanging. The cycle is: push → PR → check reviews → fix if needed → merge.
+
+### 5. PR Checklist
 - [ ] All new code has tests written BEFORE the implementation
 - [ ] `npm run build` passes with zero errors
 - [ ] `npm run test` passes with zero failures
