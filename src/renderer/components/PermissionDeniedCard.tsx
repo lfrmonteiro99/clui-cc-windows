@@ -1,6 +1,6 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { motion } from 'framer-motion'
-import { ShieldWarning, Terminal, ArrowSquareOut } from '@phosphor-icons/react'
+import { ShieldWarning, Terminal, ArrowSquareOut, ShieldCheck } from '@phosphor-icons/react'
 import { useColors } from '../theme'
 
 interface Props {
@@ -10,8 +10,16 @@ interface Props {
   onDismiss: () => void
 }
 
+/** Convert a tool name from a permission denial to its settings.json permission pattern */
+function toolToPermissionPattern(toolName: string): string {
+  if (toolName === 'Bash') return 'Bash(*)'
+  return toolName
+}
+
 export function PermissionDeniedCard({ tools, sessionId, projectPath, onDismiss }: Props) {
   const colors = useColors()
+  const [allowedTools, setAllowedTools] = useState<Set<string>>(new Set())
+  const [allowingAll, setAllowingAll] = useState(false)
 
   const handleOpenInCli = () => {
     if (sessionId) {
@@ -21,6 +29,28 @@ export function PermissionDeniedCard({ tools, sessionId, projectPath, onDismiss 
   }
 
   const toolNames = [...new Set(tools.map((t) => t.toolName))]
+
+  const handleAllowTool = async (toolName: string) => {
+    const pattern = toolToPermissionPattern(toolName)
+    try {
+      await window.clui.addPermission(pattern)
+      setAllowedTools((prev) => new Set([...prev, toolName]))
+    } catch {}
+  }
+
+  const handleAllowAll = async () => {
+    setAllowingAll(true)
+    try {
+      for (const name of toolNames) {
+        const pattern = toolToPermissionPattern(name)
+        await window.clui.addPermission(pattern)
+      }
+      setAllowedTools(new Set(toolNames))
+    } catch {}
+    setAllowingAll(false)
+  }
+
+  const allAllowed = toolNames.every((n) => allowedTools.has(n))
 
   return (
     <motion.div
@@ -56,34 +86,70 @@ export function PermissionDeniedCard({ tools, sessionId, projectPath, onDismiss 
         {/* Body */}
         <div className="px-3 py-2">
           <p className="text-[11px] leading-[1.5] mb-2" style={{ color: colors.textSecondary }}>
-            Interactive approvals are not supported in the current CLI mode.
-            {toolNames.length > 0 && (
-              <> Denied: <span style={{ color: colors.textPrimary }}>{toolNames.join(', ')}</span>.</>
-            )}
+            {allAllowed
+              ? 'Permissions saved. Retry your prompt to use these tools.'
+              : 'These tools were blocked. Allow them permanently or open in CLI.'}
           </p>
 
-          {/* Tool list */}
+          {/* Tool list with per-tool Allow buttons */}
           {tools.length > 0 && (
-            <div className="flex flex-wrap gap-1 mb-2">
-              {toolNames.map((name) => (
-                <span
-                  key={name}
-                  className="inline-flex items-center gap-1 text-[10px] font-mono px-2 py-0.5 rounded-md"
-                  style={{
-                    background: colors.surfacePrimary,
-                    color: colors.textTertiary,
-                    border: `1px solid ${colors.surfaceSecondary}`,
-                  }}
-                >
-                  <Terminal size={10} />
-                  {name}
-                </span>
-              ))}
+            <div className="flex flex-col gap-1 mb-2">
+              {toolNames.map((name) => {
+                const isAllowed = allowedTools.has(name)
+                return (
+                  <div
+                    key={name}
+                    className="flex items-center justify-between px-2 py-1 rounded-md"
+                    style={{
+                      background: isAllowed ? colors.permissionAllowBg : colors.surfacePrimary,
+                      border: `1px solid ${isAllowed ? colors.permissionAllowBorder : colors.surfaceSecondary}`,
+                    }}
+                  >
+                    <span className="inline-flex items-center gap-1 text-[10px] font-mono" style={{ color: isAllowed ? colors.statusComplete : colors.textTertiary }}>
+                      {isAllowed ? <ShieldCheck size={10} /> : <Terminal size={10} />}
+                      {name}
+                      {isAllowed && <span className="text-[9px] opacity-70 ml-1">allowed</span>}
+                    </span>
+                    {!isAllowed && (
+                      <button
+                        onClick={() => handleAllowTool(name)}
+                        className="text-[9px] font-medium px-2 py-0.5 rounded-full cursor-pointer transition-colors"
+                        style={{
+                          background: colors.permissionAllowBg,
+                          color: colors.statusComplete,
+                          border: `1px solid ${colors.permissionAllowBorder}`,
+                        }}
+                        onMouseEnter={(e) => { e.currentTarget.style.background = colors.permissionAllowHoverBg }}
+                        onMouseLeave={(e) => { e.currentTarget.style.background = colors.permissionAllowBg }}
+                      >
+                        Allow Always
+                      </button>
+                    )}
+                  </div>
+                )
+              })}
             </div>
           )}
 
           {/* Actions */}
-          <div className="flex gap-1.5">
+          <div className="flex gap-1.5 flex-wrap">
+            {!allAllowed && toolNames.length > 1 && (
+              <button
+                onClick={handleAllowAll}
+                disabled={allowingAll}
+                className="text-[11px] font-medium px-3 py-1.5 rounded-full transition-colors cursor-pointer flex items-center gap-1.5 disabled:opacity-40"
+                style={{
+                  background: colors.permissionAllowBg,
+                  color: colors.statusComplete,
+                  border: `1px solid ${colors.permissionAllowBorder}`,
+                }}
+                onMouseEnter={(e) => { if (!allowingAll) e.currentTarget.style.background = colors.permissionAllowHoverBg }}
+                onMouseLeave={(e) => { if (!allowingAll) e.currentTarget.style.background = colors.permissionAllowBg }}
+              >
+                <ShieldCheck size={12} />
+                Allow All
+              </button>
+            )}
             {sessionId && (
               <button
                 onClick={handleOpenInCli}
@@ -93,12 +159,8 @@ export function PermissionDeniedCard({ tools, sessionId, projectPath, onDismiss 
                   color: colors.accent,
                   border: `1px solid ${colors.accentBorderMedium}`,
                 }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = colors.accentSoft
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = colors.accentLight
-                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = colors.accentSoft }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = colors.accentLight }}
               >
                 <ArrowSquareOut size={12} />
                 Open in CLI
@@ -112,12 +174,8 @@ export function PermissionDeniedCard({ tools, sessionId, projectPath, onDismiss 
                 color: colors.textTertiary,
                 border: `1px solid ${colors.surfaceSecondary}`,
               }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = colors.surfaceActive
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = colors.surfaceHover
-              }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = colors.surfaceActive }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = colors.surfaceHover }}
             >
               Dismiss
             </button>

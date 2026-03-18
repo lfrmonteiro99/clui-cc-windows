@@ -12,6 +12,7 @@ import { getWindowConfig } from './window-config'
 import { loadShortcutConfig, saveShortcutConfig, getSafeAlternatives } from './shortcut-config'
 import { buildTerminalCommand } from './terminal-launch'
 import { buildScreenshotCommand, getScreenshotTempPath } from './screenshot'
+import { SettingsManager } from './settings-manager'
 import { IPC } from '../shared/types'
 import type { RunOptions, NormalizedEvent, EnrichedError } from '../shared/types'
 
@@ -29,6 +30,8 @@ let toggleSequence = 0
 
 // Feature flag: enable PTY interactive permissions transport
 const INTERACTIVE_PTY = process.env.CLUI_INTERACTIVE_PERMISSIONS_PTY === '1'
+
+const settingsManager = new SettingsManager()
 
 const controlPlane = new ControlPlane(INTERACTIVE_PTY)
 
@@ -794,6 +797,43 @@ ipcMain.handle(IPC.OPEN_IN_TERMINAL, (_event, arg: string | null | { sessionId?:
     log(`Failed to open terminal: ${err}`)
     return false
   }
+})
+
+// ─── Permission Management IPC ───
+
+ipcMain.handle(IPC.PERMISSIONS_GET, () => {
+  return settingsManager.getPermissions()
+})
+
+ipcMain.handle(IPC.PERMISSIONS_ADD, (_event, pattern: string) => {
+  log(`IPC PERMISSIONS_ADD: ${pattern}`)
+  settingsManager.addPermission(pattern)
+  return true
+})
+
+ipcMain.handle(IPC.PERMISSIONS_REMOVE, (_event, pattern: string) => {
+  log(`IPC PERMISSIONS_REMOVE: ${pattern}`)
+  settingsManager.removePermission(pattern)
+  return true
+})
+
+ipcMain.handle(IPC.PERMISSIONS_APPLY_PRESET, (_event, preset: string) => {
+  log(`IPC PERMISSIONS_APPLY_PRESET: ${preset}`)
+  if (preset !== 'permissive' && preset !== 'balanced' && preset !== 'strict') {
+    log(`Invalid preset "${preset}" — ignoring`)
+    return false
+  }
+  settingsManager.applyPreset(preset)
+  return true
+})
+
+ipcMain.handle(IPC.PERMISSIONS_NEEDS_SETUP, () => {
+  return settingsManager.needsSetup()
+})
+
+ipcMain.handle(IPC.PERMISSIONS_DISMISS_SETUP, () => {
+  settingsManager.dismissSetup()
+  return true
 })
 
 // ─── Marketplace IPC ───

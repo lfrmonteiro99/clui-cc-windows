@@ -1,6 +1,15 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { IPC } from '../shared/types'
-import type { RunOptions, NormalizedEvent, HealthReport, EnrichedError, Attachment, SessionMeta, CatalogPlugin, SessionLoadMessage } from '../shared/types'
+import type {
+  RunOptions,
+  NormalizedEvent,
+  HealthReport,
+  EnrichedError,
+  Attachment,
+  SessionMeta,
+  CatalogPlugin,
+  SessionLoadMessage,
+} from '../shared/types'
 
 export interface CluiAPI {
   // ─── Request-response (renderer → main) ───
@@ -31,6 +40,12 @@ export interface CluiAPI {
   installPlugin(repo: string, pluginName: string, marketplace: string, sourcePath?: string, isSkillMd?: boolean): Promise<{ ok: boolean; error?: string }>
   uninstallPlugin(pluginName: string): Promise<{ ok: boolean; error?: string }>
   setPermissionMode(mode: string): void
+  getPermissions(): Promise<{ allow: string[]; deny: string[] }>
+  addPermission(pattern: string): Promise<boolean>
+  removePermission(pattern: string): Promise<boolean>
+  applyPermissionPreset(preset: string): Promise<boolean>
+  needsPermissionSetup(): Promise<boolean>
+  dismissPermissionSetup(): Promise<boolean>
   getTheme(): Promise<{ isDark: boolean }>
   onThemeChange(callback: (isDark: boolean) => void): () => void
 
@@ -83,6 +98,12 @@ const api: CluiAPI = {
   uninstallPlugin: (pluginName) =>
     ipcRenderer.invoke(IPC.MARKETPLACE_UNINSTALL, { pluginName }),
   setPermissionMode: (mode) => ipcRenderer.send(IPC.SET_PERMISSION_MODE, mode),
+  getPermissions: () => ipcRenderer.invoke(IPC.PERMISSIONS_GET),
+  addPermission: (pattern) => ipcRenderer.invoke(IPC.PERMISSIONS_ADD, pattern),
+  removePermission: (pattern) => ipcRenderer.invoke(IPC.PERMISSIONS_REMOVE, pattern),
+  applyPermissionPreset: (preset) => ipcRenderer.invoke(IPC.PERMISSIONS_APPLY_PRESET, preset),
+  needsPermissionSetup: () => ipcRenderer.invoke(IPC.PERMISSIONS_NEEDS_SETUP),
+  dismissPermissionSetup: () => ipcRenderer.invoke(IPC.PERMISSIONS_DISMISS_SETUP),
   getTheme: () => ipcRenderer.invoke(IPC.GET_THEME),
   onThemeChange: (callback) => {
     const handler = (_e: Electron.IpcRendererEvent, isDark: boolean) => callback(isDark)

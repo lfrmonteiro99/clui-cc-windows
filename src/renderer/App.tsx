@@ -1,4 +1,4 @@
-import React, { useEffect, useCallback } from 'react'
+import React, { useEffect, useCallback, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Paperclip, Camera, HeadCircuit } from '@phosphor-icons/react'
 import { TabStrip } from './components/TabStrip'
@@ -6,6 +6,7 @@ import { ConversationView } from './components/ConversationView'
 import { InputBar } from './components/InputBar'
 import { StatusBar } from './components/StatusBar'
 import { MarketplacePanel } from './components/MarketplacePanel'
+import { PermissionWizard } from './components/PermissionWizard'
 import { PopoverLayerProvider } from './components/PopoverLayer'
 import { useClaudeEvents } from './hooks/useClaudeEvents'
 import { useHealthReconciliation } from './hooks/useHealthReconciliation'
@@ -23,6 +24,14 @@ export default function App() {
   const colors = useColors()
   const setSystemTheme = useThemeStore((s) => s.setSystemTheme)
   const expandedUI = useThemeStore((s) => s.expandedUI)
+  const [showPermissionWizard, setShowPermissionWizard] = useState(false)
+
+  // ─── Permission wizard check (first launch) ───
+  useEffect(() => {
+    window.clui.needsPermissionSetup().then((needs) => {
+      if (needs) setShowPermissionWizard(true)
+    }).catch(() => {})
+  }, [])
 
   // ─── Theme initialization ───
   useEffect(() => {
@@ -120,6 +129,15 @@ export default function App() {
 
         {/* ─── 460px content column, centered. Circles overflow left. ─── */}
         <div style={{ width: contentWidth, position: 'relative', margin: '0 auto', transition: 'width 0.26s cubic-bezier(0.4, 0, 0.1, 1)' }}>
+
+          {/* ─── Permission wizard (first launch) ─── */}
+          <AnimatePresence>
+            {showPermissionWizard && (
+              <div data-clui-ui style={{ position: 'relative', zIndex: 35, marginBottom: 8 }}>
+                <PermissionWizard onComplete={() => setShowPermissionWizard(false)} />
+              </div>
+            )}
+          </AnimatePresence>
 
           <AnimatePresence initial={false}>
             {marketplaceOpen && (

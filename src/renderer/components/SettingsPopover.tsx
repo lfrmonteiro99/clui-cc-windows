@@ -1,11 +1,12 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { motion } from 'framer-motion'
-import { DotsThree, Bell, ArrowsOutSimple, Moon } from '@phosphor-icons/react'
+import { DotsThree, Bell, ArrowsOutSimple, Moon, ShieldCheck } from '@phosphor-icons/react'
 import { useThemeStore } from '../theme'
 import { useSessionStore } from '../stores/sessionStore'
 import { usePopoverLayer } from './PopoverLayer'
 import { useColors } from '../theme'
+import { PermissionEditor } from './PermissionEditor'
 
 function RowToggle({
   checked,
@@ -55,8 +56,10 @@ export function SettingsPopover() {
   const colors = useColors()
 
   const [open, setOpen] = useState(false)
+  const [permEditorOpen, setPermEditorOpen] = useState(false)
   const triggerRef = useRef<HTMLButtonElement>(null)
   const popoverRef = useRef<HTMLDivElement>(null)
+  const permEditorRef = useRef<HTMLDivElement>(null)
   const [pos, setPos] = useState<{ right: number; top?: number; bottom?: number; maxHeight?: number }>({ right: 0 })
 
   const updatePos = useCallback(() => {
@@ -92,7 +95,9 @@ export function SettingsPopover() {
       const target = e.target as Node
       if (triggerRef.current?.contains(target)) return
       if (popoverRef.current?.contains(target)) return
+      if (permEditorRef.current?.contains(target)) return
       setOpen(false)
+      setPermEditorOpen(false)
     }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
@@ -221,8 +226,43 @@ export function SettingsPopover() {
                 />
               </div>
             </div>
+
+            <div style={{ height: 1, background: colors.popoverBorder }} />
+
+            {/* Permissions */}
+            <div>
+              <button
+                onClick={() => setPermEditorOpen((o) => !o)}
+                className="flex items-center gap-2 w-full text-left cursor-pointer rounded-md px-0 py-0 transition-colors"
+                style={{ background: 'transparent' }}
+              >
+                <ShieldCheck size={14} style={{ color: colors.textTertiary }} />
+                <div className="text-[12px] font-medium" style={{ color: colors.textPrimary }}>
+                  Permissions
+                </div>
+              </button>
+            </div>
           </div>
         </motion.div>,
+        popoverLayer,
+      )}
+
+      {/* Permission editor — rendered as a separate floating panel */}
+      {popoverLayer && permEditorOpen && createPortal(
+        <div
+          ref={permEditorRef}
+          data-clui-ui
+          style={{
+            position: 'fixed',
+            ...(pos.top != null ? { top: pos.top } : {}),
+            ...(pos.bottom != null ? { bottom: pos.bottom } : {}),
+            right: pos.right + 250,
+            pointerEvents: 'auto',
+            zIndex: 100,
+          }}
+        >
+          <PermissionEditor onClose={() => setPermEditorOpen(false)} />
+        </div>,
         popoverLayer,
       )}
     </>

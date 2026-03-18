@@ -358,6 +358,14 @@ export const IPC = {
   // Permission mode
   SET_PERMISSION_MODE: 'clui:set-permission-mode',
 
+  // Permission management (settings.json)
+  PERMISSIONS_GET: 'clui:permissions-get',
+  PERMISSIONS_ADD: 'clui:permissions-add',
+  PERMISSIONS_REMOVE: 'clui:permissions-remove',
+  PERMISSIONS_APPLY_PRESET: 'clui:permissions-apply-preset',
+  PERMISSIONS_NEEDS_SETUP: 'clui:permissions-needs-setup',
+  PERMISSIONS_DISMISS_SETUP: 'clui:permissions-dismiss-setup',
+
   // Legacy (kept for backward compat during migration)
   STREAM_EVENT: 'clui:stream-event',
   RUN_COMPLETE: 'clui:run-complete',
