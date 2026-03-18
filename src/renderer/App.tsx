@@ -3,6 +3,8 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Paperclip, Camera, HeadCircuit } from '@phosphor-icons/react'
 import { TabStrip } from './components/TabStrip'
 import { ConversationView } from './components/ConversationView'
+import { ComparisonView } from './components/ComparisonView'
+import { ComparisonLauncher } from './components/ComparisonLauncher'
 import { InputBar } from './components/InputBar'
 import { StatusBar } from './components/StatusBar'
 import { MarketplacePanel } from './components/MarketplacePanel'
@@ -21,6 +23,7 @@ import { useShortcutStore } from './stores/shortcutStore'
 import { useSessionStore } from './stores/sessionStore'
 import { useSnippetStore } from './stores/snippetStore'
 import { useCommandPaletteStore } from './stores/commandPaletteStore'
+import { useComparisonStore } from './stores/comparisonStore'
 import { useColors, useThemeStore, spacing } from './theme'
 
 const TRANSITION = { duration: 0.26, ease: [0.4, 0, 0.1, 1] as const }
@@ -186,14 +189,17 @@ export default function App() {
   const shortcutBindings = useShortcutStore((s) => s.bindings)
   const shortcutSettingsOpen = useShortcutStore((s) => s.settingsOpen)
   const captureTargetId = useShortcutStore((s) => s.captureTargetId)
+  const activeComparison = useComparisonStore((s) => s.activeComparison)
+  const comparisonLauncherOpen = useComparisonStore((s) => s.launcherOpen)
   const isRunning = activeTabStatus === 'running' || activeTabStatus === 'connecting'
 
-  // Layout dimensions — expandedUI widens and heightens the panel
-  const contentWidth = expandedUI ? 700 : spacing.contentWidth
-  const cardExpandedWidth = expandedUI ? 700 : 460
+  // Layout dimensions — expandedUI widens and heightens the panel; comparison mode widens further
+  const isComparing = !!activeComparison
+  const contentWidth = isComparing ? 900 : expandedUI ? 700 : spacing.contentWidth
+  const cardExpandedWidth = isComparing ? 900 : expandedUI ? 700 : 460
   const cardCollapsedWidth = expandedUI ? 670 : 430
   const cardCollapsedMargin = expandedUI ? 15 : 15
-  const bodyMaxHeight = expandedUI ? 520 : 400
+  const bodyMaxHeight = isComparing ? 520 : expandedUI ? 520 : 400
 
   const handleScreenshot = useCallback(async () => {
     const result = await window.clui.takeScreenshot()
@@ -407,11 +413,16 @@ export default function App() {
               className="overflow-hidden no-drag"
             >
               <div style={{ maxHeight: bodyMaxHeight }}>
-                <ConversationView />
-                <StatusBar />
+                {isComparing ? <ComparisonView /> : <ConversationView />}
+                {!isComparing && <StatusBar />}
               </div>
             </motion.div>
           </motion.div>
+
+          {/* Comparison launcher modal */}
+          <AnimatePresence>
+            {comparisonLauncherOpen && <ComparisonLauncher />}
+          </AnimatePresence>
 
           {/* ─── Input row — circles float outside left ─── */}
           {/* marginBottom: shadow buffer so the glass-surface drop shadow isn't clipped at the native window edge */}
