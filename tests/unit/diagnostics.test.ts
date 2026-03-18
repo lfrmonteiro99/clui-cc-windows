@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
+import { homedir } from 'os'
 import { buildDiagnosticBundle, sanitizeBundle } from '../../src/main/diagnostics'
 
 vi.mock('fs', async () => {
@@ -21,18 +22,20 @@ describe('diagnostics', () => {
   })
 
   it('sanitizeBundle removes sensitive paths', () => {
+    const home = homedir()
     const raw = {
       platform: 'win32',
       arch: 'x64',
       nodeVersion: '20.0.0',
       electronVersion: '33.0.0',
       timestamp: new Date().toISOString(),
-      debugLog: 'C:\\Users\\secret-user\\AppData\\file.log contains api_key=sk-12345',
+      debugLog: `${home}\\AppData\\file.log contains api_key=sk-12345`,
       errors: [],
     }
 
     const sanitized = sanitizeBundle(raw)
-    expect(sanitized.debugLog).not.toContain('secret-user')
+    expect(sanitized.debugLog).not.toContain(home)
+    expect(sanitized.debugLog).toContain('<HOME>')
     expect(sanitized.debugLog).not.toContain('sk-12345')
   })
 

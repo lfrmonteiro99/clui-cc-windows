@@ -88,6 +88,7 @@ export class ProcessManager extends EventEmitter {
       stdio: ['pipe', 'pipe', 'pipe'],
       cwd,
       env,
+      shell: process.platform === 'win32',
     })
 
     log(`Spawned PID: ${child.pid}`)

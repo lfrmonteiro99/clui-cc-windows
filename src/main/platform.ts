@@ -36,9 +36,11 @@ export function findBinary(name: string): string {
   if (isWin()) {
     try {
       const result = execSync(`where ${name}`, { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'ignore'] })
-      // `where` can return multiple lines; take the first
-      const firstLine = result.split(/\r?\n/).map(l => l.trim()).filter(Boolean)[0]
-      if (firstLine) return firstLine
+      const lines = result.split(/\r?\n/).map(l => l.trim()).filter(Boolean)
+      // On Windows, prefer .cmd/.exe over bare name (which may be a POSIX shell shim)
+      const cmdOrExe = lines.find(l => /\.(cmd|exe)$/i.test(l))
+      if (cmdOrExe) return cmdOrExe
+      if (lines[0]) return lines[0]
     } catch {}
     return name
   }

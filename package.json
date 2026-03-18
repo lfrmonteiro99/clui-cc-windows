@@ -2,6 +2,7 @@
   "name": "clui",
   "version": "0.1.0",
   "description": "Clui CC — Command Line User Interface for Claude Code",
+  "author": "Lucas Couto",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -29,10 +30,12 @@
   "dependencies": {
     "@phosphor-icons/react": "^2.1.10",
     "framer-motion": "^12.35.1",
-    "node-pty": "^1.1.0",
     "react-markdown": "^9.0.0",
     "remark-gfm": "^4.0.0",
     "zustand": "^5.0.0"
+  },
+  "optionalDependencies": {
+    "node-pty": "^1.1.0"
   },
   "build": {
     "appId": "com.clui.app",
@@ -42,25 +45,39 @@
     },
     "mac": {
       "icon": "resources/icon.icns",
-      "target": ["dmg", "zip"]
+      "target": [
+        "dmg",
+        "zip"
+      ]
     },
     "win": {
-      "icon": "resources/icon.png",
+      "icon": "resources/icon.ico",
       "target": [
-        { "target": "nsis", "arch": ["x64", "arm64"] },
-        { "target": "portable", "arch": ["x64"] }
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
       ]
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "deleteAppDataOnUninstall": false,
-      "installerIcon": "resources/icon.png",
-      "uninstallerIcon": "resources/icon.png"
+      "installerIcon": "resources/icon.ico",
+      "uninstallerIcon": "resources/icon.ico"
     },
     "portable": {
       "artifactName": "${productName}-${version}-portable.exe"
-    }
+    },
+    "npmRebuild": false
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.2.1",
@@ -75,6 +92,7 @@
     "postcss": "^8.4.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "sharp": "^0.34.5",
     "tailwindcss": "^4.2.1",
     "typescript": "^5.7.0",
     "vite": "^6.0.0",

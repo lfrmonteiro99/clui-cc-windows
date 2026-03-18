@@ -182,6 +182,7 @@ export class RunManager extends EventEmitter {
       stdio: ['pipe', 'pipe', 'pipe'],
       cwd,
       env: this._getEnv(),
+      shell: process.platform === 'win32',
     })
 
     log(`Spawned PID: ${child.pid}`)
