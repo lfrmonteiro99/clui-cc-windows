@@ -17,8 +17,12 @@ function isWin(): boolean {
 export function getWhisperBinaryCandidates(): string[] {
   const home = homedir()
 
+  // Auto-provisioned path (highest priority)
+  const cluiWhisper = join(home, '.clui', 'whisper', isWin() ? 'whisper-cli.exe' : 'whisper-cli')
+
   if (isWin()) {
     return [
+      cluiWhisper,
       join(home, 'scoop', 'shims', 'whisper-cli.exe'),
       join(home, 'scoop', 'shims', 'whisper.exe'),
       join(home, 'AppData', 'Local', 'Programs', 'whisper-cli', 'whisper-cli.exe'),
@@ -31,6 +35,7 @@ export function getWhisperBinaryCandidates(): string[] {
   }
 
   return [
+    cluiWhisper,
     '/opt/homebrew/bin/whisper-cli',
     '/usr/local/bin/whisper-cli',
     '/opt/homebrew/bin/whisper',
@@ -46,8 +51,12 @@ export function getWhisperModelCandidates(): string[] {
   const home = homedir()
   const models = ['ggml-tiny.bin', 'ggml-base.bin', 'ggml-tiny.en.bin', 'ggml-base.en.bin']
 
+  // Auto-provisioned path (highest priority)
+  const cluiDir = join(home, '.clui', 'whisper')
+
   if (isWin()) {
     const dirs = [
+      cluiDir,
       join(home, 'AppData', 'Local', 'whisper', 'models'),
       join(home, '.local', 'share', 'whisper'),
       join(home, 'scoop', 'apps', 'whisper-cpp', 'current', 'models'),
@@ -56,6 +65,7 @@ export function getWhisperModelCandidates(): string[] {
   }
 
   const dirs = [
+    cluiDir,
     join(home, '.local/share/whisper'),
     '/opt/homebrew/share/whisper-cpp/models',
   ]

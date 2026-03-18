@@ -20,6 +20,7 @@ import { appendRecord as costAppendRecord, getSummary as costGetSummary, getHist
 import { AutoAttachManager } from './auto-attach'
 import { GitContextProvider } from './git-context'
 import { getWhisperBinaryCandidates, getWhisperNotFoundMessage, getWhisperModelCandidates, getModelDownloadMessage } from './whisper-paths'
+import { ensureWhisper, type WhisperProvisionStatus } from './whisper-provisioner'
 import { findBinary } from './platform'
 import { IPC } from '../shared/types'
 import type { RunOptions, NormalizedEvent, EnrichedError, ExportOptions, SessionExportData, CostRecord } from '../shared/types'
@@ -1101,6 +1102,12 @@ app.whenReady().then(() => {
       log(`Skill ${status.name}: ${status.state}${status.error ? ` — ${status.error}` : ''}`)
       broadcast(IPC.SKILL_STATUS, status)
     }).catch((err: Error) => log(`Skill provisioning error: ${err.message}`))
+
+    // Whisper provisioning — auto-download binary + model on first boot
+    ensureWhisper((status: WhisperProvisionStatus) => {
+      log(`[WhisperProvisioner] ${status.stage}${status.progress != null ? ` ${status.progress}%` : ''}${status.error ? ` — ${status.error}` : ''}`)
+      broadcast('clui:whisper-status', status)
+    }).catch((err: Error) => log(`Whisper provisioning error: ${err.message}`))
   }
 
   createWindow()
