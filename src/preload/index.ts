@@ -94,6 +94,14 @@ export interface CluiAPI {
   onSkillStatus(callback: (status: { name: string; state: string; error?: string; reason?: string }) => void): () => void
   onWhisperStatus(callback: (status: { stage: string; progress?: number; error?: string }) => void): () => void
   onWindowShown(callback: () => void): () => void
+
+  // Terminal
+  terminalCreate(options?: { shell?: string; cwd?: string; cols?: number; rows?: number }): Promise<{ termTabId: string | null; error?: string }>
+  terminalWrite(termTabId: string, data: string): void
+  terminalResize(termTabId: string, cols: number, rows: number): void
+  terminalClose(termTabId: string): Promise<void>
+  onTerminalData(callback: (termTabId: string, data: string) => void): () => void
+  onTerminalExit(callback: (termTabId: string, exitCode: number) => void): () => void
 }
 
 const api: CluiAPI = {
@@ -215,6 +223,22 @@ const api: CluiAPI = {
     const handler = () => callback()
     ipcRenderer.on(IPC.WINDOW_SHOWN, handler)
     return () => ipcRenderer.removeListener(IPC.WINDOW_SHOWN, handler)
+  },
+
+  // Terminal
+  terminalCreate: (options) => ipcRenderer.invoke(IPC.TERMINAL_CREATE, options),
+  terminalWrite: (termTabId, data) => ipcRenderer.send(IPC.TERMINAL_WRITE, termTabId, data),
+  terminalResize: (termTabId, cols, rows) => ipcRenderer.send(IPC.TERMINAL_RESIZE, termTabId, cols, rows),
+  terminalClose: (termTabId) => ipcRenderer.invoke(IPC.TERMINAL_CLOSE, termTabId),
+  onTerminalData: (callback) => {
+    const handler = (_e: Electron.IpcRendererEvent, termTabId: string, data: string) => callback(termTabId, data)
+    ipcRenderer.on(IPC.TERMINAL_DATA, handler)
+    return () => ipcRenderer.removeListener(IPC.TERMINAL_DATA, handler)
+  },
+  onTerminalExit: (callback) => {
+    const handler = (_e: Electron.IpcRendererEvent, termTabId: string, exitCode: number) => callback(termTabId, exitCode)
+    ipcRenderer.on(IPC.TERMINAL_EXIT, handler)
+    return () => ipcRenderer.removeListener(IPC.TERMINAL_EXIT, handler)
   },
 }
 

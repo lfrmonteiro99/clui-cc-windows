@@ -22,6 +22,7 @@ import { GitContextProvider } from './git-context'
 import { getWhisperBinaryCandidates, getWhisperNotFoundMessage, getWhisperModelCandidates, getModelDownloadMessage } from './whisper-paths'
 import { ensureWhisper, type WhisperProvisionStatus } from './whisper-provisioner'
 import { findBinary } from './platform'
+import { TerminalManager } from './terminal/terminal-manager'
 import { IPC } from '../shared/types'
 import type { RunOptions, NormalizedEvent, EnrichedError, ExportOptions, SessionExportData, CostRecord } from '../shared/types'
 
@@ -59,6 +60,7 @@ const settingsManager = new SettingsManager()
 const pinnedSessions = new PinnedSessionStore()
 const autoAttachManager = new AutoAttachManager()
 const gitContext = new GitContextProvider()
+const terminalManager = new TerminalManager(broadcast)
 let agentMemory: AgentMemory | null = null
 
 const controlPlane = new ControlPlane(INTERACTIVE_PTY)
@@ -983,6 +985,31 @@ ipcMain.handle(IPC.GIT_DIFF, (_event, cwd: string, file?: string) => {
   return gitContext.getDiff(cwd, file)
 })
 
+// ─── Terminal IPC ───
+
+ipcMain.handle(IPC.TERMINAL_CREATE, (_event, options?: { shell?: string; cwd?: string; cols?: number; rows?: number }) => {
+  try {
+    const termTabId = terminalManager.create(options || {})
+    return { termTabId }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    log(`IPC TERMINAL_CREATE error: ${msg}`)
+    return { termTabId: null, error: msg }
+  }
+})
+
+ipcMain.on(IPC.TERMINAL_WRITE, (_event, termTabId: string, data: string) => {
+  terminalManager.write(termTabId, data)
+})
+
+ipcMain.on(IPC.TERMINAL_RESIZE, (_event, termTabId: string, cols: number, rows: number) => {
+  terminalManager.resize(termTabId, cols, rows)
+})
+
+ipcMain.handle(IPC.TERMINAL_CLOSE, (_event, termTabId: string) => {
+  terminalManager.close(termTabId)
+})
+
 // ─── Cost Tracking IPC ───
 
 // ─── Error logging ───
@@ -1194,6 +1221,7 @@ app.whenReady().then(() => {
 
 app.on('will-quit', () => {
   globalShortcut.unregisterAll()
+  terminalManager.shutdown()
   controlPlane.shutdown()
   flushLogs()
 })
