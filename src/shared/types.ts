@@ -440,6 +440,22 @@ export interface GitStatus {
   files: GitFileStatus[]
 }
 
+// ─── Terminal Types ───
+
+export interface TerminalTab {
+  id: string
+  title: string
+  shell: string
+  cwd: string
+  status: 'active' | 'exited'
+  exitCode: number | null
+}
+
+export interface TerminalCreateOptions {
+  shell?: string
+  cwd?: string
+}
+
 // ─── IPC Channel Names ───
 
 export const IPC = {
@@ -545,6 +561,14 @@ export const IPC = {
 
   // Whisper provisioning
   WHISPER_STATUS: 'clui:whisper-status',
+
+  // Terminal
+  TERMINAL_CREATE: 'clui:terminal-create',
+  TERMINAL_WRITE: 'clui:terminal-write',
+  TERMINAL_RESIZE: 'clui:terminal-resize',
+  TERMINAL_CLOSE: 'clui:terminal-close',
+  TERMINAL_DATA: 'clui:terminal-data',
+  TERMINAL_EXIT: 'clui:terminal-exit',
 
   // Error logging
   LOG_RENDERER_ERROR: 'clui:log-renderer-error',

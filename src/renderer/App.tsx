@@ -33,6 +33,9 @@ import { orderTabsByTabOrder, reconcileTabOrder, replaceTabOrderId, saveStoredTa
 import { useComparisonStore } from './stores/comparisonStore'
 import { useMarketplaceStore } from './stores/marketplaceStore'
 import { useWorkflowStore } from './stores/workflowStore'
+import { useTerminalStore } from './stores/terminalStore'
+import { TerminalPanel } from './components/TerminalPanel'
+import { ModeToggle } from './components/ModeToggle'
 import { useColors, useThemeStore, spacing } from './theme'
 
 const TRANSITION = { duration: 0.26, ease: [0.4, 0, 0.1, 1] as const }
@@ -59,6 +62,7 @@ export default function App() {
   const workflowExecution = useWorkflowStore((s) => s.activeExecution)
   const activeComparison = useComparisonStore((s) => s.activeComparison)
   const comparisonLauncherOpen = useComparisonStore((s) => s.launcherOpen)
+  const terminalMode = useTerminalStore((s) => s.terminalMode)
   const isRunning = activeTabStatus === 'running' || activeTabStatus === 'connecting'
   const [showPermissionWizard, setShowPermissionWizard] = useState(false)
   const [gitPanelOpen, setGitPanelOpen] = useState(false)
@@ -194,6 +198,18 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [shortcutBindings, captureTargetId])
 
+  // ─── Terminal toggle shortcut (Ctrl+`) ───
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === '`') {
+        e.preventDefault()
+        useTerminalStore.getState().toggleMode()
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
+
   // OS-level click-through (RAF-throttled to avoid per-pixel IPC)
   useEffect(() => {
     if (!window.clui?.setIgnoreMouseEvents) return
@@ -228,13 +244,14 @@ export default function App() {
     }
   }, [])
 
-  // Layout dimensions — expandedUI widens and heightens the panel; comparison mode widens further
+  // Layout dimensions — expandedUI widens and heightens the panel; terminal/comparison mode widens further
   const isComparing = !!activeComparison
-  const contentWidth = isComparing ? 900 : expandedUI ? 700 : spacing.contentWidth
-  const cardExpandedWidth = isComparing ? 900 : expandedUI ? 700 : 460
+  const effectiveExpanded = isExpanded || terminalMode // terminal forces expanded
+  const contentWidth = isComparing ? 900 : terminalMode ? 700 : expandedUI ? 700 : spacing.contentWidth
+  const cardExpandedWidth = isComparing ? 900 : terminalMode ? 700 : expandedUI ? 700 : 460
   const cardCollapsedWidth = expandedUI ? 670 : 430
   const cardCollapsedMargin = expandedUI ? 15 : 15
-  const bodyMaxHeight = isComparing ? 520 : expandedUI ? 520 : 400
+  const bodyMaxHeight = isComparing ? 520 : terminalMode ? 520 : expandedUI ? 520 : 400
 
   const handleScreenshot = useCallback(async () => {
     const result = await window.clui.takeScreenshot()
@@ -522,13 +539,13 @@ export default function App() {
             data-clui-ui
             className="overflow-hidden flex flex-col drag-region"
             animate={{
-              width: isExpanded ? cardExpandedWidth : cardCollapsedWidth,
-              marginBottom: isExpanded ? 10 : -14,
-              marginLeft: isExpanded ? 0 : cardCollapsedMargin,
-              marginRight: isExpanded ? 0 : cardCollapsedMargin,
-              background: isExpanded ? colors.containerBg : colors.containerBgCollapsed,
+              width: effectiveExpanded ? cardExpandedWidth : cardCollapsedWidth,
+              marginBottom: effectiveExpanded ? 10 : -14,
+              marginLeft: effectiveExpanded ? 0 : cardCollapsedMargin,
+              marginRight: effectiveExpanded ? 0 : cardCollapsedMargin,
+              background: effectiveExpanded ? colors.containerBg : colors.containerBgCollapsed,
               borderColor: colors.containerBorder,
-              boxShadow: isExpanded ? colors.cardShadow : colors.cardShadowCollapsed,
+              boxShadow: effectiveExpanded ? colors.cardShadow : colors.cardShadowCollapsed,
             }}
             transition={TRANSITION}
             style={{
@@ -536,7 +553,7 @@ export default function App() {
               borderStyle: 'solid',
               borderRadius: 20,
               position: 'relative',
-              zIndex: isExpanded ? 20 : 10,
+              zIndex: effectiveExpanded ? 20 : 10,
             }}
           >
             {/* Tab strip — always mounted */}
@@ -548,16 +565,22 @@ export default function App() {
             <motion.div
               initial={false}
               animate={{
-                height: isExpanded ? 'auto' : 0,
-                opacity: isExpanded ? 1 : 0,
+                height: effectiveExpanded ? 'auto' : 0,
+                opacity: effectiveExpanded ? 1 : 0,
               }}
               transition={TRANSITION}
               className="overflow-hidden no-drag"
             >
-              <div style={{ maxHeight: bodyMaxHeight }}>
-                {workflowExecution && <WorkflowProgress />}
-                {isComparing ? <ComparisonView /> : <ConversationView />}
-                {!isComparing && <StatusBar />}
+              <div style={{ maxHeight: bodyMaxHeight, height: terminalMode ? bodyMaxHeight : undefined }}>
+                {terminalMode ? (
+                  <TerminalPanel />
+                ) : (
+                  <>
+                    {workflowExecution && <WorkflowProgress />}
+                    {isComparing ? <ComparisonView /> : <ConversationView />}
+                    {!isComparing && <StatusBar />}
+                  </>
+                )}
               </div>
             </motion.div>
           </motion.div>
@@ -568,53 +591,57 @@ export default function App() {
           </AnimatePresence>
 
           {/* ─── Input row — circles float outside left ─── */}
-          {/* marginBottom: shadow buffer so the glass-surface drop shadow isn't clipped at the native window edge */}
-          <div data-clui-ui className="relative" style={{ minHeight: 46, zIndex: 15, marginBottom: 10 }}>
-            {/* Stacked circle buttons — expand on hover */}
-            <div
-              data-clui-ui
-              className="circles-out"
-            >
-              <div className="btn-stack">
-                {/* btn-1: Attach (front, rightmost) */}
-                <button
-                  className="stack-btn stack-btn-1 glass-surface"
-                  title="Attach file"
-                  onClick={handleAttachFile}
-                  disabled={isRunning}
-                >
-                  <Paperclip size={17} />
-                </button>
-                {/* btn-2: Screenshot (middle) */}
-                <button
-                  className="stack-btn stack-btn-2 glass-surface"
-                  title="Take screenshot"
-                  onClick={handleScreenshot}
-                  disabled={isRunning}
-                >
-                  <Camera size={17} />
-                </button>
-                {/* btn-3: Skills (back, leftmost) */}
-                <button
-                  className="stack-btn stack-btn-3 glass-surface"
-                  title="Skills & Plugins"
-                  onClick={() => useSessionStore.getState().toggleMarketplace()}
-                  disabled={isRunning}
-                >
-                  <HeadCircuit size={17} />
-                </button>
+          {/* Hidden in terminal mode — terminal captures keystrokes directly */}
+          {!terminalMode && (
+            <div data-clui-ui className="relative" style={{ minHeight: 46, zIndex: 15, marginBottom: 10 }}>
+              {/* Stacked circle buttons — expand on hover */}
+              <div
+                data-clui-ui
+                className="circles-out"
+              >
+                <div className="btn-stack">
+                  {/* btn-0: Terminal toggle */}
+                  <ModeToggle />
+                  {/* btn-1: Attach (front, rightmost) */}
+                  <button
+                    className="stack-btn stack-btn-1 glass-surface"
+                    title="Attach file"
+                    onClick={handleAttachFile}
+                    disabled={isRunning}
+                  >
+                    <Paperclip size={17} />
+                  </button>
+                  {/* btn-2: Screenshot (middle) */}
+                  <button
+                    className="stack-btn stack-btn-2 glass-surface"
+                    title="Take screenshot"
+                    onClick={handleScreenshot}
+                    disabled={isRunning}
+                  >
+                    <Camera size={17} />
+                  </button>
+                  {/* btn-3: Skills (back, leftmost) */}
+                  <button
+                    className="stack-btn stack-btn-3 glass-surface"
+                    title="Skills & Plugins"
+                    onClick={() => useSessionStore.getState().toggleMarketplace()}
+                    disabled={isRunning}
+                  >
+                    <HeadCircuit size={17} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Input pill */}
+              <div
+                data-clui-ui
+                className="glass-surface w-full"
+                style={{ minHeight: 50, borderRadius: 25, padding: '0 6px 0 16px', background: colors.inputPillBg }}
+              >
+                <InputBar />
               </div>
             </div>
-
-            {/* Input pill */}
-            <div
-              data-clui-ui
-              className="glass-surface w-full"
-              style={{ minHeight: 50, borderRadius: 25, padding: '0 6px 0 16px', background: colors.inputPillBg }}
-            >
-              <InputBar />
-            </div>
-          </div>
+          )}
         </div>
         </div>
       </ErrorBoundary>
