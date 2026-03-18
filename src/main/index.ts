@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, screen, globalShortcut, Tray, Menu, nativeImage, nativeTheme, shell, Notification } from 'electron'
+import { app, BrowserWindow, ipcMain, dialog, screen, globalShortcut, Tray, Menu, nativeImage, nativeTheme, shell, Notification, session } from 'electron'
 import { join } from 'path'
 import { existsSync, readdirSync, statSync, createReadStream } from 'fs'
 import { createInterface } from 'readline'
@@ -1053,6 +1053,28 @@ ipcMain.handle(IPC.NOTIFY_DESKTOP, (_event, title: string, body: string) => {
 app.whenReady().then(() => {
   agentMemory = new AgentMemory(join(app.getPath('userData'), 'agent-memory.json'))
   controlPlane.setAgentMemory(agentMemory)
+
+  // ─── Content Security Policy ───
+  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        'Content-Security-Policy': [
+          [
+            "default-src 'self'",
+            "script-src 'self'",
+            "style-src 'self' 'unsafe-inline'",
+            "img-src 'self' data:",
+            "font-src 'self'",
+            "connect-src 'self'",
+            "media-src 'self'",
+            "object-src 'none'",
+            "base-uri 'self'",
+          ].join('; '),
+        ],
+      },
+    })
+  })
 
   // macOS: become an accessory app. Accessory apps can have key windows (keyboard works)
   // without deactivating the currently active app (hover preserved in browsers).
