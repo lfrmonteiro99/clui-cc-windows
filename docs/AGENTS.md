@@ -158,6 +158,11 @@ No telemetry. No analytics. No auto-update.
 
 Every issue (bug fix, feature, refactor) MUST follow this workflow strictly:
 
+This applies to any coding agent, in any client, using any LLM.
+
+- If an agent picks up an issue to implement, it MUST create and use a new branch based on the current `main` branch.
+- Agents MUST NOT implement issue work directly on `main`.
+
 ### 1. Branch from main
 ```bash
 git checkout main && git pull
