@@ -19,6 +19,8 @@ import { exportSessionToFile } from './session-export'
 import { appendRecord as costAppendRecord, getSummary as costGetSummary, getHistory as costGetHistory } from './cost-tracker'
 import { AutoAttachManager } from './auto-attach'
 import { GitContextProvider } from './git-context'
+import { getWhisperBinaryCandidates, getWhisperNotFoundMessage, getWhisperModelCandidates, getModelDownloadMessage } from './whisper-paths'
+import { findBinary } from './platform'
 import { IPC } from '../shared/types'
 import type { RunOptions, NormalizedEvent, EnrichedError, ExportOptions, SessionExportData, CostRecord } from '../shared/types'
 
@@ -793,8 +795,6 @@ ipcMain.handle(IPC.TRANSCRIBE_AUDIO, async (_event, audioBase64: string) => {
     writeFileSync(tmpWav, buf)
 
     // Find whisper binary using platform-appropriate paths
-    const { getWhisperBinaryCandidates, getWhisperNotFoundMessage } = require('./whisper-paths')
-    const { findBinary } = require('./platform')
     const whisperCandidates = getWhisperBinaryCandidates()
 
     let whisperBin = ''
@@ -821,7 +821,6 @@ ipcMain.handle(IPC.TRANSCRIBE_AUDIO, async (_event, audioBase64: string) => {
     const isWhisperCpp = whisperBin.includes('whisper-cli')
 
     // Find model file — prefer multilingual (auto-detect language) over .en (English-only)
-    const { getWhisperModelCandidates, getModelDownloadMessage } = require('./whisper-paths')
     const modelCandidates = getWhisperModelCandidates()
 
     let modelPath = ''
@@ -1065,27 +1064,29 @@ app.whenReady().then(() => {
   agentMemory = new AgentMemory(join(app.getPath('userData'), 'agent-memory.json'))
   controlPlane.setAgentMemory(agentMemory)
 
-  // ─── Content Security Policy ───
-  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
-    callback({
-      responseHeaders: {
-        ...details.responseHeaders,
-        'Content-Security-Policy': [
-          [
-            "default-src 'self'",
-            "script-src 'self'",
-            "style-src 'self' 'unsafe-inline'",
-            "img-src 'self' data:",
-            "font-src 'self'",
-            "connect-src 'self'",
-            "media-src 'self'",
-            "object-src 'none'",
-            "base-uri 'self'",
-          ].join('; '),
-        ],
-      },
+  // ─── Content Security Policy (production only — Vite dev injects inline scripts) ───
+  if (app.isPackaged) {
+    session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+      callback({
+        responseHeaders: {
+          ...details.responseHeaders,
+          'Content-Security-Policy': [
+            [
+              "default-src 'self'",
+              "script-src 'self'",
+              "style-src 'self' 'unsafe-inline'",
+              "img-src 'self' data:",
+              "font-src 'self'",
+              "connect-src 'self'",
+              "media-src 'self'",
+              "object-src 'none'",
+              "base-uri 'self'",
+            ].join('; '),
+          ],
+        },
+      })
     })
-  })
+  }
 
   // macOS: become an accessory app. Accessory apps can have key windows (keyboard works)
   // without deactivating the currently active app (hover preserved in browsers).

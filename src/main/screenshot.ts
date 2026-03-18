@@ -36,16 +36,26 @@ export function buildScreenshotCommand(outputPath: string): ScreenshotCommand | 
 
   if (process.platform === 'win32') {
     const escapedPath = outputPath.replace(/'/g, "''")
-    // Launch Snipping Tool for interactive region select, then save clipboard to file.
-    // If user cancels the snip, clipboard won't have an image → file won't be created.
+    // Use ms-screenclip: URI to open the native screen snip overlay (same as Win+Shift+S).
+    // Then poll the clipboard every 500ms for up to 30s waiting for the user to complete the snip.
+    // If user cancels (Escape), clipboard stays empty → file won't be created.
     const psScript = [
       'Add-Type -AssemblyName System.Windows.Forms;',
       'Add-Type -AssemblyName System.Drawing;',
       '[System.Windows.Forms.Clipboard]::Clear();',
-      '$p = Start-Process -FilePath "SnippingTool.exe" -ArgumentList "/clip" -PassThru;',
-      '$p.WaitForExit();',
-      '$img = [System.Windows.Forms.Clipboard]::GetImage();',
-      `if ($img) { $img.Save('${escapedPath}', [System.Drawing.Imaging.ImageFormat]::Png); $img.Dispose() }`,
+      'Start-Process "explorer.exe" "ms-screenclip:";',
+      'Start-Sleep -Milliseconds 800;',
+      '$timeout = 60; $elapsed = 0;',
+      'while ($elapsed -lt $timeout) {',
+      '  Start-Sleep -Milliseconds 500;',
+      '  $elapsed += 1;',
+      '  $img = [System.Windows.Forms.Clipboard]::GetImage();',
+      '  if ($img) {',
+      `    $img.Save('${escapedPath}', [System.Drawing.Imaging.ImageFormat]::Png);`,
+      '    $img.Dispose();',
+      '    break',
+      '  }',
+      '}',
     ].join(' ')
 
     return {
