@@ -21,6 +21,7 @@ import { useShortcutStore } from './stores/shortcutStore'
 import { useSessionStore } from './stores/sessionStore'
 import { useSnippetStore } from './stores/snippetStore'
 import { useCommandPaletteStore } from './stores/commandPaletteStore'
+import { orderTabsByTabOrder, reconcileTabOrder, replaceTabOrderId, saveStoredTabOrder } from './stores/tabOrder'
 import { useColors, useThemeStore, spacing } from './theme'
 
 const TRANSITION = { duration: 0.26, ease: [0.4, 0, 0.1, 1] as const }
@@ -68,9 +69,20 @@ export default function App() {
         }))
         window.clui.createTab().then(({ tabId }) => {
           useSessionStore.setState((s) => ({
-            tabs: s.tabs.map((t, i) => (i === 0 ? { ...t, id: tabId } : t)),
+            tabs: orderTabsByTabOrder(
+              s.tabs.map((t, i) => (i === 0 ? { ...t, id: tabId } : t)),
+              reconcileTabOrder(
+                replaceTabOrderId(s.tabOrder, s.tabs[0]?.id || tabId, tabId),
+                s.tabs.map((t, i) => (i === 0 ? { ...t, id: tabId } : t)),
+              ),
+            ),
+            tabOrder: reconcileTabOrder(
+              replaceTabOrderId(s.tabOrder, s.tabs[0]?.id || tabId, tabId),
+              s.tabs.map((t, i) => (i === 0 ? { ...t, id: tabId } : t)),
+            ),
             activeTabId: tabId,
           }))
+          saveStoredTabOrder(useSessionStore.getState().tabOrder)
         }).catch(() => {})
       }
     })
@@ -107,6 +119,12 @@ export default function App() {
         }
         case 'new-tab':
           void session.createTab()
+          break
+        case 'move-tab-left':
+          session.moveActiveTab('left')
+          break
+        case 'move-tab-right':
+          session.moveActiveTab('right')
           break
         case 'close-tab':
           if (session.tabs.length > 1) {
