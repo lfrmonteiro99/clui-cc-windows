@@ -8,6 +8,8 @@ import {
   SpinnerGap, ArrowCounterClockwise, Square,
 } from '@phosphor-icons/react'
 import { useSessionStore } from '../stores/sessionStore'
+import { FilePath } from './FilePath'
+import { isLikelyFilePath } from '../utils/file-path-detect'
 import { PermissionCard } from './PermissionCard'
 import { PermissionDeniedCard } from './PermissionDeniedCard'
 import { RetryBanner } from './RetryBanner'
@@ -577,6 +579,12 @@ const AssistantMessage = React.memo(function AssistantMessage({
 
   const markdownComponents = useMemo(() => ({
     table: ({ children }: any) => <TableScrollWrapper>{children}</TableScrollWrapper>,
+    code: ({ children, className }: any) => {
+      if (className) return <code className={className}>{children}</code>
+      const text = typeof children === 'string' ? children : String(children ?? '')
+      if (isLikelyFilePath(text)) return <FilePath path={text} displayName={text} />
+      return <code>{children}</code>
+    },
     a: ({ href, children }: any) => (
       <button
         type="button"
@@ -635,6 +643,25 @@ function toolSummary(tools: Message[]): string {
   const desc = getToolDescription(first.toolName || 'Tool', first.toolInput)
   if (tools.length === 1) return desc
   return `${desc} and ${tools.length - 1} more tool${tools.length > 2 ? 's' : ''}`
+}
+
+function ToolDescriptionWithFilePath({ desc, toolInput }: { desc: string; toolInput?: string }) {
+  if (!toolInput) return <>{desc}</>
+  try {
+    const parsed = JSON.parse(toolInput)
+    const fp = parsed.file_path || parsed.path
+    if (fp && desc.includes(fp)) {
+      const idx = desc.indexOf(fp)
+      return (
+        <>
+          {desc.slice(0, idx)}
+          <FilePath path={fp} displayName={fp} />
+          {desc.slice(idx + fp.length)}
+        </>
+      )
+    }
+  } catch { /* not JSON */ }
+  return <>{desc}</>
 }
 
 /** Short human-readable description from tool name + input */
@@ -726,7 +753,7 @@ const ToolGroup = React.memo(function ToolGroup({ tools, skipMotion }: { tools: 
                       className="text-[12px] leading-[1.4] block truncate"
                       style={{ color: isRunning ? colors.textSecondary : colors.textTertiary }}
                     >
-                      {desc}
+                      <ToolDescriptionWithFilePath desc={desc} toolInput={tool.toolInput} />
                     </span>
 
                     {/* Inline diff viewer for Edit/Write tools */}

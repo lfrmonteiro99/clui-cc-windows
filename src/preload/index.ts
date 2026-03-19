@@ -103,6 +103,14 @@ export interface CluiAPI {
   terminalClose(termTabId: string): Promise<void>
   onTerminalData(callback: (termTabId: string, data: string) => void): () => void
   onTerminalExit(callback: (termTabId: string, exitCode: number) => void): () => void
+
+  // File peek
+  fileRead(workingDirectory: string, filePath: string): Promise<{
+    ok: boolean; content?: string; language?: string; lineCount?: number;
+    truncated?: boolean; fileSize?: number; error?: string; message?: string
+  }>
+  fileReveal(filePath: string, workingDirectory: string): Promise<boolean>
+  fileOpenExternal(filePath: string, workingDirectory: string): Promise<boolean>
 }
 
 const api: CluiAPI = {
@@ -242,6 +250,11 @@ const api: CluiAPI = {
     ipcRenderer.on(IPC.TERMINAL_EXIT, handler)
     return () => ipcRenderer.removeListener(IPC.TERMINAL_EXIT, handler)
   },
+
+  // File peek
+  fileRead: (workingDirectory, filePath) => ipcRenderer.invoke(IPC.FILE_READ, { workingDirectory, filePath }),
+  fileReveal: (filePath, workingDirectory) => ipcRenderer.invoke(IPC.FILE_REVEAL, { filePath, workingDirectory }),
+  fileOpenExternal: (filePath, workingDirectory) => ipcRenderer.invoke(IPC.FILE_OPEN_EXTERNAL, { filePath, workingDirectory }),
 }
 
 contextBridge.exposeInMainWorld('clui', api)

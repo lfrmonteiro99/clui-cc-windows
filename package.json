@@ -43,6 +43,7 @@
     "framer-motion": "^12.35.1",
     "react-markdown": "^9.0.0",
     "remark-gfm": "^4.0.0",
+    "shiki": "^4.0.2",
     "zustand": "^5.0.0"
   },
   "optionalDependencies": {

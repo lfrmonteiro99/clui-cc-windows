@@ -574,6 +574,11 @@ export const IPC = {
   // Error logging
   LOG_RENDERER_ERROR: 'clui:log-renderer-error',
 
+  // File peek
+  FILE_READ: 'clui:file-read',
+  FILE_REVEAL: 'clui:file-reveal',
+  FILE_OPEN_EXTERNAL: 'clui:file-open-external',
+
   // Legacy (kept for backward compat during migration)
   STREAM_EVENT: 'clui:stream-event',
   RUN_COMPLETE: 'clui:run-complete',

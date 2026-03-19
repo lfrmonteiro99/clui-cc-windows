@@ -39,7 +39,7 @@ describe('DiffViewer', () => {
 
     expect(screen.getByText(/Show \d+ lines changed/)).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: /large\.ts/i }))
+    fireEvent.click(screen.getAllByRole('button', { name: /large\.ts/i })[0])
 
     expect(screen.getByText('lines changed')).toBeInTheDocument()
   })
