@@ -119,17 +119,17 @@ FILE_OPEN_EXTERNAL: 'clui:file-open-external',
 
 **Channel:** `clui:file-reveal`
 **Direction:** renderer -> main (invoke/handle)
-**Payload:** `{ filePath: string }`
+**Payload:** `{ filePath: string, workingDirectory: string }`
 **Handler:** `shell.showItemInFolder(resolvedPath)` — Electron built-in, opens OS file explorer with the file selected.
-**Security:** Same workspace boundary check as FILE_READ.
+**Security:** Same workspace boundary check as FILE_READ — `workingDirectory` is required in the payload.
 
 ### 3.3 `IPC.FILE_OPEN_EXTERNAL`
 
 **Channel:** `clui:file-open-external`
 **Direction:** renderer -> main (invoke/handle)
-**Payload:** `{ filePath: string }`
+**Payload:** `{ filePath: string, workingDirectory: string }`
 **Handler:** `shell.openPath(resolvedPath)` — Opens file in the OS default editor.
-**Security:** Same workspace boundary check as FILE_READ.
+**Security:** Same workspace boundary check as FILE_READ — `workingDirectory` is required in the payload.
 
 ### 3.4 Language Detection Map
 
@@ -295,7 +295,7 @@ interface ContextMenuState {
 const FILE_CONTEXT_ITEMS: ContextMenuItem[] = [
   { id: 'peek', label: 'Peek File', icon: 'Eye', shortcut: 'Ctrl+Click' },
   { id: 'copy-path', label: 'Copy Path', icon: 'Copy' },
-  { id: 'reveal', label: 'Reveal in Explorer', icon: 'FolderOpen' },
+  { id: 'reveal', label: process.platform === 'darwin' ? 'Reveal in Finder' : 'Reveal in Explorer', icon: 'FolderOpen' },
   { id: 'open-external', label: 'Open in Editor', icon: 'ArrowSquareOut' },
 ]
 
@@ -359,7 +359,7 @@ interface FilePathProps {
 
 **File:** `src/renderer/components/FileContextMenu.tsx`
 
-Custom React context menu. Mounted at the App level (portal or direct child of App root). Positioned absolutely at `contextMenuStore.position`.
+Custom React context menu. Mounted at the App level (portal or direct child of App root). Positioned absolutely at `contextMenuStore.position`. **Must have `data-clui-ui` attribute** on the root element — without it, the app's click-through system (`setIgnoreMouseEvents`) will swallow clicks on the menu.
 
 **Visual design:**
 - `glass-surface` class (matches existing panels)
@@ -389,8 +389,8 @@ Custom React context menu. Mounted at the App level (portal or direct child of A
 |---------|--------|
 | `peek` | `filePeekStore.openPeek(filePath, workingDirectory)` |
 | `copy-path` | `navigator.clipboard.writeText(filePath)` + toast notification |
-| `reveal` | `window.clui.fileReveal(filePath)` |
-| `open-external` | `window.clui.fileOpenExternal(filePath)` |
+| `reveal` | `window.clui.fileReveal(filePath, workingDirectory)` |
+| `open-external` | `window.clui.fileOpenExternal(filePath, workingDirectory)` |
 
 ### 5.3 `<FilePeekPanel>`
 
@@ -631,7 +631,7 @@ When Escape is pressed:
 2. If peek panel is open, close peek panel
 3. Otherwise, propagate to other handlers (command palette, etc.)
 
-Implementation: `FileContextMenu` and `FilePeekPanel` each attach a `keydown` listener. Context menu uses `z-index: 40` (higher than peek at `z-index: 32`), so its Escape handler fires first and calls `e.stopPropagation()`.
+Implementation: A single top-level `keydown` handler (or each component's handler checks higher-priority state). `FilePeekPanel`'s Escape handler must check `contextMenuStore.isOpen` before closing — if the context menu is open, Escape closes only the menu. Z-index affects visual stacking, not keyboard event propagation order.
 
 Click-outside dismissal:
 - Context menu: `mousedown` on `document`, check if target is outside menu, close if so
@@ -665,7 +665,11 @@ export async function getHighlighter(): Promise<Highlighter> {
           'bash', 'sql', 'plaintext',
         ],
       })
-    )
+    ).catch((err) => {
+      // Reset so next attempt can retry instead of caching a rejected promise
+      highlighterPromise = null
+      throw err
+    })
   }
   return highlighterPromise
 }
@@ -711,6 +715,8 @@ When theme changes while peek is open, re-run `highlightCode()` with the new the
 Shiki returns an HTML string. Render it via `dangerouslySetInnerHTML` on a container div. This is safe because:
 - The input is file content that Shiki escapes (it does not pass through raw HTML)
 - The content comes from the user's own filesystem via a validated IPC channel
+
+**Safety boundary:** The Shiki HTML output must go directly to `dangerouslySetInnerHTML` without any intermediate HTML processing (e.g., search-and-replace for highlighting). Any future feature that modifies the HTML between Shiki output and rendering (e.g., search highlighting) must operate on the Shiki tokens, not on the raw HTML string, to avoid XSS.
 
 Add line numbers as a separate gutter column (not part of Shiki output) to keep selection clean — users can select code text without line numbers.
 
@@ -759,29 +765,49 @@ Add line numbers as a separate gutter column (not part of Shiki output) to keep 
 
 ### 10.1 Workspace Boundary Enforcement
 
-All three IPC handlers (FILE_READ, FILE_REVEAL, FILE_OPEN_EXTERNAL) enforce the same security boundary:
+All three IPC handlers (FILE_READ, FILE_REVEAL, FILE_OPEN_EXTERNAL) enforce the same security boundary. All require `workingDirectory` in their payload.
 
 ```typescript
-import { resolve, normalize } from 'path'
+import { resolve, normalize, sep } from 'path'
+import { existsSync, realpathSync } from 'fs'
 
 function isPathWithinWorkspace(filePath: string, workingDirectory: string): boolean {
   const resolved = resolve(workingDirectory, filePath)
-  const normalized = normalize(resolved)
-  const normalizedBase = normalize(workingDirectory)
+
+  // Use realpathSync to resolve symlinks — prevents symlink escape attacks.
+  // Both the workspace base and target must be resolved through realpathSync.
+  // Only call realpathSync if the file exists (it throws otherwise).
+  let normalizedTarget: string
+  let normalizedBase: string
+
+  try {
+    normalizedBase = realpathSync(workingDirectory)
+  } catch {
+    normalizedBase = normalize(workingDirectory)
+  }
+
+  if (existsSync(resolved)) {
+    try {
+      normalizedTarget = realpathSync(resolved)
+    } catch {
+      normalizedTarget = normalize(resolved)
+    }
+  } else {
+    normalizedTarget = normalize(resolved)
+  }
 
   // Ensure the resolved path starts with the workspace directory
-  // Use platform-appropriate separator for prefix check
-  return normalized.startsWith(normalizedBase + require('path').sep) ||
-         normalized === normalizedBase
+  return normalizedTarget.startsWith(normalizedBase + sep) ||
+         normalizedTarget === normalizedBase
 }
 ```
 
 ### 10.2 Path Traversal Prevention
 
-The `resolve()` + `normalize()` combination handles:
+The `resolve()` + `realpathSync()` + `normalize()` combination handles:
 - `../../etc/passwd` — resolves to outside workspace, rejected
 - `foo/../../../etc/passwd` — same
-- Symlinks: `fs.realpathSync()` should be used on both the workspace dir and the target path to prevent symlink escapes. However, `realpathSync` can throw if the file doesn't exist yet, so use it conditionally.
+- **Symlink escape:** A symlink inside the workspace pointing to `/etc/passwd` is resolved via `realpathSync()` to its real target, which fails the prefix check
 
 ### 10.3 No Write Access
 
@@ -833,8 +859,8 @@ fileRead(workingDirectory: string, filePath: string): Promise<{
   error?: string
   message?: string
 }>
-fileReveal(filePath: string): Promise<boolean>
-fileOpenExternal(filePath: string): Promise<boolean>
+fileReveal(filePath: string, workingDirectory: string): Promise<boolean>
+fileOpenExternal(filePath: string, workingDirectory: string): Promise<boolean>
 ```
 
 Add implementations to the `api` object:
@@ -842,10 +868,10 @@ Add implementations to the `api` object:
 ```typescript
 fileRead: (workingDirectory, filePath) =>
   ipcRenderer.invoke(IPC.FILE_READ, { workingDirectory, filePath }),
-fileReveal: (filePath) =>
-  ipcRenderer.invoke(IPC.FILE_REVEAL, { filePath }),
-fileOpenExternal: (filePath) =>
-  ipcRenderer.invoke(IPC.FILE_OPEN_EXTERNAL, { filePath }),
+fileReveal: (filePath, workingDirectory) =>
+  ipcRenderer.invoke(IPC.FILE_REVEAL, { filePath, workingDirectory }),
+fileOpenExternal: (filePath, workingDirectory) =>
+  ipcRenderer.invoke(IPC.FILE_OPEN_EXTERNAL, { filePath, workingDirectory }),
 ```
 
 ### Step 4: Stores (`src/renderer/stores/`)
