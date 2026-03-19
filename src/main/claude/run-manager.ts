@@ -172,6 +172,20 @@ export class RunManager extends EventEmitter {
     // Always tell Claude it's inside CLUI (additive, doesn't replace base prompt)
     args.push('--append-system-prompt', CLUI_SYSTEM_HINT)
 
+    // Windows: shell:true passes args through cmd.exe which interprets
+    // <, >, |, &, (, ), ^, !, % as operators. Wrapping in double quotes
+    // makes cmd.exe treat them as literals.
+    if (process.platform === 'win32') {
+      for (let i = 0; i < args.length; i++) {
+        // Collapse newlines — cmd.exe treats them as command separators
+        args[i] = args[i].replace(/\n/g, ' ')
+        // Wrap in double quotes if it contains cmd.exe special characters
+        if (/[<>|&^()!%]/.test(args[i])) {
+          args[i] = `"${args[i].replace(/"/g, '""').replace(/%/g, '%%')}"`
+        }
+      }
+    }
+
     if (DEBUG) {
       log(`Starting run ${requestId}: ${this.claudeBinary} ${args.join(' ')}`)
       log(`Prompt: ${options.prompt.substring(0, 200)}`)

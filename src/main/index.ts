@@ -24,6 +24,9 @@ import { ensureWhisper, type WhisperProvisionStatus } from './whisper-provisione
 import { findBinary } from './platform'
 import { TerminalManager } from './terminal/terminal-manager'
 import { handleFileRead, handleFileReveal, handleFileOpenExternal } from './file-peek-handlers'
+import { DatabaseService } from './context/database-service'
+import { IngestionService } from './context/ingestion-service'
+import { RetrievalService } from './context/retrieval-service'
 import { IPC } from '../shared/types'
 import type { RunOptions, NormalizedEvent, EnrichedError, ExportOptions, SessionExportData, CostRecord } from '../shared/types'
 
@@ -65,6 +68,14 @@ const terminalManager = new TerminalManager(broadcast)
 let agentMemory: AgentMemory | null = null
 
 const controlPlane = new ControlPlane(INTERACTIVE_PTY)
+
+// Context database
+const userDataPath = app.getPath('userData')
+const contextDbPath = join(userDataPath, 'state', 'context.sqlite')
+const contextBlobsPath = join(userDataPath, 'state', 'blobs')
+const contextDb = new DatabaseService(contextDbPath, contextBlobsPath)
+const ingestionService = new IngestionService(contextDb)
+const retrievalService = new RetrievalService(contextDb)
 
 // Keep native width fixed to avoid renderer animation vs setBounds race.
 // The UI itself still launches in compact mode; extra width is transparent/click-through.
@@ -128,6 +139,24 @@ controlPlane.on('tab-status-change', (tabId: string, newStatus: string, oldStatu
 
 controlPlane.on('error', (tabId: string, error: EnrichedError) => {
   broadcast(IPC.ENRICHED_ERROR, tabId, error)
+})
+
+// ─── Context database ingestion ───
+
+controlPlane.on('event', (tabId: string, event: NormalizedEvent) => {
+  try {
+    ingestionService.ingest(tabId, event)
+  } catch (err) {
+    log(`Ingestion error (event): ${err}`)
+  }
+})
+
+controlPlane.on('tab-status-change', (tabId: string, newStatus: string, oldStatus: string) => {
+  try {
+    ingestionService.onTabStatusChange(tabId, newStatus, oldStatus)
+  } catch (err) {
+    log(`Ingestion error (tab-status-change): ${err}`)
+  }
 })
 
 // ─── Window Creation ───
@@ -335,6 +364,16 @@ ipcMain.handle(IPC.PROMPT, async (_event, { tabId, requestId, options }: { tabId
     throw new Error('No requestId provided — prompt rejected')
   }
 
+  // Capture user prompt and init tab for context database
+  try {
+    if (options.projectPath) {
+      ingestionService.initTab(tabId, options.projectPath)
+    }
+    ingestionService.ingestUserMessage(tabId, requestId, options.prompt || '', [])
+  } catch (err) {
+    log(`Ingestion error (prompt capture): ${err}`)
+  }
+
   try {
     await controlPlane.submitPrompt(tabId, requestId, options)
   } catch (err: unknown) {
@@ -369,6 +408,11 @@ ipcMain.handle(IPC.TAB_HEALTH, () => {
 
 ipcMain.handle(IPC.CLOSE_TAB, (_event, tabId: string) => {
   log(`IPC CLOSE_TAB: ${tabId}`)
+  try {
+    ingestionService.onTabClosed(tabId)
+  } catch (err) {
+    log(`Ingestion error (tab close): ${err}`)
+  }
   controlPlane.closeTab(tabId)
 })
 
@@ -1110,6 +1154,15 @@ app.whenReady().then(() => {
   agentMemory = new AgentMemory(join(app.getPath('userData'), 'agent-memory.json'))
   controlPlane.setAgentMemory(agentMemory)
 
+  // ─── Context database ───
+  try {
+    contextDb.init()
+    controlPlane.setRetrievalService(retrievalService)
+    log('Context database initialized')
+  } catch (err) {
+    log(`Context database init failed: ${err}`)
+  }
+
   // ─── Content Security Policy (production only — Vite dev injects inline scripts) ───
   if (app.isPackaged) {
     session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
@@ -1236,6 +1289,8 @@ app.on('will-quit', () => {
   globalShortcut.unregisterAll()
   terminalManager.shutdown()
   controlPlane.shutdown()
+  ingestionService.shutdown()
+  contextDb.close()
   flushLogs()
 })
 

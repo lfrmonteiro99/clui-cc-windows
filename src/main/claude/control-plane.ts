@@ -3,6 +3,7 @@ import { RunManager } from './run-manager'
 import { PtyRunManager } from './pty-run-manager'
 import { PermissionServer, maskSensitiveFields } from '../hooks/permission-server'
 import { AgentMemory } from '../agent-memory'
+import type { RetrievalService } from '../context/retrieval-service'
 import type { HookToolRequest, PermissionOption } from '../hooks/permission-server'
 import { log as _log } from '../logger'
 import type {
@@ -80,6 +81,8 @@ export class ControlPlane extends EventEmitter {
   private hookServerReady: Promise<void>
   /** Optional persisted coordination memory shared across tabs/agents. */
   private agentMemory: AgentMemory | null = null
+  /** Optional context database retrieval service for memory packet injection. */
+  private retrievalService: RetrievalService | null = null
 
   constructor(interactivePty = false) {
     super()
@@ -299,6 +302,10 @@ export class ControlPlane extends EventEmitter {
   setAgentMemory(agentMemory: AgentMemory): void {
     this.agentMemory = agentMemory
     this.agentMemory.pruneStaleTabs(this.tabs.keys())
+  }
+
+  setRetrievalService(service: RetrievalService): void {
+    this.retrievalService = service
   }
 
   /**
@@ -693,6 +700,24 @@ export class ControlPlane extends EventEmitter {
           systemPrompt: [options.systemPrompt, agentMemoryPrompt].filter(Boolean).join('\n\n'),
         }
       }
+    }
+
+    // Context database memory packet
+    if (this.retrievalService) {
+      const projectId = this.retrievalService.resolveProjectId(options.projectPath || '')
+      log(`Context retrieval: path="${options.projectPath}" → projectId=${projectId || 'null'}`)
+      if (projectId) {
+        const memoryPacket = this.retrievalService.buildMemoryPacket(projectId, tabId, options.prompt || '')
+        log(`Context packet: ${memoryPacket ? `${memoryPacket.length} chars` : 'null (no data)'}`)
+        if (memoryPacket) {
+          options = {
+            ...options,
+            systemPrompt: [options.systemPrompt, memoryPacket].filter(Boolean).join('\n\n'),
+          }
+        }
+      }
+    } else {
+      log('Context retrieval: retrievalService not set')
     }
 
     // Per-run token lifecycle: register run, generate per-run settings file
