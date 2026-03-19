@@ -23,6 +23,7 @@ import { getWhisperBinaryCandidates, getWhisperNotFoundMessage, getWhisperModelC
 import { ensureWhisper, type WhisperProvisionStatus } from './whisper-provisioner'
 import { findBinary } from './platform'
 import { TerminalManager } from './terminal/terminal-manager'
+import { handleFileRead, handleFileReveal, handleFileOpenExternal } from './file-peek-handlers'
 import { IPC } from '../shared/types'
 import type { RunOptions, NormalizedEvent, EnrichedError, ExportOptions, SessionExportData, CostRecord } from '../shared/types'
 
@@ -984,6 +985,11 @@ ipcMain.handle(IPC.GIT_DIFF, (_event, cwd: string, file?: string) => {
   log(`IPC GIT_DIFF: ${cwd}${file ? ` file=${file}` : ''}`)
   return gitContext.getDiff(cwd, file)
 })
+
+// ─── File Peek IPC ───
+ipcMain.handle(IPC.FILE_READ, handleFileRead)
+ipcMain.handle(IPC.FILE_REVEAL, handleFileReveal)
+ipcMain.handle(IPC.FILE_OPEN_EXTERNAL, handleFileOpenExternal)
 
 // ─── Terminal IPC ───
 

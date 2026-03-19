@@ -36,7 +36,11 @@ import { useWorkflowStore } from './stores/workflowStore'
 import { useTerminalStore } from './stores/terminalStore'
 import { TerminalPanel } from './components/TerminalPanel'
 import { ModeToggle } from './components/ModeToggle'
+import { FilePeekPanel } from './components/FilePeekPanel'
+import { FileContextMenu } from './components/FileContextMenu'
 import { useColors, useThemeStore, spacing } from './theme'
+import { useFilePeekStore } from './stores/filePeekStore'
+import { useContextMenuStore } from './stores/contextMenuStore'
 
 const TRANSITION = { duration: 0.26, ease: [0.4, 0, 0.1, 1] as const }
 
@@ -63,6 +67,8 @@ export default function App() {
   const activeComparison = useComparisonStore((s) => s.activeComparison)
   const comparisonLauncherOpen = useComparisonStore((s) => s.launcherOpen)
   const terminalMode = useTerminalStore((s) => s.terminalMode)
+  const filePeekOpen = useFilePeekStore((s) => s.isOpen)
+  const contextMenuOpen = useContextMenuStore((s) => s.isOpen)
   const isRunning = activeTabStatus === 'running' || activeTabStatus === 'connecting'
   const [showPermissionWizard, setShowPermissionWizard] = useState(false)
   const [gitPanelOpen, setGitPanelOpen] = useState(false)
@@ -289,6 +295,7 @@ export default function App() {
         <CommandPalette />
         <ToastContainer />
         <GitPanel open={gitPanelOpen} onClose={() => setGitPanelOpen(false)} />
+        {contextMenuOpen && <FileContextMenu />}
         <div data-testid="app-root" className="flex flex-col justify-end h-full" style={{ background: 'transparent' }}>
 
         {/* ─── 460px content column, centered. Circles overflow left. ─── */}
@@ -332,6 +339,27 @@ export default function App() {
                     }}
                   >
                     <MarketplacePanel />
+                  </div>
+                </motion.div>
+              </div>
+            )}
+          </AnimatePresence>
+
+          <AnimatePresence initial={false}>
+            {filePeekOpen && (
+              <div data-clui-ui style={{
+                width: 720, maxWidth: 720, marginLeft: '50%',
+                transform: 'translateX(-50%)', marginBottom: 14,
+                position: 'relative', zIndex: 32,
+              }}>
+                <motion.div
+                  initial={{ opacity: 0, y: 14, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 10, scale: 0.985 }}
+                  transition={TRANSITION}
+                >
+                  <div data-clui-ui className="glass-surface overflow-hidden no-drag" style={{ borderRadius: 24, maxHeight: 470 }}>
+                    <FilePeekPanel />
                   </div>
                 </motion.div>
               </div>

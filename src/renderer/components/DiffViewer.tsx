@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { CaretDown, CaretRight } from '@phosphor-icons/react'
 import { useColors } from '../theme'
+import { FilePath } from './FilePath'
 import { generateDiff } from '../utils/diff'
 import type { DiffHunk, DiffLine } from '../utils/diff'
 
@@ -92,17 +93,16 @@ export function DiffViewer({ filePath, oldString, newString, defaultCollapsed }:
           ? <CaretRight size={12} style={{ color: colors.textTertiary, flexShrink: 0 }} />
           : <CaretDown size={12} style={{ color: colors.textTertiary, flexShrink: 0 }} />
         }
-        <span
+        <FilePath
+          path={filePath}
+          displayName={fileName}
           style={{
             color: colors.textSecondary,
             overflow: 'hidden',
             textOverflow: 'ellipsis',
             whiteSpace: 'nowrap',
           }}
-          title={filePath}
-        >
-          {fileName}
-        </span>
+        />
         <span style={{ color: colors.textTertiary, fontSize: 11, flexShrink: 0 }}>
           {collapsed ? `Show ${totalLines} lines changed` : ''}
         </span>
