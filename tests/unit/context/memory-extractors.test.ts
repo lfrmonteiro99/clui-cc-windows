@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeAll, beforeEach, afterEach } from 'vitest'
 import { mkdtempSync, rmSync } from 'fs'
 import { join } from 'path'
 import { tmpdir } from 'os'
@@ -8,6 +8,11 @@ import {
   extractErrorPatterns,
   extractToolPreferences,
 } from '../../../src/main/context/memory-extractors'
+import { __initSqlWasm } from '../../__mocks__/better-sqlite3'
+
+beforeAll(async () => {
+  await __initSqlWasm()
+})
 
 describe('Memory Extractors', () => {
   let tempDir: string
