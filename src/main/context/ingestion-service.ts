@@ -3,6 +3,7 @@ import { basename, isAbsolute, relative, resolve, normalize } from 'path'
 import type { DatabaseService } from './database-service'
 import type { NormalizedEvent, AssistantMessagePayload } from '../../shared/types'
 import type { ContextMemory, ContextSessionSummary } from './types'
+import { extractFilePatterns, extractErrorPatterns, extractToolPreferences } from './memory-extractors'
 
 // ── Per-tab ingestion state ─────────────────────────────────────────────
 
@@ -513,6 +514,17 @@ export class IngestionService extends EventEmitter {
 
     // Create session_outcome memory
     this.createSessionOutcomeMemory(state, event)
+
+    // Run memory extractors
+    if (state.projectId && state.sessionId) {
+      try {
+        extractFilePatterns(this.db, state.projectId, state.sessionId)
+        extractErrorPatterns(this.db, state.projectId, state.sessionId)
+        extractToolPreferences(this.db, state.projectId, state.sessionId)
+      } catch (err) {
+        console.error('[IngestionService] Memory extractor error:', err)
+      }
+    }
 
     // Emit events
     const sessionDetail = this.db.getSessionDetail(state.sessionId)

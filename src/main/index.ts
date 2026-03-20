@@ -142,6 +142,15 @@ controlPlane.on('error', (tabId: string, error: EnrichedError) => {
   broadcast(IPC.ENRICHED_ERROR, tabId, error)
 })
 
+// ─── Context database broadcast events ───
+
+ingestionService.on('memory-created', (memory) => {
+  broadcast(IPC.CONTEXT_MEMORY_CREATED, memory)
+})
+ingestionService.on('session-recorded', (session) => {
+  broadcast(IPC.CONTEXT_SESSION_RECORDED, session)
+})
+
 // ─── Context database ingestion ───
 
 controlPlane.on('event', (tabId: string, event: NormalizedEvent) => {
@@ -1064,6 +1073,48 @@ ipcMain.handle(IPC.WSL_BROWSE, async (_event, distro: string) => {
   return result.canceled ? null : result.filePaths[0]
 })
 
+// ─── Context Database IPC ───
+
+ipcMain.handle(IPC.CONTEXT_SEARCH_MEMORIES, async (_e, { projectPath, query, limit }: { projectPath: string; query: string; limit: number }) => {
+  const projectId = retrievalService.resolveProjectId(projectPath)
+  if (!projectId) return []
+  return retrievalService.searchMemories(projectId, query, limit || 20)
+})
+
+ipcMain.handle(IPC.CONTEXT_GET_SESSION_HISTORY, async (_e, { projectPath, limit, offset }: { projectPath: string; limit: number; offset: number }) => {
+  return contextDb.getSessionHistory(projectPath, limit || 20, offset || 0)
+})
+
+ipcMain.handle(IPC.CONTEXT_GET_SESSION_DETAIL, async (_e, sessionId: string) => {
+  return contextDb.getSessionDetail(sessionId)
+})
+
+ipcMain.handle(IPC.CONTEXT_GET_PROJECT_STATS, async (_e, projectPath: string) => {
+  return contextDb.getProjectStats(projectPath)
+})
+
+ipcMain.handle(IPC.CONTEXT_PIN_MEMORY, async (_e, memoryId: string) => {
+  contextDb.pinMemory(memoryId)
+})
+
+ipcMain.handle(IPC.CONTEXT_UNPIN_MEMORY, async (_e, memoryId: string) => {
+  contextDb.unpinMemory(memoryId)
+})
+
+ipcMain.handle(IPC.CONTEXT_DELETE_MEMORY, async (_e, memoryId: string) => {
+  contextDb.deleteMemory(memoryId)
+})
+
+ipcMain.handle(IPC.CONTEXT_GET_FILES_TOUCHED, async (_e, { projectPath, limit }: { projectPath: string; limit: number }) => {
+  return contextDb.getFilesTouched(projectPath, limit || 50)
+})
+
+ipcMain.handle(IPC.CONTEXT_GET_MEMORY_PACKET_PREVIEW, async (_e, { projectPath, tabId, prompt }: { projectPath: string; tabId: string; prompt: string }) => {
+  const projectId = retrievalService.resolveProjectId(projectPath)
+  if (!projectId) return null
+  return retrievalService.buildMemoryPacket(projectId, tabId, prompt || '')
+})
+
 // ─── Terminal IPC ───
 
 ipcMain.handle(IPC.TERMINAL_AVAILABLE, () => terminalManager.isAvailable())
@@ -1188,6 +1239,25 @@ app.whenReady().then(() => {
     contextDb.init()
     controlPlane.setRetrievalService(retrievalService)
     log('Context database initialized')
+
+    // Auto-prune stale memories on startup
+    try {
+      const pruned = contextDb.pruneStaleMemories()
+      if (pruned > 0) log(`Pruned ${pruned} stale memories`)
+    } catch (err) {
+      log(`Memory pruning error: ${err}`)
+    }
+
+    // Daily pruning interval (24h)
+    const PRUNE_INTERVAL_MS = 24 * 60 * 60 * 1000
+    setInterval(() => {
+      try {
+        const pruned = contextDb.pruneStaleMemories()
+        if (pruned > 0) log(`Daily pruning: removed ${pruned} stale memories`)
+      } catch (err) {
+        log(`Daily pruning error: ${err}`)
+      }
+    }, PRUNE_INTERVAL_MS)
   } catch (err) {
     log(`Context database init failed: ${err}`)
   }

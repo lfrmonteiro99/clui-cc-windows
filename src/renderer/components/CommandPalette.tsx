@@ -4,13 +4,14 @@ import { motion } from 'framer-motion'
 import {
   Plus, ClockCounterClockwise, GearSix, HeadCircuit, Lightning, DownloadSimple,
   Browser, Cpu, Moon, Sun, ArrowsOutSimple, ArrowsInSimple, X, GitBranch,
-  TerminalWindow, Broom,
+  TerminalWindow, Broom, Brain,
 } from '@phosphor-icons/react'
 import { usePopoverLayer } from './PopoverLayer'
 import { useColors } from '../theme'
 import { useThemeStore } from '../theme'
 import { useCommandPaletteStore } from '../stores/commandPaletteStore'
 import { useSessionStore, AVAILABLE_MODELS } from '../stores/sessionStore'
+import { useContextStore } from '../stores/contextStore'
 import { useTerminalStore } from '../stores/terminalStore'
 import { useShortcutStore } from '../stores/shortcutStore'
 import { useSnippetStore } from '../stores/snippetStore'
@@ -35,6 +36,7 @@ const ICON_MAP: Record<string, React.ReactNode> = {
   GitBranch: <GitBranch size={ICON_SIZE} />,
   TerminalWindow: <TerminalWindow size={ICON_SIZE} />,
   Broom: <Broom size={ICON_SIZE} />,
+  Brain: <Brain size={ICON_SIZE} />,
 }
 
 function resolveIcon(name: string): React.ReactNode {
@@ -63,6 +65,8 @@ function executeCommand(command: PaletteCommand): void {
     session.toggleMarketplace()
   } else if (id === 'snippets') {
     snippets.openManager()
+  } else if (id === 'context-panel') {
+    useContextStore.getState().togglePanel()
   } else if (id === 'git-panel') {
     window.dispatchEvent(new Event('clui-toggle-git-panel'))
   } else if (id === 'toggle-expanded') {
@@ -106,6 +110,7 @@ function buildCommands(): PaletteCommand[] {
     { id: 'history', category: 'action', icon: 'ClockCounterClockwise', label: 'Open History', shortcut: shortcutMap['open-history'] },
     { id: 'marketplace', category: 'action', icon: 'HeadCircuit', label: 'Marketplace', shortcut: shortcutMap['open-marketplace'] },
     { id: 'snippets', category: 'action', icon: 'Lightning', label: 'Manage Snippets' },
+    { id: 'context-panel', category: 'action', icon: 'Brain', label: 'Toggle Context Panel' },
     { id: 'git-panel', category: 'action', icon: 'GitBranch', label: 'Git Context Panel' },
     {
       id: 'toggle-expanded',

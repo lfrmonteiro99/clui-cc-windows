@@ -610,6 +610,19 @@ export const IPC = {
   WSL_CHECK_CLAUDE: 'clui:wsl-check-claude',
   WSL_BROWSE: 'clui:wsl-browse',
 
+  // Context database
+  CONTEXT_SEARCH_MEMORIES: 'clui:context-search-memories',
+  CONTEXT_GET_SESSION_HISTORY: 'clui:context-get-session-history',
+  CONTEXT_GET_SESSION_DETAIL: 'clui:context-get-session-detail',
+  CONTEXT_GET_PROJECT_STATS: 'clui:context-get-project-stats',
+  CONTEXT_PIN_MEMORY: 'clui:context-pin-memory',
+  CONTEXT_UNPIN_MEMORY: 'clui:context-unpin-memory',
+  CONTEXT_DELETE_MEMORY: 'clui:context-delete-memory',
+  CONTEXT_GET_FILES_TOUCHED: 'clui:context-get-files-touched',
+  CONTEXT_GET_MEMORY_PACKET_PREVIEW: 'clui:context-get-memory-packet-preview',
+  CONTEXT_MEMORY_CREATED: 'clui:context-memory-created',
+  CONTEXT_SESSION_RECORDED: 'clui:context-session-recorded',
+
   // Legacy (kept for backward compat during migration)
   STREAM_EVENT: 'clui:stream-event',
   RUN_COMPLETE: 'clui:run-complete',
