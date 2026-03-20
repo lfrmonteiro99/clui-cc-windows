@@ -73,7 +73,7 @@ describe('FileContextMenu', () => {
     renderWithProviders(<FileContextMenu />)
     fireEvent.click(screen.getByText('Peek File'))
 
-    expect(mockOpenPeek).toHaveBeenCalledWith('src/main/index.ts', 'C:/repo')
+    expect(mockOpenPeek).toHaveBeenCalledWith('src/main/index.ts', 'C:/repo', undefined, undefined)
     expect(useContextMenuStore.getState().isOpen).toBe(false)
   })
 
@@ -91,7 +91,7 @@ describe('FileContextMenu', () => {
     renderWithProviders(<FileContextMenu />)
     fireEvent.click(screen.getByText('Reveal in Explorer'))
 
-    expect(window.clui.fileReveal).toHaveBeenCalledWith('src/main/index.ts', 'C:/repo')
+    expect(window.clui.fileReveal).toHaveBeenCalledWith('src/main/index.ts', 'C:/repo', undefined, undefined)
     expect(useContextMenuStore.getState().isOpen).toBe(false)
   })
 
@@ -100,7 +100,7 @@ describe('FileContextMenu', () => {
     renderWithProviders(<FileContextMenu />)
     fireEvent.click(screen.getByText('Open in Editor'))
 
-    expect(window.clui.fileOpenExternal).toHaveBeenCalledWith('src/main/index.ts', 'C:/repo')
+    expect(window.clui.fileOpenExternal).toHaveBeenCalledWith('src/main/index.ts', 'C:/repo', undefined, undefined)
     expect(useContextMenuStore.getState().isOpen).toBe(false)
   })
 

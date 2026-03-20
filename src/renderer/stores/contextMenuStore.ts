@@ -14,11 +14,13 @@ interface ContextMenuState {
   position: { x: number; y: number }
   filePath: string | null
   workingDirectory: string | null
+  runtime: string | null
+  wslDistro: string | null
   items: ContextMenuItem[]
   focusedIndex: number
 
   // Actions
-  openMenu: (position: { x: number; y: number }, filePath: string, workingDirectory: string) => void
+  openMenu: (position: { x: number; y: number }, filePath: string, workingDirectory: string, runtime?: string, wslDistro?: string) => void
   closeMenu: () => void
   setFocusedIndex: (index: number) => void
 }
@@ -37,14 +39,18 @@ export const useContextMenuStore = create<ContextMenuState>((set) => ({
   position: { x: 0, y: 0 },
   filePath: null,
   workingDirectory: null,
+  runtime: null,
+  wslDistro: null,
   items: FILE_CONTEXT_ITEMS,
   focusedIndex: -1,
 
-  openMenu: (position, filePath, workingDirectory) => set({
+  openMenu: (position, filePath, workingDirectory, runtime, wslDistro) => set({
     isOpen: true,
     position,
     filePath,
     workingDirectory,
+    runtime: runtime ?? null,
+    wslDistro: wslDistro ?? null,
     items: FILE_CONTEXT_ITEMS,
     focusedIndex: -1,
   }),

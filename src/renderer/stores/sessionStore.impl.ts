@@ -588,7 +588,16 @@ export const useSessionStore = create<State>((set, get) => ({
   },
 
   setBaseDirectory: (dir) => {
-    const { activeTabId } = get()
+    const { activeTabId, tabs } = get()
+    const tab = tabs.find((t) => t.id === activeTabId)
+    if (tab && (tab.status === 'running' || tab.status === 'connecting')) {
+      useNotificationStore.getState().addToast({
+        type: 'warning',
+        title: 'Cannot change directory',
+        message: 'Stop the current session to change runtime',
+      })
+      return
+    }
     window.clui.resetTabSession(activeTabId)
     set((s) => ({
       tabs: s.tabs.map((t) =>

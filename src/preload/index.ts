@@ -107,12 +107,12 @@ export interface CluiAPI {
   onTerminalExit(callback: (termTabId: string, exitCode: number) => void): () => void
 
   // File peek
-  fileRead(workingDirectory: string, filePath: string): Promise<{
+  fileRead(workingDirectory: string, filePath: string, runtime?: string, wslDistro?: string): Promise<{
     ok: boolean; content?: string; language?: string; lineCount?: number;
     truncated?: boolean; fileSize?: number; error?: string; message?: string
   }>
-  fileReveal(filePath: string, workingDirectory: string): Promise<boolean>
-  fileOpenExternal(filePath: string, workingDirectory: string): Promise<boolean>
+  fileReveal(filePath: string, workingDirectory: string, runtime?: string, wslDistro?: string): Promise<boolean>
+  fileOpenExternal(filePath: string, workingDirectory: string, runtime?: string, wslDistro?: string): Promise<boolean>
 
   // WSL
   wslStatus(): Promise<WslStatus>
@@ -264,9 +264,9 @@ const api: CluiAPI = {
   },
 
   // File peek
-  fileRead: (workingDirectory, filePath) => ipcRenderer.invoke(IPC.FILE_READ, { workingDirectory, filePath }),
-  fileReveal: (filePath, workingDirectory) => ipcRenderer.invoke(IPC.FILE_REVEAL, { filePath, workingDirectory }),
-  fileOpenExternal: (filePath, workingDirectory) => ipcRenderer.invoke(IPC.FILE_OPEN_EXTERNAL, { filePath, workingDirectory }),
+  fileRead: (workingDirectory, filePath, runtime, wslDistro) => ipcRenderer.invoke(IPC.FILE_READ, { workingDirectory, filePath, runtime, wslDistro }),
+  fileReveal: (filePath, workingDirectory, runtime, wslDistro) => ipcRenderer.invoke(IPC.FILE_REVEAL, { filePath, workingDirectory, runtime, wslDistro }),
+  fileOpenExternal: (filePath, workingDirectory, runtime, wslDistro) => ipcRenderer.invoke(IPC.FILE_OPEN_EXTERNAL, { filePath, workingDirectory, runtime, wslDistro }),
 
   // WSL
   wslStatus: () => ipcRenderer.invoke(IPC.WSL_STATUS),

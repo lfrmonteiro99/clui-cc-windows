@@ -16,10 +16,9 @@ export function FilePath({ path, displayName, className, style }: FilePathProps)
   const openPeek = useFilePeekStore((s) => s.openPeek)
   const openMenu = useContextMenuStore((s) => s.openMenu)
 
-  const getWorkingDirectory = useCallback(() => {
+  const getActiveTab = useCallback(() => {
     const state = useSessionStore.getState()
-    const tab = state.tabs.find((t) => t.id === state.activeTabId)
-    return tab?.workingDirectory || ''
+    return state.tabs.find((t) => t.id === state.activeTabId)
   }, [])
 
   const handleClick = useCallback(
@@ -27,19 +26,21 @@ export function FilePath({ path, displayName, className, style }: FilePathProps)
       if (e.ctrlKey || e.metaKey) {
         e.preventDefault()
         e.stopPropagation()
-        openPeek(path, getWorkingDirectory())
+        const tab = getActiveTab()
+        openPeek(path, tab?.workingDirectory || '', tab?.runtime, tab?.wslDistro ?? undefined)
       }
     },
-    [path, openPeek, getWorkingDirectory],
+    [path, openPeek, getActiveTab],
   )
 
   const handleContextMenu = useCallback(
     (e: React.MouseEvent) => {
       e.preventDefault()
       e.stopPropagation()
-      openMenu({ x: e.clientX, y: e.clientY }, path, getWorkingDirectory())
+      const tab = getActiveTab()
+      openMenu({ x: e.clientX, y: e.clientY }, path, tab?.workingDirectory || '', tab?.runtime, tab?.wslDistro ?? undefined)
     },
-    [path, openMenu, getWorkingDirectory],
+    [path, openMenu, getActiveTab],
   )
 
   const handleKeyDown = useCallback(
@@ -47,10 +48,11 @@ export function FilePath({ path, displayName, className, style }: FilePathProps)
       if (e.key === 'Enter') {
         e.preventDefault()
         e.stopPropagation()
-        openPeek(path, getWorkingDirectory())
+        const tab = getActiveTab()
+        openPeek(path, tab?.workingDirectory || '', tab?.runtime, tab?.wslDistro ?? undefined)
       }
     },
-    [path, openPeek, getWorkingDirectory],
+    [path, openPeek, getActiveTab],
   )
 
   return (

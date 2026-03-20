@@ -325,13 +325,24 @@ export class RunManager extends EventEmitter {
   }
 
   /**
-   * Cancel a running process: SIGINT, then SIGKILL after 5s.
+   * Cancel a running process: close stdin, then SIGINT, then SIGKILL after 5s.
+   *
+   * Closing stdin first is the most reliable shutdown signal for WSL processes
+   * (where SIGINT may not propagate through wsl.exe), but it's also a clean
+   * shutdown pattern for native processes — the CLI exits when stdin closes.
    */
   cancel(requestId: string): boolean {
     const handle = this.activeRuns.get(requestId)
     if (!handle) return false
 
     log(`Cancelling run ${requestId}`)
+
+    // Close stdin first — propagates reliably through wsl.exe
+    if (handle.process.stdin && !handle.process.stdin.destroyed) {
+      handle.process.stdin.end()
+    }
+
+    // Then SIGINT as backup
     handle.process.kill('SIGINT')
 
     // Fallback: SIGKILL if process hasn't exited after 5s.

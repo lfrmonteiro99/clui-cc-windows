@@ -5,7 +5,6 @@ import { PermissionServer, maskSensitiveFields } from '../hooks/permission-serve
 import { AgentMemory } from '../agent-memory'
 import type { RetrievalService } from '../context/retrieval-service'
 import type { HookToolRequest, PermissionOption } from '../hooks/permission-server'
-import { getWindowsHostIpForWsl } from '../wsl/detection'
 import { log as _log } from '../logger'
 import type {
   TabStatus,
@@ -728,8 +727,12 @@ export class ControlPlane extends EventEmitter {
       const runToken = this.permissionServer.registerRun(tabId, requestId, options.sessionId || null)
       this.runTokens.set(requestId, runToken)
 
+      // WSL2 NAT: determine the host IP so the hook URL is reachable from inside WSL
       let wslHookOptions: { distro: string; hostIp: string } | undefined
       if (options.runtime === 'wsl' && options.wslDistro) {
+        // Inline require to avoid import-organizer removing the static import
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { getWindowsHostIpForWsl } = require('../wsl/detection') as typeof import('../wsl/detection')
         const hostIp = getWindowsHostIpForWsl(options.wslDistro)
         wslHookOptions = { distro: options.wslDistro, hostIp }
       }
