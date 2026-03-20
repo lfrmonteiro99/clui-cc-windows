@@ -319,6 +319,10 @@ export interface RunOptions {
   hookSettingsPath?: string
   /** Extra directories to add via --add-dir (session-preserving) */
   addDirs?: string[]
+  /** Runtime environment: native (default) or wsl */
+  runtime?: 'native' | 'wsl'
+  /** WSL distribution name (required when runtime is 'wsl') */
+  wslDistro?: string
 }
 
 // ─── Control Plane Types ───
