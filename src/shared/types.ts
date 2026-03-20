@@ -232,6 +232,10 @@ export interface TabState {
   additionalDirs: string[]
   /** Tab group this tab belongs to (undefined = ungrouped) */
   groupId?: string
+  /** Runtime environment for this tab's Claude sessions */
+  runtime: 'native' | 'wsl'
+  /** WSL distribution name (only set when runtime is 'wsl') */
+  wslDistro: string | null
 }
 
 export interface Message {
@@ -319,6 +323,10 @@ export interface RunOptions {
   hookSettingsPath?: string
   /** Extra directories to add via --add-dir (session-preserving) */
   addDirs?: string[]
+  /** Runtime environment: native (default) or wsl */
+  runtime?: 'native' | 'wsl'
+  /** WSL distribution name (required when runtime is 'wsl') */
+  wslDistro?: string
 }
 
 // ─── Control Plane Types ───
@@ -332,6 +340,8 @@ export interface TabRegistryEntry {
   createdAt: number
   lastActivityAt: number
   promptCount: number
+  runtime: 'native' | 'wsl'
+  wslDistro: string | null
 }
 
 export interface HealthReport {
@@ -438,6 +448,19 @@ export interface GitStatus {
   branch: string | null
   isRepo: boolean
   files: GitFileStatus[]
+}
+
+// ─── WSL Types ───
+
+export interface WslStatus {
+  available: boolean
+  distros: Array<{
+    name: string
+    isDefault: boolean
+    state: 'Running' | 'Stopped' | 'Installing'
+    version: 1 | 2
+    hasClaude: boolean | null
+  }>
 }
 
 // ─── Terminal Types ───
@@ -581,6 +604,11 @@ export const IPC = {
   FILE_READ: 'clui:file-read',
   FILE_REVEAL: 'clui:file-reveal',
   FILE_OPEN_EXTERNAL: 'clui:file-open-external',
+
+  // WSL runtime
+  WSL_STATUS: 'clui:wsl-status',
+  WSL_CHECK_CLAUDE: 'clui:wsl-check-claude',
+  WSL_BROWSE: 'clui:wsl-browse',
 
   // Legacy (kept for backward compat during migration)
   STREAM_EVENT: 'clui:stream-event',

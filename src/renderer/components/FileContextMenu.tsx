@@ -19,6 +19,8 @@ export function FileContextMenu() {
     position,
     filePath,
     workingDirectory,
+    runtime,
+    wslDistro,
     items,
     focusedIndex,
     closeMenu,
@@ -32,23 +34,25 @@ export function FileContextMenu() {
     (id: string) => {
       if (!filePath || !workingDirectory) return
       closeMenu()
+      const rt = runtime ?? undefined
+      const distro = wslDistro ?? undefined
       switch (id) {
         case 'peek':
-          openPeek(filePath, workingDirectory)
+          openPeek(filePath, workingDirectory, rt, distro)
           break
         case 'copy-path':
           navigator.clipboard.writeText(filePath)
           addToast({ type: 'success', title: 'Path copied to clipboard' })
           break
         case 'reveal':
-          window.clui.fileReveal(filePath, workingDirectory)
+          window.clui.fileReveal(filePath, workingDirectory, rt, distro)
           break
         case 'open-external':
-          window.clui.fileOpenExternal(filePath, workingDirectory)
+          window.clui.fileOpenExternal(filePath, workingDirectory, rt, distro)
           break
       }
     },
-    [filePath, workingDirectory, closeMenu, openPeek, addToast],
+    [filePath, workingDirectory, runtime, wslDistro, closeMenu, openPeek, addToast],
   )
 
   // Click-outside dismissal

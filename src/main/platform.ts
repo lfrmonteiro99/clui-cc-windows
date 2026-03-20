@@ -12,7 +12,7 @@
  */
 
 import { execSync } from 'child_process'
-import { existsSync, accessSync, constants } from 'fs'
+import { existsSync, readFileSync, accessSync, constants } from 'fs'
 import { homedir } from 'os'
 import { join, dirname } from 'path'
 
@@ -171,4 +171,92 @@ export function findClaudeBinary(): string {
 
   // Fall back to PATH-based lookup
   return findBinary('claude')
+}
+
+export interface ClaudeEntryPoint {
+  binary: string
+  prefixArgs: string[]
+}
+
+/**
+ * Resolve the Claude CLI entry point for spawning.
+ *
+ * On non-Windows: returns { binary: findClaudeBinary(), prefixArgs: getClaudeLaunchPrefixArgs() }
+ *
+ * On Windows: attempts to parse claude.cmd to find the underlying node_modules cli.js,
+ * then returns { binary: 'node.exe', prefixArgs: ['/path/to/cli.js'] }.
+ * This avoids shell: true which causes cmd.exe escaping problems.
+ *
+ * Falls back to the standard binary + prefix args if resolution fails.
+ */
+export function resolveClaudeEntryPoint(): ClaudeEntryPoint {
+  const fallback: ClaudeEntryPoint = {
+    binary: findClaudeBinary(),
+    prefixArgs: getClaudeLaunchPrefixArgs(),
+  }
+
+  if (!isWin()) {
+    return fallback
+  }
+
+  // On Windows, try to resolve claude.cmd → node.exe + cli.js
+  const resolved = _resolveWindowsCmdToNodeCliJs(fallback.binary)
+  return resolved ?? fallback
+}
+
+/**
+ * Given a claude binary path (possibly a .cmd), try to parse the .cmd wrapper
+ * and extract the real cli.js path so we can spawn node.exe directly.
+ *
+ * Returns null if resolution fails at any step.
+ */
+function _resolveWindowsCmdToNodeCliJs(claudeBinary: string): ClaudeEntryPoint | null {
+  // Build candidate .cmd paths to check
+  const candidates: string[] = []
+
+  // If findClaudeBinary already returned a .cmd, use it directly
+  if (/\.cmd$/i.test(claudeBinary)) {
+    candidates.push(claudeBinary)
+  } else {
+    // Try appending .cmd to the found binary
+    candidates.push(claudeBinary + '.cmd')
+  }
+
+  // Also try the well-known %APPDATA%\npm location
+  const appDataNpmCmd = join(homedir(), 'AppData', 'Roaming', 'npm', 'claude.cmd')
+  if (!candidates.includes(appDataNpmCmd)) {
+    candidates.push(appDataNpmCmd)
+  }
+
+  for (const cmdPath of candidates) {
+    if (!existsSync(cmdPath)) continue
+
+    try {
+      const content = readFileSync(cmdPath, 'utf-8')
+
+      // Match the real cli.js path inside the .cmd wrapper.
+      // The pattern looks for: node_modules\@anthropic-ai\claude-code\cli.js
+      // or with forward slashes. We explicitly avoid matching node_modules\.bin\claude shims.
+      const match = content.match(/node_modules[\\/]@anthropic-ai[\\/]claude-code[\\/]cli\.js/)
+      if (!match) continue
+
+      // Extract the relative path from the match
+      const relativePath = match[0]
+      const cmdDir = dirname(cmdPath)
+      const cliJsPath = join(cmdDir, relativePath)
+
+      // Verify cli.js actually exists on disk
+      if (!existsSync(cliJsPath)) continue
+
+      return {
+        binary: 'node.exe',
+        prefixArgs: [cliJsPath],
+      }
+    } catch {
+      // readFileSync failed or other error — try next candidate
+      continue
+    }
+  }
+
+  return null
 }

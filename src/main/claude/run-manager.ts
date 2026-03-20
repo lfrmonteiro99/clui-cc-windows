@@ -4,7 +4,9 @@ import { homedir } from 'os'
 import { StreamParser } from '../stream-parser'
 import { normalize } from './event-normalizer'
 import { log as _log } from '../logger'
-import { findClaudeBinary, getClaudeLaunchPrefixArgs, getLoginShellPath, ensureBinDirInPath } from '../platform'
+import { resolveClaudeEntryPoint, getLoginShellPath, ensureBinDirInPath } from '../platform'
+import { spawnInWsl } from '../wsl/wsl-spawner'
+import type { ClaudeEntryPoint } from '../platform'
 import type { ClaudeEvent, NormalizedEvent, RunOptions, EnrichedError } from '../../shared/types'
 
 const MAX_RING_LINES = 100
@@ -91,13 +93,13 @@ export class RunManager extends EventEmitter {
   private activeRuns = new Map<string, RunHandle>()
   /** Holds recently-finished runs so diagnostics survive past process exit */
   private _finishedRuns = new Map<string, RunHandle>()
-  private claudeBinary: string
+  private entryPoint: ClaudeEntryPoint
   private _loginShellPath = ''
 
   constructor() {
     super()
-    this.claudeBinary = findClaudeBinary()
-    log(`Claude binary: ${this.claudeBinary}`)
+    this.entryPoint = resolveClaudeEntryPoint()
+    log(`Claude entry point: binary=${this.entryPoint.binary} prefixArgs=[${this.entryPoint.prefixArgs.join(', ')}]`)
   }
 
   private _getEnv(): NodeJS.ProcessEnv {
@@ -111,7 +113,7 @@ export class RunManager extends EventEmitter {
       env.PATH = this._loginShellPath
     }
 
-    ensureBinDirInPath(this.claudeBinary, env)
+    ensureBinDirInPath(this.entryPoint.binary, env)
 
     return env
   }
@@ -120,7 +122,7 @@ export class RunManager extends EventEmitter {
     const cwd = options.projectPath === '~' ? homedir() : options.projectPath
 
     const args: string[] = [
-      ...getClaudeLaunchPrefixArgs(),
+      ...this.entryPoint.prefixArgs,
       '-p',
       '--input-format', 'stream-json',
       '--output-format', 'stream-json',
@@ -172,33 +174,27 @@ export class RunManager extends EventEmitter {
     // Always tell Claude it's inside CLUI (additive, doesn't replace base prompt)
     args.push('--append-system-prompt', CLUI_SYSTEM_HINT)
 
-    // Windows: shell:true passes args through cmd.exe which interprets
-    // <, >, |, &, (, ), ^, !, % as operators. Wrapping in double quotes
-    // makes cmd.exe treat them as literals.
-    if (process.platform === 'win32') {
-      for (let i = 0; i < args.length; i++) {
-        // Collapse newlines — cmd.exe treats them as command separators
-        args[i] = args[i].replace(/\n/g, ' ')
-        // Wrap in double quotes if it contains cmd.exe special characters
-        if (/[<>|&^()!%]/.test(args[i])) {
-          args[i] = `"${args[i].replace(/"/g, '""').replace(/%/g, '%%')}"`
-        }
-      }
-    }
-
     if (DEBUG) {
-      log(`Starting run ${requestId}: ${this.claudeBinary} ${args.join(' ')}`)
+      log(`Starting run ${requestId}: ${this.entryPoint.binary} ${args.join(' ')}`)
       log(`Prompt: ${options.prompt.substring(0, 200)}`)
     } else {
       log(`Starting run ${requestId}`)
     }
 
-    const child = spawn(this.claudeBinary, args, {
-      stdio: ['pipe', 'pipe', 'pipe'],
-      cwd,
-      env: this._getEnv(),
-      shell: process.platform === 'win32',
-    })
+    // Route through WSL spawner when runtime is 'wsl' with a distro specified
+    const child: ChildProcess = (options.runtime === 'wsl' && options.wslDistro)
+      ? spawnInWsl({
+          distro: options.wslDistro,
+          args,
+          cwd,
+          env: this._getEnv() as Record<string, string>,
+          hookSettingsPath: options.hookSettingsPath,
+        })
+      : spawn(this.entryPoint.binary, args, {
+          stdio: ['pipe', 'pipe', 'pipe'],
+          cwd,
+          env: this._getEnv(),
+        })
 
     log(`Spawned PID: ${child.pid}`)
 
@@ -329,13 +325,24 @@ export class RunManager extends EventEmitter {
   }
 
   /**
-   * Cancel a running process: SIGINT, then SIGKILL after 5s.
+   * Cancel a running process: close stdin, then SIGINT, then SIGKILL after 5s.
+   *
+   * Closing stdin first is the most reliable shutdown signal for WSL processes
+   * (where SIGINT may not propagate through wsl.exe), but it's also a clean
+   * shutdown pattern for native processes — the CLI exits when stdin closes.
    */
   cancel(requestId: string): boolean {
     const handle = this.activeRuns.get(requestId)
     if (!handle) return false
 
     log(`Cancelling run ${requestId}`)
+
+    // Close stdin first — propagates reliably through wsl.exe
+    if (handle.process.stdin && !handle.process.stdin.destroyed) {
+      handle.process.stdin.end()
+    }
+
+    // Then SIGINT as backup
     handle.process.kill('SIGINT')
 
     // Fallback: SIGKILL if process hasn't exited after 5s.

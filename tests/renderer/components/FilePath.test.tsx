@@ -52,7 +52,7 @@ describe('FilePath', () => {
     renderWithProviders(<FilePath path="src/main/index.ts" />)
     const el = screen.getByRole('button')
     fireEvent.click(el, { ctrlKey: true })
-    expect(mockOpenPeek).toHaveBeenCalledWith('src/main/index.ts', 'C:/repo')
+    expect(mockOpenPeek).toHaveBeenCalledWith('src/main/index.ts', 'C:/repo', undefined, undefined)
   })
 
   it('calls openMenu on right-click (contextmenu event)', () => {
@@ -63,6 +63,8 @@ describe('FilePath', () => {
       { x: 100, y: 200 },
       'src/main/index.ts',
       'C:/repo',
+      undefined,
+      undefined,
     )
   })
 
@@ -77,6 +79,6 @@ describe('FilePath', () => {
     renderWithProviders(<FilePath path="src/main/index.ts" />)
     const el = screen.getByRole('button')
     fireEvent.keyDown(el, { key: 'Enter' })
-    expect(mockOpenPeek).toHaveBeenCalledWith('src/main/index.ts', 'C:/repo')
+    expect(mockOpenPeek).toHaveBeenCalledWith('src/main/index.ts', 'C:/repo', undefined, undefined)
   })
 })

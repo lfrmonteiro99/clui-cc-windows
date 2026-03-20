@@ -24,6 +24,7 @@ import { ensureWhisper, type WhisperProvisionStatus } from './whisper-provisione
 import { findBinary } from './platform'
 import { TerminalManager } from './terminal/terminal-manager'
 import { handleFileRead, handleFileReveal, handleFileOpenExternal } from './file-peek-handlers'
+import { isWslAvailable, listWslDistros, checkClaudeInWsl } from './wsl/detection'
 import { DatabaseService } from './context/database-service'
 import { IngestionService } from './context/ingestion-service'
 import { RetrievalService } from './context/retrieval-service'
@@ -1034,6 +1035,34 @@ ipcMain.handle(IPC.GIT_DIFF, (_event, cwd: string, file?: string) => {
 ipcMain.handle(IPC.FILE_READ, handleFileRead)
 ipcMain.handle(IPC.FILE_REVEAL, handleFileReveal)
 ipcMain.handle(IPC.FILE_OPEN_EXTERNAL, handleFileOpenExternal)
+
+// ─── WSL IPC ───
+
+ipcMain.handle(IPC.WSL_STATUS, async () => {
+  if (process.platform !== 'win32') {
+    return { available: false, distros: [] }
+  }
+  const available = isWslAvailable()
+  const distros = available ? listWslDistros() : []
+  return {
+    available,
+    distros: distros.map(d => ({ ...d, hasClaude: null })),
+  }
+})
+
+ipcMain.handle(IPC.WSL_CHECK_CLAUDE, async (_event, distro: string) => {
+  return checkClaudeInWsl(distro)
+})
+
+ipcMain.handle(IPC.WSL_BROWSE, async (_event, distro: string) => {
+  if (!mainWindow) return null
+  const wslHome = `\\\\wsl.localhost\\${distro}\\home`
+  const result = await dialog.showOpenDialog(mainWindow, {
+    defaultPath: wslHome,
+    properties: ['openDirectory'],
+  })
+  return result.canceled ? null : result.filePaths[0]
+})
 
 // ─── Terminal IPC ───
 

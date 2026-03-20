@@ -15,7 +15,7 @@ interface FilePeekState {
   errorType: 'not_found' | 'too_large' | 'binary' | 'permission_denied' | 'outside_workspace' | null
 
   // Actions
-  openPeek: (filePath: string, workingDirectory: string) => Promise<void>
+  openPeek: (filePath: string, workingDirectory: string, runtime?: string, wslDistro?: string) => Promise<void>
   closePeek: () => void
 }
 
@@ -32,7 +32,7 @@ export const useFilePeekStore = create<FilePeekState>((set, get) => ({
   error: null,
   errorType: null,
 
-  openPeek: async (filePath, workingDirectory) => {
+  openPeek: async (filePath, workingDirectory, runtime, wslDistro) => {
     // If same file is already open, just ensure panel is visible
     if (get().filePath === filePath && get().isOpen && !get().error) return
 
@@ -53,7 +53,7 @@ export const useFilePeekStore = create<FilePeekState>((set, get) => ({
     })
 
     try {
-      const result = await window.clui.fileRead(workingDirectory, filePath)
+      const result = await window.clui.fileRead(workingDirectory, filePath, runtime, wslDistro)
       if (result.ok) {
         set({
           content: result.content,

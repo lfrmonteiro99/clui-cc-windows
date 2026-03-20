@@ -1,6 +1,7 @@
-import { resolve, normalize, sep, extname } from 'path'
+import { resolve, normalize, sep, extname, posix } from 'path'
 import { existsSync, realpathSync, statSync, readFileSync, openSync, readSync, closeSync } from 'fs'
 import { shell } from 'electron'
+import { convertPathToWindows } from './wsl/detection'
 
 const MAX_FILE_SIZE = 102_400
 const MAX_LINES = 5000
@@ -22,6 +23,28 @@ const EXT_TO_LANG: Record<string, string> = {
   '.vue': 'vue', '.svelte': 'svelte', '.astro': 'astro',
   '.env': 'dotenv', '.ini': 'ini', '.cfg': 'ini',
   '.lock': 'plaintext', '.log': 'plaintext',
+}
+
+/**
+ * Translate a file path from WSL (Linux) to a Windows-accessible path
+ * when the tab is running in WSL mode.
+ * Only translates absolute Linux paths (starting with '/').
+ */
+function translateWslPath(filePath: string, runtime?: string, wslDistro?: string): string {
+  if (runtime === 'wsl' && wslDistro && filePath.startsWith('/')) {
+    return convertPathToWindows(filePath, wslDistro)
+  }
+  return filePath
+}
+
+/**
+ * Translate the working directory from WSL to Windows when needed.
+ */
+function translateWslWorkingDir(workingDirectory: string, runtime?: string, wslDistro?: string): string {
+  if (runtime === 'wsl' && wslDistro && workingDirectory.startsWith('/')) {
+    return convertPathToWindows(workingDirectory, wslDistro)
+  }
+  return workingDirectory
 }
 
 export function isPathWithinWorkspace(filePath: string, workingDirectory: string): boolean {
@@ -48,14 +71,16 @@ function isBinaryFile(filePath: string): boolean {
   }
 }
 
-export function handleFileRead(_event: Electron.IpcMainInvokeEvent, payload: { workingDirectory: string; filePath: string }) {
-  const { workingDirectory, filePath } = payload
+export function handleFileRead(_event: Electron.IpcMainInvokeEvent, payload: { workingDirectory: string; filePath: string; runtime?: string; wslDistro?: string }) {
+  const { runtime, wslDistro } = payload
+  const workingDirectory = translateWslWorkingDir(payload.workingDirectory, runtime, wslDistro)
+  const filePath = translateWslPath(payload.filePath, runtime, wslDistro)
   const resolved = resolve(workingDirectory, filePath)
   if (!isPathWithinWorkspace(filePath, workingDirectory)) {
     return { ok: false, error: 'outside_workspace', message: 'File is outside the current workspace' }
   }
   if (!existsSync(resolved)) {
-    return { ok: false, error: 'not_found', message: `File not found: ${filePath}` }
+    return { ok: false, error: 'not_found', message: `File not found: ${payload.filePath}` }
   }
   const stats = statSync(resolved)
   if (stats.size > MAX_FILE_SIZE) {
@@ -72,7 +97,7 @@ export function handleFileRead(_event: Electron.IpcMainInvokeEvent, payload: { w
     content = readFileSync(resolved, 'utf-8')
   } catch (err: any) {
     if (err.code === 'EACCES' || err.code === 'EPERM') {
-      return { ok: false, error: 'permission_denied', message: `Permission denied: ${filePath}` }
+      return { ok: false, error: 'permission_denied', message: `Permission denied: ${payload.filePath}` }
     }
     throw err
   }
@@ -82,21 +107,26 @@ export function handleFileRead(_event: Electron.IpcMainInvokeEvent, payload: { w
     content = lines.slice(0, MAX_LINES).join('\n')
     truncated = true
   }
-  const ext = extname(resolved).toLowerCase()
+  // Use posix.extname for WSL paths that may still be in Linux format in the original
+  const ext = (runtime === 'wsl' ? posix.extname(payload.filePath) : extname(resolved)).toLowerCase()
   const language = EXT_TO_LANG[ext] || 'plaintext'
   return { ok: true, content, language, lineCount: Math.min(lines.length, MAX_LINES), truncated, fileSize: stats.size }
 }
 
-export function handleFileReveal(_event: Electron.IpcMainInvokeEvent, payload: { filePath: string; workingDirectory: string }) {
-  const { filePath, workingDirectory } = payload
+export function handleFileReveal(_event: Electron.IpcMainInvokeEvent, payload: { filePath: string; workingDirectory: string; runtime?: string; wslDistro?: string }) {
+  const { runtime, wslDistro } = payload
+  const workingDirectory = translateWslWorkingDir(payload.workingDirectory, runtime, wslDistro)
+  const filePath = translateWslPath(payload.filePath, runtime, wslDistro)
   if (!isPathWithinWorkspace(filePath, workingDirectory)) return false
   const resolved = resolve(workingDirectory, filePath)
   shell.showItemInFolder(resolved)
   return true
 }
 
-export function handleFileOpenExternal(_event: Electron.IpcMainInvokeEvent, payload: { filePath: string; workingDirectory: string }) {
-  const { filePath, workingDirectory } = payload
+export function handleFileOpenExternal(_event: Electron.IpcMainInvokeEvent, payload: { filePath: string; workingDirectory: string; runtime?: string; wslDistro?: string }) {
+  const { runtime, wslDistro } = payload
+  const workingDirectory = translateWslWorkingDir(payload.workingDirectory, runtime, wslDistro)
+  const filePath = translateWslPath(payload.filePath, runtime, wslDistro)
   if (!isPathWithinWorkspace(filePath, workingDirectory)) return false
   const resolved = resolve(workingDirectory, filePath)
   shell.openPath(resolved)
