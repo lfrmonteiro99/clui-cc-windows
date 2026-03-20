@@ -216,6 +216,8 @@ function makeLocalTab(): TabState {
     workingDirectory: '~',
     hasChosenDirectory: false,
     additionalDirs: [],
+    runtime: 'native',
+    wslDistro: null,
   }
 }
 

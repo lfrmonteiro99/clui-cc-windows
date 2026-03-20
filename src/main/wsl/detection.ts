@@ -7,6 +7,9 @@
  */
 
 import { execSync, execFileSync } from 'child_process'
+import { readFileSync } from 'fs'
+import { homedir } from 'os'
+import { join } from 'path'
 import { log as _log } from '../logger'
 
 function log(msg: string): void {
@@ -210,4 +213,72 @@ export function detectRuntimeFromPath(path: string): RuntimeType {
 
   // Everything else: Windows drive paths, relative paths, ~, empty
   return 'native'
+}
+
+/**
+ * Determine the Windows host IP address that a WSL distro should use
+ * to reach the permission hook server running on the Windows host.
+ *
+ * Logic:
+ *  1. If `~/.wslconfig` contains `networkingMode=mirrored` → `127.0.0.1`
+ *     (mirrored mode shares the host network stack)
+ *  2. If the distro is WSL1 → `127.0.0.1`
+ *     (WSL1 shares the host network directly)
+ *  3. For WSL2 NAT mode: parse `/etc/resolv.conf` inside the distro —
+ *     the nameserver is the Windows host IP on the Hyper-V vSwitch
+ *  4. Fallback: `127.0.0.1`
+ *
+ * SECURITY NOTE: When this returns a non-loopback IP, the permission
+ * server must rebind to `0.0.0.0` to be reachable from WSL2. This
+ * relaxes the default `127.0.0.1`-only binding documented in CLAUDE.md.
+ * The per-launch app secret and per-run tokens still authenticate requests.
+ */
+export function getWindowsHostIpForWsl(distro: string): string {
+  // Step 1: Check for mirrored networking mode in ~/.wslconfig
+  try {
+    const wslConfigPath = join(homedir(), '.wslconfig')
+    const content = readFileSync(wslConfigPath, 'utf-8')
+    // Match networkingMode=mirrored (case-insensitive, allow whitespace around =)
+    if (/^\s*networkingMode\s*=\s*mirrored\s*$/mi.test(content)) {
+      log('WSL networking mode is mirrored — using 127.0.0.1')
+      return '127.0.0.1'
+    }
+  } catch {
+    // No .wslconfig or unreadable — continue to next check
+  }
+
+  // Step 2: Check if distro is WSL1 (shares host network)
+  try {
+    const distros = listWslDistros()
+    const match = distros.find(d => d.name === distro)
+    if (match && match.version === 1) {
+      log(`Distro "${distro}" is WSL1 — using 127.0.0.1`)
+      return '127.0.0.1'
+    }
+  } catch {
+    // If we can't determine version, fall through to resolv.conf
+  }
+
+  // Step 3: WSL2 NAT — extract host IP from /etc/resolv.conf inside the distro
+  try {
+    const buf = execFileSync('wsl.exe', ['-d', distro, '--', 'cat', '/etc/resolv.conf'], {
+      timeout: WSL_EXEC_TIMEOUT,
+      stdio: ['pipe', 'pipe', 'pipe'],
+      windowsHide: true,
+    })
+    const text = buf.toString('utf-8')
+    // Find the nameserver line (typically there's one, pointing at the Windows host)
+    const nsMatch = text.match(/^\s*nameserver\s+([\d.]+)/m)
+    if (nsMatch) {
+      const ip = nsMatch[1]
+      log(`WSL2 NAT host IP for "${distro}": ${ip}`)
+      return ip
+    }
+  } catch (err) {
+    log(`Failed to read /etc/resolv.conf in "${distro}": ${err}`)
+  }
+
+  // Step 4: Fallback
+  log(`Could not determine WSL host IP for "${distro}" — falling back to 127.0.0.1`)
+  return '127.0.0.1'
 }

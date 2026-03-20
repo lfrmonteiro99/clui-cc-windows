@@ -19,6 +19,7 @@ import type {
   CostSummary,
   AutoAttachState,
   GitStatus,
+  WslStatus,
 } from '../shared/types'
 
 export interface CluiAPI {
@@ -112,6 +113,11 @@ export interface CluiAPI {
   }>
   fileReveal(filePath: string, workingDirectory: string): Promise<boolean>
   fileOpenExternal(filePath: string, workingDirectory: string): Promise<boolean>
+
+  // WSL
+  wslStatus(): Promise<WslStatus>
+  wslCheckClaude(distro: string): Promise<boolean>
+  wslBrowse(distro: string): Promise<string | null>
 }
 
 const api: CluiAPI = {
@@ -261,6 +267,11 @@ const api: CluiAPI = {
   fileRead: (workingDirectory, filePath) => ipcRenderer.invoke(IPC.FILE_READ, { workingDirectory, filePath }),
   fileReveal: (filePath, workingDirectory) => ipcRenderer.invoke(IPC.FILE_REVEAL, { filePath, workingDirectory }),
   fileOpenExternal: (filePath, workingDirectory) => ipcRenderer.invoke(IPC.FILE_OPEN_EXTERNAL, { filePath, workingDirectory }),
+
+  // WSL
+  wslStatus: () => ipcRenderer.invoke(IPC.WSL_STATUS),
+  wslCheckClaude: (distro: string) => ipcRenderer.invoke(IPC.WSL_CHECK_CLAUDE, distro),
+  wslBrowse: (distro: string) => ipcRenderer.invoke(IPC.WSL_BROWSE, distro),
 }
 
 contextBridge.exposeInMainWorld('clui', api)

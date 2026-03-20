@@ -5,6 +5,7 @@ import { PermissionServer, maskSensitiveFields } from '../hooks/permission-serve
 import { AgentMemory } from '../agent-memory'
 import type { RetrievalService } from '../context/retrieval-service'
 import type { HookToolRequest, PermissionOption } from '../hooks/permission-server'
+import { getWindowsHostIpForWsl } from '../wsl/detection'
 import { log as _log } from '../logger'
 import type {
   TabStatus,
@@ -469,6 +470,8 @@ export class ControlPlane extends EventEmitter {
       createdAt: Date.now(),
       lastActivityAt: Date.now(),
       promptCount: 0,
+      runtime: 'native',
+      wslDistro: null,
     }
     this.tabs.set(tabId, entry)
     log(`Tab created: ${tabId}`)
@@ -724,7 +727,14 @@ export class ControlPlane extends EventEmitter {
     if (this.permissionServer.getPort()) {
       const runToken = this.permissionServer.registerRun(tabId, requestId, options.sessionId || null)
       this.runTokens.set(requestId, runToken)
-      const hookSettingsPath = this.permissionServer.generateSettingsFile(runToken)
+
+      let wslHookOptions: { distro: string; hostIp: string } | undefined
+      if (options.runtime === 'wsl' && options.wslDistro) {
+        const hostIp = getWindowsHostIpForWsl(options.wslDistro)
+        wslHookOptions = { distro: options.wslDistro, hostIp }
+      }
+
+      const hookSettingsPath = this.permissionServer.generateSettingsFile(runToken, wslHookOptions)
       options = { ...options, hookSettingsPath }
     }
 
