@@ -14,6 +14,7 @@ import { PermissionCard } from './PermissionCard'
 import { PermissionDeniedCard } from './PermissionDeniedCard'
 import { RetryBanner } from './RetryBanner'
 import { DiffViewer } from './DiffViewer'
+import { DirectoryPicker } from './DirectoryPicker'
 import { useColors, useThemeStore } from '../theme'
 import type { Message } from '../../shared/types'
 
@@ -298,33 +299,27 @@ export function ConversationView({ overrideTabId }: { overrideTabId?: string } =
 
 function EmptyState() {
   const setBaseDirectory = useSessionStore((s) => s.setBaseDirectory)
-  const colors = useColors()
 
-  const handleChooseFolder = async () => {
-    const dir = await window.clui.selectDirectory()
-    if (dir) {
+  const handleDirectorySelect = useCallback(
+    (dir: string, runtime: import('./DirectoryPicker').RuntimeType, distro: string | null) => {
       setBaseDirectory(dir)
-    }
-  }
+      // Update tab runtime/distro via direct store mutation (setBaseDirectory only sets directory)
+      const { activeTabId } = useSessionStore.getState()
+      useSessionStore.setState((s) => ({
+        tabs: s.tabs.map((t) =>
+          t.id === activeTabId ? { ...t, runtime, wslDistro: distro } : t,
+        ),
+      }))
+    },
+    [setBaseDirectory],
+  )
 
   return (
     <div
-      className="flex flex-col items-center justify-center px-4 py-8"
+      className="flex flex-col items-center justify-center py-4"
       style={{ minHeight: 80 }}
     >
-      <button
-        onClick={handleChooseFolder}
-        className="flex items-center gap-1.5 text-[12px] px-3 py-1.5 rounded-lg transition-colors"
-        style={{
-          color: colors.accent,
-          background: colors.surfaceHover,
-          border: 'none',
-          cursor: 'pointer',
-        }}
-      >
-        <FolderOpen size={13} />
-        Choose folder
-      </button>
+      <DirectoryPicker onSelect={handleDirectorySelect} />
     </div>
   )
 }

@@ -421,9 +421,13 @@ export class PermissionServer extends EventEmitter {
   /**
    * Generate a per-run settings file with the PreToolUse HTTP hook.
    * The URL includes both appSecret and runToken for authentication.
+   *
+   * When wslOptions is provided, the hook URL uses the given hostIp
+   * instead of 127.0.0.1, so WSL2 processes can reach the Windows host.
    */
-  generateSettingsFile(runToken: string): string {
+  generateSettingsFile(runToken: string, wslOptions?: { distro: string; hostIp: string }): string {
     const port = this._actualPort || this.port
+    const hookHost = wslOptions?.hostIp || '127.0.0.1'
     const settings = {
       hooks: {
         PreToolUse: [
@@ -432,7 +436,7 @@ export class PermissionServer extends EventEmitter {
             hooks: [
               {
                 type: 'http',
-                url: `http://127.0.0.1:${port}/hook/pre-tool-use/${this.appSecret}/${runToken}`,
+                url: `http://${hookHost}:${port}/hook/pre-tool-use/${this.appSecret}/${runToken}`,
                 timeout: 300,
               },
             ],
@@ -448,9 +452,72 @@ export class PermissionServer extends EventEmitter {
     writeFileSync(filePath, JSON.stringify(settings, null, 2), { mode: 0o600 })
     this.settingsFiles.set(runToken, filePath)
     if (DEBUG) {
-      log(`Generated settings file: ${filePath}`)
+      log(`Generated settings file: ${filePath} (host=${hookHost})`)
     }
     return filePath
+  }
+
+  // ─── WSL Access Control ───
+
+  /**
+   * Re-bind the server to 0.0.0.0 so WSL2 NAT processes can reach it.
+   *
+   * SECURITY TRADE-OFF: This relaxes the default 127.0.0.1 binding.
+   * The per-launch app secret and per-run tokens still authenticate every
+   * request, preventing unauthorized use. The server should be re-bound
+   * back to 127.0.0.1 via disableWslAccess() when no WSL2 NAT tabs remain.
+   */
+  async enableWslAccess(): Promise<void> {
+    if (!this.server || !this._actualPort) {
+      log('enableWslAccess: server not running')
+      return
+    }
+    const port = this._actualPort
+    log(`Rebinding permission server to 0.0.0.0:${port} for WSL2 access`)
+    await this._rebind('0.0.0.0', port)
+  }
+
+  /**
+   * Re-bind the server back to 127.0.0.1 (localhost only).
+   * Call when no WSL2 NAT tabs remain active.
+   */
+  async disableWslAccess(): Promise<void> {
+    if (!this.server || !this._actualPort) {
+      log('disableWslAccess: server not running')
+      return
+    }
+    const port = this._actualPort
+    log(`Rebinding permission server to 127.0.0.1:${port} (WSL access disabled)`)
+    await this._rebind('127.0.0.1', port)
+  }
+
+  /**
+   * Close the current server socket and re-listen on a new host/port.
+   * Pending permission requests are preserved (they live in pendingRequests map,
+   * not in the HTTP connection).
+   */
+  private _rebind(host: string, port: number): Promise<void> {
+    return new Promise((resolve, reject) => {
+      if (!this.server) {
+        reject(new Error('No server to rebind'))
+        return
+      }
+
+      this.server.close(() => {
+        this.server = createServer((req, res) => this._handleRequest(req, res))
+
+        this.server!.on('error', (err: NodeJS.ErrnoException) => {
+          log(`Rebind error: ${err.message}`)
+          reject(err)
+        })
+
+        this.server!.listen(port, host, () => {
+          this._actualPort = port
+          log(`Permission server rebound to ${host}:${port}`)
+          resolve()
+        })
+      })
+    })
   }
 
   // ─── HTTP Request Handling ───

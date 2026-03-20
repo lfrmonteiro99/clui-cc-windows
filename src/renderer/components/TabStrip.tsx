@@ -104,6 +104,23 @@ function TabItem({
     >
       <StatusDot status={tab.status} hasUnread={tab.hasUnread} hasPermission={tab.permissionQueue.length > 0} />
       <span className="truncate flex-1">{tab.title}</span>
+      {tab.runtime === 'wsl' && (
+        <span
+          style={{
+            fontSize: 9,
+            fontWeight: 600,
+            color: colors.textSecondary,
+            backgroundColor: colors.surfaceHover,
+            borderRadius: 3,
+            padding: '1px 4px',
+            marginLeft: 4,
+            flexShrink: 0,
+          }}
+          title={`WSL: ${tab.wslDistro}`}
+        >
+          WSL
+        </span>
+      )}
       {totalTabs > 1 && (
         <button
           onClick={(e) => {

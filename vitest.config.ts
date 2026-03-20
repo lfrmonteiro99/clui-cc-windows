@@ -1,11 +1,17 @@
 import { defineConfig } from 'vitest/config'
+import { resolve } from 'path'
 
 export default defineConfig({
+  resolve: {
+    alias: {
+      'better-sqlite3': resolve(process.cwd(), 'tests/__mocks__/better-sqlite3.ts'),
+    },
+  },
   test: {
     globals: true,
     environment: 'node',
     include: ['tests/**/*.test.ts', 'tests/**/*.test.tsx'],
-    setupFiles: ['tests/setup.ts'],
+    setupFiles: ['tests/setup.ts', 'tests/setup-sqlite.ts'],
     coverage: {
       provider: 'v8',
       reportsDirectory: 'coverage',
@@ -24,7 +30,6 @@ export default defineConfig({
       ],
       exclude: ['src/preload/**'],
     },
-    // Allow mocking process.platform for cross-platform tests
     unstubGlobals: true,
     restoreMocks: true,
   },
