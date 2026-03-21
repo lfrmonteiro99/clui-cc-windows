@@ -76,7 +76,10 @@ export class SettingsManager {
   private filePath: string
 
   constructor(filePath?: string) {
-    this.filePath = filePath || join(homedir(), '.claude', 'settings.json')
+    this.filePath = filePath
+      || (process.env.CLUI_SETTINGS_PATH
+        ? process.env.CLUI_SETTINGS_PATH
+        : join(homedir(), '.claude', 'settings.json'))
   }
 
   /** Read and parse settings.json. Returns safe defaults if file is missing or malformed. */

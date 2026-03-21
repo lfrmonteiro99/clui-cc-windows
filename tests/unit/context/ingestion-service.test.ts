@@ -1,10 +1,15 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'fs'
 import { join } from 'path'
 import { tmpdir } from 'os'
 import { DatabaseService } from '../../../src/main/context/database-service'
 import { IngestionService } from '../../../src/main/context/ingestion-service'
 import type { NormalizedEvent, AssistantMessagePayload } from '../../../src/shared/types'
+import { __initSqlWasm } from '../../__mocks__/better-sqlite3'
+
+beforeAll(async () => {
+  await __initSqlWasm()
+})
 
 describe('IngestionService', () => {
   let tempDir: string

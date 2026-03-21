@@ -1,9 +1,14 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeAll, beforeEach, afterEach } from 'vitest'
 import { mkdtempSync, rmSync, existsSync } from 'fs'
 import { join } from 'path'
 import { tmpdir } from 'os'
 import { DatabaseService } from '../../../src/main/context/database-service'
 import type { MemoryInsert } from '../../../src/main/context/types'
+import { __initSqlWasm } from '../../__mocks__/better-sqlite3'
+
+beforeAll(async () => {
+  await __initSqlWasm()
+})
 
 describe('DatabaseService', () => {
   let tempDir: string

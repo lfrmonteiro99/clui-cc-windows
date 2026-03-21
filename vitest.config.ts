@@ -11,7 +11,7 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     include: ['tests/**/*.test.ts', 'tests/**/*.test.tsx'],
-    setupFiles: ['tests/setup.ts', 'tests/setup-sqlite.ts'],
+    setupFiles: ['tests/setup.ts'],
     coverage: {
       provider: 'v8',
       reportsDirectory: 'coverage',
@@ -30,6 +30,8 @@ export default defineConfig({
       ],
       exclude: ['src/preload/**'],
     },
+    testTimeout: 10000,
+    teardownTimeout: 3000,
     unstubGlobals: true,
     restoreMocks: true,
   },

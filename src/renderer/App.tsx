@@ -37,9 +37,11 @@ import { useTerminalStore } from './stores/terminalStore'
 import { TerminalPanel } from './components/TerminalPanel'
 import { ModeToggle } from './components/ModeToggle'
 import { FilePeekPanel } from './components/FilePeekPanel'
+import { ContextPanel } from './components/ContextPanel'
 import { FileContextMenu } from './components/FileContextMenu'
 import { useColors, useThemeStore, spacing } from './theme'
 import { useFilePeekStore } from './stores/filePeekStore'
+import { useContextStore } from './stores/contextStore'
 import { useContextMenuStore } from './stores/contextMenuStore'
 import { useNotificationStore } from './stores/notificationStore'
 
@@ -69,6 +71,7 @@ export default function App() {
   const comparisonLauncherOpen = useComparisonStore((s) => s.launcherOpen)
   const terminalMode = useTerminalStore((s) => s.terminalMode)
   const filePeekOpen = useFilePeekStore((s) => s.isOpen)
+  const contextPanelOpen = useContextStore((s) => s.panelOpen)
   const contextMenuOpen = useContextMenuStore((s) => s.isOpen)
   const isRunning = activeTabStatus === 'running' || activeTabStatus === 'connecting'
   const [showPermissionWizard, setShowPermissionWizard] = useState(false)
@@ -378,6 +381,27 @@ export default function App() {
                 >
                   <div data-clui-ui className="glass-surface overflow-hidden no-drag" style={{ borderRadius: 24, maxHeight: 470 }}>
                     <FilePeekPanel />
+                  </div>
+                </motion.div>
+              </div>
+            )}
+          </AnimatePresence>
+
+          <AnimatePresence initial={false}>
+            {contextPanelOpen && (
+              <div data-clui-ui style={{
+                width: 720, maxWidth: 720, marginLeft: '50%',
+                transform: 'translateX(-50%)', marginBottom: 14,
+                position: 'relative', zIndex: 31,
+              }}>
+                <motion.div
+                  initial={{ opacity: 0, y: 14, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 10, scale: 0.985 }}
+                  transition={TRANSITION}
+                >
+                  <div data-clui-ui className="glass-surface overflow-hidden no-drag" style={{ borderRadius: 24, maxHeight: 470 }}>
+                    <ContextPanel />
                   </div>
                 </motion.div>
               </div>

@@ -55,8 +55,11 @@ export async function launchCluiApp(testInfo: TestInfo, homeDir?: string): Promi
       CLUI_CLAUDE_NODE_SCRIPT: path.join(process.cwd(), 'tests', 'e2e', 'fixtures', 'fake-claude.cjs'),
       HOME: isolated.homeDir,
       USERPROFILE: isolated.homeDir,
+      HOMEDRIVE: path.parse(isolated.homeDir).root.replace(/[/\\]$/, ''),
+      HOMEPATH: isolated.homeDir.slice(path.parse(isolated.homeDir).root.length - 1),
       APPDATA: isolated.appDataDir,
       LOCALAPPDATA: isolated.localAppDataDir,
+      CLUI_SETTINGS_PATH: isolated.settingsPath,
     },
   })
 

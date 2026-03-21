@@ -21,6 +21,13 @@ import type {
   GitStatus,
   WslStatus,
 } from '../shared/types'
+import type {
+  ContextMemory,
+  ContextSessionSummary,
+  ContextProjectStats,
+  ContextFileTouched,
+  MemorySearchResult,
+} from '../shared/context-types'
 
 export interface CluiAPI {
   // ─── Request-response (renderer → main) ───
@@ -118,6 +125,19 @@ export interface CluiAPI {
   wslStatus(): Promise<WslStatus>
   wslCheckClaude(distro: string): Promise<boolean>
   wslBrowse(distro: string): Promise<string | null>
+
+  // Context database
+  contextSearchMemories(projectPath: string, query: string, limit?: number): Promise<MemorySearchResult[]>
+  contextGetSessionHistory(projectPath: string, limit?: number, offset?: number): Promise<ContextSessionSummary[]>
+  contextGetSessionDetail(sessionId: string): Promise<any>
+  contextGetProjectStats(projectPath: string): Promise<ContextProjectStats | null>
+  contextPinMemory(memoryId: string): Promise<void>
+  contextUnpinMemory(memoryId: string): Promise<void>
+  contextDeleteMemory(memoryId: string): Promise<void>
+  contextGetFilesTouched(projectPath: string, limit?: number): Promise<ContextFileTouched[]>
+  contextGetMemoryPacketPreview(projectPath: string, tabId: string, prompt: string): Promise<string | null>
+  onContextMemoryCreated(callback: (memory: ContextMemory) => void): () => void
+  onContextSessionRecorded(callback: (session: ContextSessionSummary) => void): () => void
 }
 
 const api: CluiAPI = {
@@ -272,6 +292,36 @@ const api: CluiAPI = {
   wslStatus: () => ipcRenderer.invoke(IPC.WSL_STATUS),
   wslCheckClaude: (distro: string) => ipcRenderer.invoke(IPC.WSL_CHECK_CLAUDE, distro),
   wslBrowse: (distro: string) => ipcRenderer.invoke(IPC.WSL_BROWSE, distro),
+
+  // Context database
+  contextSearchMemories: (projectPath, query, limit) =>
+    ipcRenderer.invoke(IPC.CONTEXT_SEARCH_MEMORIES, { projectPath, query, limit }),
+  contextGetSessionHistory: (projectPath, limit, offset) =>
+    ipcRenderer.invoke(IPC.CONTEXT_GET_SESSION_HISTORY, { projectPath, limit, offset }),
+  contextGetSessionDetail: (sessionId) =>
+    ipcRenderer.invoke(IPC.CONTEXT_GET_SESSION_DETAIL, sessionId),
+  contextGetProjectStats: (projectPath) =>
+    ipcRenderer.invoke(IPC.CONTEXT_GET_PROJECT_STATS, projectPath),
+  contextPinMemory: (memoryId) =>
+    ipcRenderer.invoke(IPC.CONTEXT_PIN_MEMORY, memoryId),
+  contextUnpinMemory: (memoryId) =>
+    ipcRenderer.invoke(IPC.CONTEXT_UNPIN_MEMORY, memoryId),
+  contextDeleteMemory: (memoryId) =>
+    ipcRenderer.invoke(IPC.CONTEXT_DELETE_MEMORY, memoryId),
+  contextGetFilesTouched: (projectPath, limit) =>
+    ipcRenderer.invoke(IPC.CONTEXT_GET_FILES_TOUCHED, { projectPath, limit }),
+  contextGetMemoryPacketPreview: (projectPath, tabId, prompt) =>
+    ipcRenderer.invoke(IPC.CONTEXT_GET_MEMORY_PACKET_PREVIEW, { projectPath, tabId, prompt }),
+  onContextMemoryCreated: (callback) => {
+    const handler = (_e: Electron.IpcRendererEvent, memory: ContextMemory) => callback(memory)
+    ipcRenderer.on(IPC.CONTEXT_MEMORY_CREATED, handler)
+    return () => ipcRenderer.removeListener(IPC.CONTEXT_MEMORY_CREATED, handler)
+  },
+  onContextSessionRecorded: (callback) => {
+    const handler = (_e: Electron.IpcRendererEvent, session: ContextSessionSummary) => callback(session)
+    ipcRenderer.on(IPC.CONTEXT_SESSION_RECORDED, handler)
+    return () => ipcRenderer.removeListener(IPC.CONTEXT_SESSION_RECORDED, handler)
+  },
 }
 
 contextBridge.exposeInMainWorld('clui', api)
