@@ -1202,6 +1202,7 @@ describe('ControlPlane', () => {
       const mockRetrieval = {
         resolveProjectId: vi.fn(() => 'proj-1'),
         buildMemoryPacket: vi.fn(() => 'Context: remembered stuff'),
+        buildSmartPacket: vi.fn(() => 'Context: remembered stuff'),
       }
       cp.setRetrievalService(mockRetrieval as any)
 
@@ -1221,6 +1222,7 @@ describe('ControlPlane', () => {
       const mockRetrieval = {
         resolveProjectId: vi.fn(() => null),
         buildMemoryPacket: vi.fn(),
+        buildSmartPacket: vi.fn(),
       }
       cp.setRetrievalService(mockRetrieval as any)
 
@@ -1228,7 +1230,7 @@ describe('ControlPlane', () => {
       const p = cp.submitPrompt(tabId, 'req-1', makeRunOptions())
       await flush()
 
-      expect(mockRetrieval.buildMemoryPacket).not.toHaveBeenCalled()
+      expect(mockRetrieval.buildSmartPacket).not.toHaveBeenCalled()
 
       emitRunExit('req-1', 0)
       await p

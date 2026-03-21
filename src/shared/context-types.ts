@@ -61,3 +61,34 @@ export interface MemorySearchResult {
   createdAt: string
   updatedAt: string
 }
+
+// ── Smart Context Types (shared) ─────────────────────────────────────────
+
+export interface ContextDecision {
+  id: string
+  title: string
+  body: string
+  category: string
+  importanceScore: number
+  sessionId: string
+  createdAt: string
+}
+
+export interface ContextPitfall {
+  id: string
+  title: string
+  body: string
+  occurrenceCount: number
+  importanceScore: number
+  lastSeenAt: string
+  resolved: boolean
+}
+
+export interface ContextUserPattern {
+  id: string
+  patternType: string
+  title: string
+  body: string | null
+  confidenceScore: number
+  observationCount: number
+}

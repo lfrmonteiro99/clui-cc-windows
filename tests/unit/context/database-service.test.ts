@@ -36,7 +36,7 @@ describe('DatabaseService', () => {
       const row = db.db
         .prepare('SELECT MAX(version) as v FROM schema_migrations')
         .get() as { v: number }
-      expect(row.v).toBe(1)
+      expect(row.v).toBe(2)
     })
 
     it('is idempotent — calling init twice does not error', () => {
@@ -47,7 +47,7 @@ describe('DatabaseService', () => {
       const row = db.db
         .prepare('SELECT COUNT(*) as c FROM schema_migrations')
         .get() as { c: number }
-      expect(row.c).toBe(1)
+      expect(row.c).toBe(2)
     })
 
     it('configures journal mode', () => {
