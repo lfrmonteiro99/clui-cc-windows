@@ -13,6 +13,8 @@ import type {
   AgentMemorySnapshot,
   AgentMemoryClaimResult,
 } from '../../shared/types'
+import { useModelRouterStore } from './modelRouterStore'
+import { useBudgetStore } from './budgetStore'
 import { canScheduleAutoResume, DEFAULT_AUTO_RESUME_MAX_RETRIES, getAutoResumeDelayMs } from '../../shared/retry-policy'
 import { useThemeStore } from '../theme'
 import { useNotificationStore } from './notificationStore'
@@ -794,11 +796,17 @@ export const useSessionStore = create<State>((set, get) => ({
       : tab.title
 
     const { preferredModel } = get()
+    // Smart model routing: auto-select cheapest adequate model when enabled
+    const resolvedModel = useModelRouterStore.getState().resolveModel(
+      activeTabId,
+      prompt,
+      preferredModel,
+    )
     const runOptions: RunOptions = {
       prompt: fullPrompt,
       projectPath: resolvedPath,
       sessionId: tab.claudeSessionId || undefined,
-      model: preferredModel || undefined,
+      model: resolvedModel || undefined,
       addDirs: tab.additionalDirs.length > 0 ? tab.additionalDirs : undefined,
     }
 
@@ -1025,6 +1033,12 @@ export const useSessionStore = create<State>((set, get) => ({
               useTokenBudgetStore.getState().recordUsage(tabId, event.usage)
             } catch {
               // Token budget tracking failure is non-fatal
+            }
+            // Record cost for budget tracking
+            try {
+              useBudgetStore.getState().recordTabCost(tabId, event.costUsd)
+            } catch {
+              // Budget tracking failure is non-fatal
             }
             // Play notification sound if window is hidden
             playNotificationIfHidden()

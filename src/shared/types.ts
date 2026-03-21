@@ -568,6 +568,18 @@ export const IPC = {
   COST_SUMMARY: 'clui:cost-summary',
   COST_HISTORY: 'clui:cost-history',
 
+  // Budget controls
+  BUDGET_GET_CONFIG: 'clui:budget-get-config',
+  BUDGET_SET_CONFIG: 'clui:budget-set-config',
+  BUDGET_GET_STATUS: 'clui:budget-get-status',
+  BUDGET_ALERT: 'clui:budget-alert',
+
+  // Response cache
+  CACHE_LOOKUP: 'clui:cache-lookup',
+  CACHE_STORE: 'clui:cache-store',
+  CACHE_CLEAR: 'clui:cache-clear',
+  CACHE_STATS: 'clui:cache-stats',
+
   // Git context
   GIT_STATUS: 'clui:git-status',
   GIT_DIFF: 'clui:git-diff',

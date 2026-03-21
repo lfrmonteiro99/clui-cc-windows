@@ -4,6 +4,7 @@ import { PtyRunManager } from './pty-run-manager'
 import { PermissionServer, maskSensitiveFields } from '../hooks/permission-server'
 import { AgentMemory } from '../agent-memory'
 import type { RetrievalService } from '../context/retrieval-service'
+import { BudgetEnforcer } from '../budget-enforcer'
 import type { HookToolRequest, PermissionOption } from '../hooks/permission-server'
 import { log as _log } from '../logger'
 import type {
@@ -83,6 +84,8 @@ export class ControlPlane extends EventEmitter {
   private agentMemory: AgentMemory | null = null
   /** Optional context database retrieval service for memory packet injection. */
   private retrievalService: RetrievalService | null = null
+  /** Optional budget enforcer for per-tab spending limits. */
+  budgetEnforcer: BudgetEnforcer | null = null
 
   constructor(interactivePty = false) {
     super()
@@ -722,6 +725,14 @@ export class ControlPlane extends EventEmitter {
       }
     } else {
       log('Context retrieval: retrievalService not set')
+    }
+
+    // Budget enforcement: inject --max-budget-usd if configured and not already set
+    if (!options.maxBudgetUsd && this.budgetEnforcer) {
+      const cliBudget = this.budgetEnforcer.getCliBudgetForTab(tabId)
+      if (cliBudget !== null) {
+        options = { ...options, maxBudgetUsd: cliBudget }
+      }
     }
 
     // Per-run token lifecycle: register run, generate per-run settings file
