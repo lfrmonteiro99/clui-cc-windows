@@ -574,6 +574,12 @@ export const IPC = {
   BUDGET_GET_STATUS: 'clui:budget-get-status',
   BUDGET_ALERT: 'clui:budget-alert',
 
+  // Response cache
+  CACHE_LOOKUP: 'clui:cache-lookup',
+  CACHE_STORE: 'clui:cache-store',
+  CACHE_CLEAR: 'clui:cache-clear',
+  CACHE_STATS: 'clui:cache-stats',
+
   // Git context
   GIT_STATUS: 'clui:git-status',
   GIT_DIFF: 'clui:git-diff',
