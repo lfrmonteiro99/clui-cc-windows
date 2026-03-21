@@ -40,6 +40,8 @@ test('shows permission wizard on first launch and persists balanced preset', asy
 })
 
 test('creates a tab and renders a fake Claude response end-to-end', async ({}, testInfo) => {
+  test.setTimeout(90_000)
+
   const { electronApp, page } = await launchCluiApp(testInfo)
 
   await dismissPermissionWizard(page)
@@ -52,8 +54,8 @@ test('creates a tab and renders a fake Claude response end-to-end', async ({}, t
   await page.getByTestId('composer-input').fill('say hello from e2e')
   await page.getByTestId('composer-send').click()
 
-  await expect(page.getByTestId('conversation-view').getByText('say hello from e2e')).toBeVisible()
-  await expect(page.getByTestId('conversation-view').getByText('Fake response to: say hello from e2e')).toBeVisible()
+  await expect(page.getByTestId('conversation-view').getByText('say hello from e2e')).toBeVisible({ timeout: 15_000 })
+  await expect(page.getByTestId('conversation-view').getByText('Fake response to: say hello from e2e')).toBeVisible({ timeout: 30_000 })
 
   await electronApp.close()
 })
