@@ -1250,7 +1250,7 @@ app.whenReady().then(() => {
 
     // Daily pruning interval (24h)
     const PRUNE_INTERVAL_MS = 24 * 60 * 60 * 1000
-    setInterval(() => {
+    const pruneInterval = setInterval(() => {
       try {
         const pruned = contextDb.pruneStaleMemories()
         if (pruned > 0) log(`Daily pruning: removed ${pruned} stale memories`)
@@ -1258,6 +1258,9 @@ app.whenReady().then(() => {
         log(`Daily pruning error: ${err}`)
       }
     }, PRUNE_INTERVAL_MS)
+    if (pruneInterval && typeof pruneInterval === 'object' && 'unref' in pruneInterval) {
+      pruneInterval.unref()
+    }
   } catch (err) {
     log(`Context database init failed: ${err}`)
   }

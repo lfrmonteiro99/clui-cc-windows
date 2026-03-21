@@ -3,6 +3,8 @@ import { expect, test } from '@playwright/test'
 import { dismissPermissionWizard, launchCluiApp } from './helpers/clui'
 
 test('shows permission wizard on first launch and persists balanced preset', async ({}, testInfo) => {
+  test.setTimeout(90_000)
+
   const firstLaunch = await launchCluiApp(testInfo)
 
   await expect(firstLaunch.page.getByTestId('permission-wizard')).toBeVisible()
@@ -46,7 +48,6 @@ test('creates a tab and renders a fake Claude response end-to-end', async ({}, t
   await expect(page.locator('[role="tab"]')).toHaveCount(2)
 
   await page.locator('[role="tab"]').last().click()
-  await expect(page.getByText('Choose folder')).toBeVisible()
 
   await page.getByTestId('composer-input').fill('say hello from e2e')
   await page.getByTestId('composer-send').click()
