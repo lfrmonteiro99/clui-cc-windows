@@ -174,4 +174,54 @@ export function buildCooccurrenceMap(
   })
 
   batch()
+
+  // Prune to keep only top terms by total weight
+  pruneCooccurrences(db, projectId)
+}
+
+// ── Co-occurrence pruning ──────────────────────────────────────────────
+
+/** Maximum unique terms (term_a values) to keep per project. */
+const MAX_COOCCURRENCE_TERMS = 500
+
+/**
+ * Prune the term_cooccurrences table to cap at MAX_COOCCURRENCE_TERMS
+ * unique terms per project, keeping those with the highest total weight.
+ * Runs after each buildCooccurrenceMap call to prevent unbounded growth.
+ */
+export function pruneCooccurrences(
+  db: DatabaseService,
+  projectId: string,
+): void {
+  const termCount = db.db
+    .prepare(
+      `SELECT COUNT(DISTINCT term_a) as cnt
+       FROM term_cooccurrences WHERE project_id = ?`,
+    )
+    .get(projectId) as { cnt: number }
+
+  if (termCount.cnt <= MAX_COOCCURRENCE_TERMS) return
+
+  // Find the top terms by total weight
+  const topTerms = db.db
+    .prepare(
+      `SELECT term_a, SUM(weight) as total_weight
+       FROM term_cooccurrences
+       WHERE project_id = ?
+       GROUP BY term_a
+       ORDER BY total_weight DESC
+       LIMIT ?`,
+    )
+    .all(projectId, MAX_COOCCURRENCE_TERMS) as Array<{ term_a: string }>
+
+  const keepSet = new Set(topTerms.map((t) => t.term_a))
+  const placeholders = topTerms.map(() => '?').join(',')
+
+  db.db
+    .prepare(
+      `DELETE FROM term_cooccurrences
+       WHERE project_id = ?
+         AND (term_a NOT IN (${placeholders}) OR term_b NOT IN (${placeholders}))`,
+    )
+    .run(projectId, ...keepSet, ...keepSet)
 }

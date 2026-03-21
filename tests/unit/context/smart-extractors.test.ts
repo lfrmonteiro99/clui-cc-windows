@@ -7,6 +7,7 @@ import {
   extractDecisions,
   extractPitfalls,
   buildCooccurrenceMap,
+  pruneCooccurrences,
 } from '../../../src/main/context/smart-extractors'
 import { __initSqlWasm } from '../../__mocks__/better-sqlite3'
 
@@ -251,6 +252,68 @@ describe('smart-extractors', () => {
         .all(projectId) as any[]
 
       expect(cooccurrences.length).toBe(0)
+    })
+  })
+
+  describe('pruneCooccurrences', () => {
+    it('removes low-weight terms when exceeding cap', () => {
+      // Insert many unique terms to exceed the 500 cap
+      const insert = db.db.prepare(
+        `INSERT INTO term_cooccurrences (project_id, term_a, term_b, weight)
+         VALUES (?, ?, ?, ?)`,
+      )
+
+      const batch = db.db.transaction(() => {
+        // Create 520 unique term_a values, each with one pair
+        for (let i = 0; i < 520; i++) {
+          const termA = `term_${String(i).padStart(4, '0')}`
+          const termB = `pair_${String(i).padStart(4, '0')}`
+          // Higher-numbered terms get higher weight so we know which survive
+          insert.run(projectId, termA, termB, i + 1)
+          insert.run(projectId, termB, termA, i + 1)
+        }
+      })
+      batch()
+
+      const beforeCount = db.db
+        .prepare(
+          'SELECT COUNT(DISTINCT term_a) as cnt FROM term_cooccurrences WHERE project_id = ?',
+        )
+        .get(projectId) as any
+
+      expect(beforeCount.cnt).toBeGreaterThan(500)
+
+      pruneCooccurrences(db, projectId)
+
+      const afterCount = db.db
+        .prepare(
+          'SELECT COUNT(DISTINCT term_a) as cnt FROM term_cooccurrences WHERE project_id = ?',
+        )
+        .get(projectId) as any
+
+      expect(afterCount.cnt).toBeLessThanOrEqual(500)
+    })
+
+    it('does not prune when under cap', () => {
+      const insert = db.db.prepare(
+        `INSERT INTO term_cooccurrences (project_id, term_a, term_b, weight)
+         VALUES (?, ?, ?, 1.0)`,
+      )
+
+      // Insert just 10 terms — well under cap
+      for (let i = 0; i < 10; i++) {
+        insert.run(projectId, `term_${i}`, `pair_${i}`)
+      }
+
+      pruneCooccurrences(db, projectId)
+
+      const count = db.db
+        .prepare(
+          'SELECT COUNT(*) as cnt FROM term_cooccurrences WHERE project_id = ?',
+        )
+        .get(projectId) as any
+
+      expect(count.cnt).toBe(10)
     })
   })
 })
