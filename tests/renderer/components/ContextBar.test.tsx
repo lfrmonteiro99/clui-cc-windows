@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import React from 'react'
-import { screen } from '@testing-library/react'
+import { fireEvent, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { ContextBar } from '../../../src/renderer/components/ContextBar'
 import { useTokenBudgetStore } from '../../../src/renderer/stores/tokenBudgetStore'
@@ -111,5 +111,105 @@ describe('ContextBar', () => {
     renderWithProviders(<ContextBar tabId="tab-1" />)
     // Should show "50k" somewhere in the display
     expect(screen.getByText(/50k/)).toBeInTheDocument()
+  })
+
+  // ─── Legend ───
+
+  describe('legend', () => {
+    it('renders a legend toggle button', () => {
+      useTokenBudgetStore.getState().recordUsage('tab-1', { input_tokens: 10_000 })
+
+      renderWithProviders(<ContextBar tabId="tab-1" />)
+      expect(screen.getByTestId('context-bar-legend-toggle')).toBeInTheDocument()
+    })
+
+    it('legend is hidden by default', () => {
+      useTokenBudgetStore.getState().recordUsage('tab-1', { input_tokens: 10_000 })
+
+      renderWithProviders(<ContextBar tabId="tab-1" />)
+      expect(screen.queryByTestId('context-bar-legend')).toBeNull()
+    })
+
+    it('shows the legend when toggle is clicked', () => {
+      useTokenBudgetStore.getState().recordUsage('tab-1', {
+        input_tokens: 10_000,
+        output_tokens: 5_000,
+        cache_read_input_tokens: 2_000,
+        cache_creation_input_tokens: 1_000,
+      })
+
+      renderWithProviders(<ContextBar tabId="tab-1" />)
+      fireEvent.click(screen.getByTestId('context-bar-legend-toggle'))
+
+      const legend = screen.getByTestId('context-bar-legend')
+      expect(legend).toBeInTheDocument()
+    })
+
+    it('displays human-friendly descriptions for each category', () => {
+      useTokenBudgetStore.getState().recordUsage('tab-1', {
+        input_tokens: 10_000,
+        output_tokens: 5_000,
+        cache_read_input_tokens: 2_000,
+        cache_creation_input_tokens: 1_000,
+      })
+
+      renderWithProviders(<ContextBar tabId="tab-1" />)
+      fireEvent.click(screen.getByTestId('context-bar-legend-toggle'))
+
+      // Each category should have a description explaining what it is
+      expect(screen.getByText(/what you send/i)).toBeInTheDocument()
+      expect(screen.getByText(/what Claude replies/i)).toBeInTheDocument()
+      expect(screen.getByText(/reused from previous/i)).toBeInTheDocument()
+      expect(screen.getByText(/new context being saved/i)).toBeInTheDocument()
+    })
+
+    it('shows token count per category in the legend', () => {
+      useTokenBudgetStore.getState().recordUsage('tab-1', {
+        input_tokens: 10_000,
+        output_tokens: 5_000,
+      })
+
+      renderWithProviders(<ContextBar tabId="tab-1" />)
+      fireEvent.click(screen.getByTestId('context-bar-legend-toggle'))
+
+      const legend = screen.getByTestId('context-bar-legend')
+      expect(legend.textContent).toContain('10k')
+      expect(legend.textContent).toContain('5k')
+    })
+
+    it('only shows categories that have tokens', () => {
+      useTokenBudgetStore.getState().recordUsage('tab-1', {
+        input_tokens: 10_000,
+        output_tokens: 5_000,
+      })
+
+      renderWithProviders(<ContextBar tabId="tab-1" />)
+      fireEvent.click(screen.getByTestId('context-bar-legend-toggle'))
+
+      expect(screen.queryByText(/reused from previous/i)).toBeNull()
+      expect(screen.queryByText(/new context being saved/i)).toBeNull()
+    })
+
+    it('explains the overall bar meaning', () => {
+      useTokenBudgetStore.getState().recordUsage('tab-1', { input_tokens: 10_000 })
+
+      renderWithProviders(<ContextBar tabId="tab-1" />)
+      fireEvent.click(screen.getByTestId('context-bar-legend-toggle'))
+
+      expect(screen.getByText(/memory capacity/i)).toBeInTheDocument()
+    })
+
+    it('hides legend when toggle is clicked again', () => {
+      useTokenBudgetStore.getState().recordUsage('tab-1', { input_tokens: 10_000 })
+
+      renderWithProviders(<ContextBar tabId="tab-1" />)
+      const toggle = screen.getByTestId('context-bar-legend-toggle')
+
+      fireEvent.click(toggle)
+      expect(screen.getByTestId('context-bar-legend')).toBeInTheDocument()
+
+      fireEvent.click(toggle)
+      expect(screen.queryByTestId('context-bar-legend')).toBeNull()
+    })
   })
 })

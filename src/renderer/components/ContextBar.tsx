@@ -1,6 +1,6 @@
-import React from 'react'
-import { motion } from 'framer-motion'
-import { Lightning, ArrowsClockwise } from '@phosphor-icons/react'
+import React, { useState } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { Lightning, ArrowsClockwise, Question } from '@phosphor-icons/react'
 import { useColors } from '../theme'
 import { useTokenBudgetStore, type ThresholdLevel } from '../stores/tokenBudgetStore'
 
@@ -34,6 +34,15 @@ function thresholdBgColor(level: ThresholdLevel, colors: ReturnType<typeof useCo
   }
 }
 
+// ─── Category descriptions (human-friendly) ───
+
+const CATEGORY_DESCRIPTIONS: Record<string, string> = {
+  Input: 'What you send — your prompts, files, and context that Claude reads',
+  Output: 'What Claude replies — the text and code Claude generates for you',
+  'Cache Read': 'Reused from previous turns — context Claude already knows (saves cost)',
+  'Cache Write': 'New context being saved — so Claude can reuse it next turn',
+}
+
 // ─── Component ───
 
 interface ContextBarProps {
@@ -44,6 +53,7 @@ export function ContextBar({ tabId }: ContextBarProps) {
   const colors = useColors()
   const budget = useTokenBudgetStore((s) => s.budgets[tabId])
   const maxTokens = useTokenBudgetStore((s) => s.maxContextTokens)
+  const [legendOpen, setLegendOpen] = useState(false)
 
   if (!budget) return null
 
@@ -72,6 +82,7 @@ export function ContextBar({ tabId }: ContextBarProps) {
       data-testid="context-bar"
       data-threshold={level}
       style={{
+        position: 'relative',
         display: 'flex',
         alignItems: 'center',
         gap: 8,
@@ -163,6 +174,86 @@ export function ContextBar({ tabId }: ContextBarProps) {
           Start fresh
         </button>
       )}
+
+      {/* Legend toggle */}
+      <button
+        data-testid="context-bar-legend-toggle"
+        onClick={() => setLegendOpen((v) => !v)}
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          width: 18,
+          height: 18,
+          borderRadius: '50%',
+          border: `1px solid ${colors.containerBorder}`,
+          background: legendOpen ? colors.surfaceSecondary : 'transparent',
+          color: colors.textTertiary,
+          cursor: 'pointer',
+          padding: 0,
+          flexShrink: 0,
+        }}
+        title="What does this mean?"
+      >
+        <Question size={11} weight="bold" />
+      </button>
+
+      {/* Legend panel */}
+      <AnimatePresence>
+        {legendOpen && (
+          <motion.div
+            data-testid="context-bar-legend"
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            style={{
+              position: 'absolute',
+              left: 0,
+              right: 0,
+              top: '100%',
+              background: colors.popoverBg,
+              border: `1px solid ${colors.popoverBorder}`,
+              borderRadius: 8,
+              padding: '10px 12px',
+              fontSize: 11,
+              zIndex: 10,
+              boxShadow: colors.popoverShadow,
+            }}
+          >
+            <div style={{ color: colors.textSecondary, fontWeight: 600, marginBottom: 8 }}>
+              This bar shows Claude&apos;s memory capacity for this conversation
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {categories.map((cat) => (
+                <div key={cat.label} style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                  <div
+                    style={{
+                      width: 10,
+                      height: 10,
+                      borderRadius: 2,
+                      background: cat.color,
+                      marginTop: 2,
+                      flexShrink: 0,
+                    }}
+                  />
+                  <div style={{ flex: 1 }}>
+                    <span style={{ fontWeight: 600, color: colors.textPrimary }}>
+                      {cat.label}
+                    </span>
+                    <span style={{ color: colors.textTertiary, marginLeft: 6 }}>
+                      {formatTokenCount(cat.tokens)}
+                    </span>
+                    <div style={{ color: colors.textTertiary, marginTop: 1 }}>
+                      {CATEGORY_DESCRIPTIONS[cat.label]}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }
