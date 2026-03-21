@@ -4,6 +4,7 @@ import { dirname, resolve, normalize } from 'path'
 import { generateId } from './id'
 import { shouldUseBlob, writeBlob } from './blob-store'
 import { migration as migration001 } from './migrations/001-initial-schema'
+import { migration as migration002 } from './migrations/002-smart-context'
 import type {
   Migration,
   ProjectRow,
@@ -14,7 +15,7 @@ import type {
   ContextFileTouched,
 } from './types'
 
-const MIGRATIONS: Migration[] = [migration001]
+const MIGRATIONS: Migration[] = [migration001, migration002]
 
 export class DatabaseService {
   private _db: Database.Database | null = null

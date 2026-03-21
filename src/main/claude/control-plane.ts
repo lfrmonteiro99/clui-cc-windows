@@ -704,13 +704,15 @@ export class ControlPlane extends EventEmitter {
       }
     }
 
-    // Context database memory packet
+    // Context database memory packet (smart context injection)
     if (this.retrievalService) {
       const projectId = this.retrievalService.resolveProjectId(options.projectPath || '')
       log(`Context retrieval: path="${options.projectPath}" → projectId=${projectId || 'null'}`)
       if (projectId) {
-        const memoryPacket = this.retrievalService.buildMemoryPacket(projectId, tabId, options.prompt || '')
-        log(`Context packet: ${memoryPacket ? `${memoryPacket.length} chars` : 'null (no data)'}`)
+        const memoryPacket = this.retrievalService.buildSmartPacket(
+          projectId, tabId, options.prompt || ''
+        )
+        log(`Smart context packet: ${memoryPacket ? `${memoryPacket.length} chars` : 'null (no data)'}`)
         if (memoryPacket) {
           options = {
             ...options,

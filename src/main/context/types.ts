@@ -112,3 +112,104 @@ export interface MemorySearchResult {
   createdAt: string
   updatedAt: string
 }
+
+// ── Smart Context Types ──────────────────────────────────────────────────
+
+export enum ContextTier {
+  ProjectState = 0,
+  Continuation = 1,
+  Decisions = 2,
+  Pitfalls = 3,
+  HotFiles = 4,
+  Patterns = 5,
+  RelevantMemories = 6,
+  RecentSessions = 7,
+}
+
+export interface SmartMemoryPacketConfig {
+  totalBudget: number
+  tierBudgets: Partial<Record<ContextTier, number>>
+  minDecisionImportance: number
+  minPitfallImportance: number
+  maxDecisions: number
+  maxPitfalls: number
+  maxPatterns: number
+  cooccurrenceMinWeight: number
+}
+
+export const DEFAULT_SMART_PACKET_CONFIG: SmartMemoryPacketConfig = {
+  totalBudget: 3000,
+  tierBudgets: {
+    [ContextTier.ProjectState]: 150,
+    [ContextTier.Continuation]: 300,
+    [ContextTier.Decisions]: 600,
+    [ContextTier.Pitfalls]: 400,
+    [ContextTier.HotFiles]: 250,
+    [ContextTier.Patterns]: 300,
+    [ContextTier.RelevantMemories]: 500,
+    [ContextTier.RecentSessions]: 500,
+  },
+  minDecisionImportance: 0.4,
+  minPitfallImportance: 0.3,
+  maxDecisions: 5,
+  maxPitfalls: 4,
+  maxPatterns: 5,
+  cooccurrenceMinWeight: 3.0,
+}
+
+export interface ScoredItem {
+  id: string
+  content: string
+  estimatedTokens: number
+  score: number
+  tier: ContextTier
+  sourceId: string
+}
+
+export interface PromptSignals {
+  keyTerms: Set<string>
+  mentionedFiles: string[]
+  isContinuation: boolean
+  expandedTerms: Set<string>
+  intent: 'fix' | 'feature' | 'refactor' | 'question' | 'review' | 'general'
+}
+
+export interface DecisionRow {
+  id: string
+  project_id: string
+  session_id: string
+  title: string
+  body: string
+  category: string
+  importance_score: number
+  supersedes_id: string | null
+  created_at: string
+  deleted_at: string | null
+}
+
+export interface PitfallRow {
+  id: string
+  project_id: string
+  session_id: string
+  title: string
+  body: string
+  occurrence_count: number
+  importance_score: number
+  last_seen_at: string
+  resolved: number
+  created_at: string
+  deleted_at: string | null
+}
+
+export interface UserPatternRow {
+  id: string
+  project_id: string
+  pattern_type: string
+  title: string
+  body: string | null
+  confidence_score: number
+  observation_count: number
+  created_at: string
+  updated_at: string
+  deleted_at: string | null
+}

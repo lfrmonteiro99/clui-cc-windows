@@ -5,6 +5,16 @@ import type {
   ProjectRow,
 } from './types'
 import { DEFAULT_MEMORY_PACKET_CONFIG } from './types'
+import { PromptAnalyzer } from './prompt-analyzer'
+import { scoreItem, computePromptMatch, extractKeyTokens } from './relevance-scorer'
+import type {
+  SmartMemoryPacketConfig,
+  PromptSignals,
+  DecisionRow,
+  PitfallRow,
+  UserPatternRow,
+} from './types'
+import { DEFAULT_SMART_PACKET_CONFIG, ContextTier } from './types'
 
 // ── Raw row types from custom queries ────────────────────────────────────
 
@@ -86,9 +96,17 @@ function sanitizeFtsQuery(query: string): string {
 
 export class RetrievalService {
   private readonly dbService: DatabaseService
+  private promptAnalyzer: PromptAnalyzer | null = null
 
   constructor(db: DatabaseService) {
     this.dbService = db
+  }
+
+  private getAnalyzer(): PromptAnalyzer {
+    if (!this.promptAnalyzer) {
+      this.promptAnalyzer = new PromptAnalyzer(this.dbService.db)
+    }
+    return this.promptAnalyzer
   }
 
   /**
@@ -256,6 +274,444 @@ export class RetrievalService {
       .all(projectId, limit) as MemoryRow[]
 
     return rows.map(this.toMemorySearchResult)
+  }
+
+  /**
+   * Smart context injection — prompt-aware, tiered, scored.
+   * Falls back to legacy buildMemoryPacket if smart path fails.
+   */
+  buildSmartPacket(
+    projectId: string,
+    tabId: string,
+    prompt: string,
+    gitDiffFiles: string[] = [],
+    config: SmartMemoryPacketConfig = DEFAULT_SMART_PACKET_CONFIG,
+  ): string | null {
+    const db = this.dbService.db
+
+    try {
+      // 1. Analyze prompt
+      const signals = this.getAnalyzer().analyze(prompt, projectId)
+
+      // 2. Build project header (never trimmed)
+      const project = db
+        .prepare('SELECT * FROM projects WHERE id = ?')
+        .get(projectId) as ProjectRow | undefined
+      if (!project) return null
+
+      const stats = db
+        .prepare(
+          `SELECT
+            (SELECT COUNT(*) FROM sessions WHERE project_id = ? AND deleted_at IS NULL) as session_count,
+            (SELECT COUNT(DISTINCT ft.path) FROM files_touched ft
+             JOIN sessions s ON s.id = ft.session_id
+             WHERE s.project_id = ? AND ft.deleted_at IS NULL AND s.deleted_at IS NULL) as unique_files_touched,
+            (SELECT MAX(s.started_at) FROM sessions s WHERE s.project_id = ? AND s.deleted_at IS NULL) as last_active_at`,
+        )
+        .get(projectId, projectId, projectId) as {
+        session_count: number
+        unique_files_touched: number
+        last_active_at: string | null
+      }
+
+      if (stats.session_count === 0) return null
+
+      const projectSection = this.buildProjectSection(project, stats)
+
+      // 3. Gather candidates per tier
+      const continuation = this.queryContinuation(db, projectId, signals)
+      const decisions = this.queryDecisions(db, projectId, signals, config)
+      const pitfalls = this.queryPitfalls(db, projectId, signals, config)
+      const hotFiles = this.queryHotFiles(db, projectId, signals, gitDiffFiles, config)
+      const patterns = this.queryPatterns(db, projectId, config)
+      const memories = this.queryScoredMemories(db, projectId, signals, gitDiffFiles, config)
+      const sessions = this.queryRecentSessionsSmart(db, projectId, signals, config)
+
+      // 4. Assemble with budget enforcement
+      return this.assembleSmartPacket(
+        projectSection,
+        { continuation, decisions, pitfalls, hotFiles, patterns, memories, sessions },
+        config,
+      )
+    } catch (err) {
+      // Fallback to legacy
+      return this.buildMemoryPacket(projectId, tabId, prompt)
+    }
+  }
+
+  // ── Smart Packet: Tier Queries ────────────────────────────────────────
+
+  private queryContinuation(
+    db: any,
+    projectId: string,
+    signals: PromptSignals,
+  ): string {
+    if (!signals.isContinuation) {
+      // Even without explicit continuation, show last session if recent
+      const lastSession = db
+        .prepare(
+          `SELECT s.id, s.title, s.goal, s.status, s.started_at, s.ended_at
+           FROM sessions s
+           WHERE s.project_id = ? AND s.deleted_at IS NULL AND s.status IN ('completed', 'dead')
+           ORDER BY s.ended_at DESC LIMIT 1`,
+        )
+        .get(projectId) as any
+
+      if (!lastSession) return ''
+
+      const hoursAgo =
+        (Date.now() - new Date(lastSession.ended_at || lastSession.started_at).getTime()) / 3_600_000
+      if (hoursAgo > 24) return '' // Too old for implicit continuation
+
+      return `<continuation>
+Last session: "${lastSession.goal || lastSession.title || 'N/A'}" (${lastSession.status}, ${Math.round(hoursAgo)}h ago)
+</continuation>`
+    }
+
+    // Explicit continuation — get more detail about last session
+    const lastSession = db
+      .prepare(
+        `SELECT s.id, s.title, s.goal, s.status, s.started_at, s.ended_at
+         FROM sessions s
+         WHERE s.project_id = ? AND s.deleted_at IS NULL
+         ORDER BY COALESCE(s.ended_at, s.started_at) DESC LIMIT 1`,
+      )
+      .get(projectId) as any
+
+    if (!lastSession) return ''
+
+    // Get files from last session
+    const files = db
+      .prepare(
+        `SELECT DISTINCT path, action FROM files_touched
+         WHERE session_id = ? AND deleted_at IS NULL LIMIT 10`,
+      )
+      .all(lastSession.id) as Array<{ path: string; action: string }>
+
+    const fileStr =
+      files.length > 0
+        ? files.map((f) => `${f.path} (${f.action})`).join(', ')
+        : 'none'
+
+    // Get user prompts from last session
+    const prompts = db
+      .prepare(
+        `SELECT substr(content, 1, 200) as content FROM messages
+         WHERE session_id = ? AND role = 'user' AND deleted_at IS NULL
+         ORDER BY seq_num LIMIT 3`,
+      )
+      .all(lastSession.id) as Array<{ content: string }>
+
+    const promptStr =
+      prompts.length > 0
+        ? prompts.map((p) => p.content).join(' → ')
+        : 'N/A'
+
+    return `<continuation>
+Last session: "${lastSession.goal || lastSession.title || 'N/A'}" (${lastSession.status})
+User prompts: ${promptStr}
+Files touched: ${fileStr}
+</continuation>`
+  }
+
+  private queryDecisions(
+    db: any,
+    projectId: string,
+    signals: PromptSignals,
+    config: SmartMemoryPacketConfig,
+  ): string {
+    const rows = db
+      .prepare(
+        `SELECT id, title, body, category, importance_score, created_at
+         FROM decisions
+         WHERE project_id = ? AND deleted_at IS NULL AND importance_score >= ?
+         ORDER BY importance_score DESC LIMIT ?`,
+      )
+      .all(
+        projectId,
+        config.minDecisionImportance,
+        config.maxDecisions,
+      ) as DecisionRow[]
+
+    if (rows.length === 0) return ''
+
+    const entries = rows.map((d) => {
+      const date = d.created_at.split(' ')[0]
+      return `<decision date="${date}" importance="${d.importance_score}">
+${d.body}
+</decision>`
+    })
+
+    return `<decisions count="${rows.length}">
+${entries.join('\n')}
+</decisions>`
+  }
+
+  private queryPitfalls(
+    db: any,
+    projectId: string,
+    signals: PromptSignals,
+    config: SmartMemoryPacketConfig,
+  ): string {
+    const rows = db
+      .prepare(
+        `SELECT id, title, body, occurrence_count, importance_score, last_seen_at
+         FROM pitfalls
+         WHERE project_id = ? AND deleted_at IS NULL AND resolved = 0
+           AND importance_score >= ?
+         ORDER BY importance_score DESC LIMIT ?`,
+      )
+      .all(
+        projectId,
+        config.minPitfallImportance,
+        config.maxPitfalls,
+      ) as PitfallRow[]
+
+    if (rows.length === 0) return ''
+
+    // Boost score for fix intents
+    const entries = rows.map((p) => {
+      return `<pitfall importance="${p.importance_score}" occurrences="${p.occurrence_count}">
+${p.body}
+</pitfall>`
+    })
+
+    return `<pitfalls count="${rows.length}">
+${entries.join('\n')}
+</pitfalls>`
+  }
+
+  private queryHotFiles(
+    db: any,
+    projectId: string,
+    signals: PromptSignals,
+    gitDiffFiles: string[],
+    config: SmartMemoryPacketConfig,
+  ): string {
+    const rows = db
+      .prepare(
+        `SELECT ft.path, COUNT(*) as touch_count,
+                COUNT(DISTINCT ft.session_id) as session_count,
+                MAX(ft.created_at) as last_touched
+         FROM files_touched ft JOIN sessions s ON ft.session_id = s.id
+         WHERE s.project_id = ? AND ft.deleted_at IS NULL
+         GROUP BY ft.path ORDER BY touch_count DESC, last_touched DESC LIMIT 10`,
+      )
+      .all(projectId) as ActiveFileRow[]
+
+    if (rows.length === 0) return ''
+
+    // Score files by relevance
+    const projectState = {
+      gitDiffFiles,
+      recentlyOpenedFiles: [] as string[],
+    }
+
+    const scored = rows.map((f) => ({
+      ...f,
+      score: scoreItem(
+        {
+          updatedAt: f.last_touched,
+          importanceScore: Math.min(0.9, 0.3 + f.touch_count * 0.05),
+          searchableText: f.path,
+          associatedFiles: [f.path],
+          accessCount: f.touch_count,
+        },
+        signals.keyTerms.size > 0 ? [...signals.keyTerms].join(' ') : '',
+        projectState,
+      ),
+    }))
+
+    scored.sort((a, b) => b.score - a.score)
+    const topFiles = scored.slice(0, 5)
+
+    const entries = topFiles.map((f) => {
+      const sessionLabel =
+        f.session_count === 1 ? '1 session' : `${f.session_count} sessions`
+      return `${f.path} — ${f.touch_count} times across ${sessionLabel}`
+    })
+
+    return `<hot_files count="${topFiles.length}">
+${entries.join('\n')}
+</hot_files>`
+  }
+
+  private queryPatterns(
+    db: any,
+    projectId: string,
+    config: SmartMemoryPacketConfig,
+  ): string {
+    const rows = db
+      .prepare(
+        `SELECT pattern_type, title, body, confidence_score
+         FROM user_patterns
+         WHERE project_id = ? AND deleted_at IS NULL
+         ORDER BY confidence_score DESC LIMIT ?`,
+      )
+      .all(projectId, config.maxPatterns) as UserPatternRow[]
+
+    if (rows.length === 0) return ''
+
+    const entries = rows.map(
+      (p) => `<pattern type="${p.pattern_type}">${p.title}${p.body ? ': ' + p.body : ''}</pattern>`,
+    )
+
+    return `<patterns count="${rows.length}">
+${entries.join('\n')}
+</patterns>`
+  }
+
+  private queryScoredMemories(
+    db: any,
+    projectId: string,
+    signals: PromptSignals,
+    gitDiffFiles: string[],
+    config: SmartMemoryPacketConfig,
+  ): string {
+    // Get candidate memories
+    const memoryRows = this.queryMemories(
+      db,
+      projectId,
+      [...signals.keyTerms, ...signals.expandedTerms].join(' '),
+      12, // Fetch more than needed for scoring
+      config.minDecisionImportance,
+    )
+
+    if (memoryRows.length === 0) return ''
+
+    const projectState = { gitDiffFiles, recentlyOpenedFiles: [] as string[] }
+    const prompt = signals.keyTerms.size > 0 ? [...signals.keyTerms].join(' ') : ''
+
+    // Score and sort
+    const scored = memoryRows.map((m) => ({
+      ...m,
+      score: scoreItem(
+        {
+          updatedAt: m.updated_at,
+          importanceScore: m.importance_score,
+          searchableText: `${m.title} ${m.body || ''}`,
+          associatedFiles: [],
+          accessCount: m.access_count,
+        },
+        prompt,
+        projectState,
+      ),
+    }))
+
+    scored.sort((a, b) => b.score - a.score)
+    const topMemories = scored.slice(0, 6)
+
+    // Track access
+    if (topMemories.length > 0) {
+      const ids = topMemories.map((m) => m.id)
+      const placeholders = ids.map(() => '?').join(', ')
+      db.prepare(
+        `UPDATE memories SET access_count = access_count + 1, last_accessed_at = datetime('now')
+         WHERE id IN (${placeholders})`,
+      ).run(...ids)
+    }
+
+    const entries = topMemories.map((m) => {
+      const created = m.created_at.split(' ')[0]
+      const content = m.body || m.title
+      return `<memory type="${m.memory_type}" importance="${m.importance_score}" created="${created}">
+${content}
+</memory>`
+    })
+
+    return `<relevant_memories count="${topMemories.length}">
+${entries.join('\n')}
+</relevant_memories>`
+  }
+
+  private queryRecentSessionsSmart(
+    db: any,
+    projectId: string,
+    signals: PromptSignals,
+    config: SmartMemoryPacketConfig,
+  ): string {
+    // Only include 1 recent session (vs. 3 in legacy) — other tiers carry the context
+    const sessionRows = db
+      .prepare(
+        `SELECT s.id, s.title, s.goal, s.status, s.started_at, s.ended_at,
+                ss.body as summary
+         FROM sessions s
+         LEFT JOIN session_summaries ss ON ss.session_id = s.id AND ss.summary_kind = 'technical'
+         WHERE s.project_id = ? AND s.deleted_at IS NULL AND s.status IN ('completed', 'dead')
+         ORDER BY s.ended_at DESC LIMIT 1`,
+      )
+      .all(projectId) as RecentSessionRow[]
+
+    return this.buildSessionsSection(db, sessionRows, {
+      ...DEFAULT_MEMORY_PACKET_CONFIG,
+      maxRecentSessions: 1,
+    })
+  }
+
+  // ── Smart Packet: Assembly ────────────────────────────────────────────
+
+  private assembleSmartPacket(
+    projectSection: string,
+    tiers: {
+      continuation: string
+      decisions: string
+      pitfalls: string
+      hotFiles: string
+      patterns: string
+      memories: string
+      sessions: string
+    },
+    config: SmartMemoryPacketConfig,
+  ): string {
+    const parts = ['<clui_context>', projectSection]
+
+    if (tiers.continuation) parts.push(tiers.continuation)
+    if (tiers.decisions) parts.push(tiers.decisions)
+    if (tiers.pitfalls) parts.push(tiers.pitfalls)
+    if (tiers.hotFiles) parts.push(tiers.hotFiles)
+    if (tiers.patterns) parts.push(tiers.patterns)
+    if (tiers.memories) parts.push(tiers.memories)
+    if (tiers.sessions) parts.push(tiers.sessions)
+
+    parts.push('</clui_context>')
+
+    let result = parts.join('\n\n')
+    let tokens = estimateTokens(result)
+
+    if (tokens <= config.totalBudget) return result
+
+    // Trim tiers in order: sessions → memories → patterns → hotFiles → pitfalls → decisions → continuation
+    const trimOrder: (keyof typeof tiers)[] = [
+      'sessions',
+      'memories',
+      'patterns',
+      'hotFiles',
+      'pitfalls',
+      'decisions',
+      'continuation',
+    ]
+
+    for (const tier of trimOrder) {
+      if (tokens <= config.totalBudget) break
+      if (tiers[tier]) {
+        tokens -= estimateTokens(tiers[tier])
+        tiers[tier] = ''
+        // Rebuild
+        const rebuiltParts = ['<clui_context>', projectSection]
+        if (tiers.continuation) rebuiltParts.push(tiers.continuation)
+        if (tiers.decisions) rebuiltParts.push(tiers.decisions)
+        if (tiers.pitfalls) rebuiltParts.push(tiers.pitfalls)
+        if (tiers.hotFiles) rebuiltParts.push(tiers.hotFiles)
+        if (tiers.patterns) rebuiltParts.push(tiers.patterns)
+        if (tiers.memories) rebuiltParts.push(tiers.memories)
+        if (tiers.sessions) rebuiltParts.push(tiers.sessions)
+        rebuiltParts.push('</clui_context>')
+        result = rebuiltParts.join('\n\n')
+        tokens = estimateTokens(result)
+      }
+    }
+
+    return result
   }
 
   // ── Private: Section builders ──────────────────────────────────────────

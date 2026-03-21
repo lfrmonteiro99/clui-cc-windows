@@ -4,6 +4,7 @@ import type { DatabaseService } from './database-service'
 import type { NormalizedEvent, AssistantMessagePayload } from '../../shared/types'
 import type { ContextMemory, ContextSessionSummary } from './types'
 import { extractFilePatterns, extractErrorPatterns, extractToolPreferences } from './memory-extractors'
+import { extractDecisions, extractPitfalls, buildCooccurrenceMap } from './smart-extractors'
 
 // ── Per-tab ingestion state ─────────────────────────────────────────────
 
@@ -521,6 +522,10 @@ export class IngestionService extends EventEmitter {
         extractFilePatterns(this.db, state.projectId, state.sessionId)
         extractErrorPatterns(this.db, state.projectId, state.sessionId)
         extractToolPreferences(this.db, state.projectId, state.sessionId)
+        // Smart context extractors
+        extractDecisions(this.db, state.projectId, state.sessionId)
+        extractPitfalls(this.db, state.projectId, state.sessionId)
+        buildCooccurrenceMap(this.db, state.projectId, state.sessionId)
       } catch (err) {
         console.error('[IngestionService] Memory extractor error:', err)
       }
