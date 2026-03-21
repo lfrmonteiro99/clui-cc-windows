@@ -237,7 +237,9 @@ export class PermissionServer extends EventEmitter {
   /** Per-run tokens → run registration (tabId, requestId, sessionId) */
   private runTokens = new Map<string, RunRegistration>()
 
-  /** Scoped "allow always" keys. Format varies by tool type. */
+  /** Scoped "allow always" keys. Format varies by tool type.
+   *  Bounded to prevent unbounded growth in long-lived sessions. */
+  private static readonly MAX_SCOPED_ALLOWS = 500
   private scopedAllows = new Set<string>()
 
   /** Tracked generated settings files: runToken → filePath */
@@ -290,6 +292,10 @@ export class PermissionServer extends EventEmitter {
       try { unlinkSync(filePath) } catch {}
     }
     this.settingsFiles.clear()
+
+    // Clear scoped allows and run tokens to free memory
+    this.scopedAllows.clear()
+    this.runTokens.clear()
 
     if (this.server) {
       this.server.close()
@@ -371,12 +377,21 @@ export class PermissionServer extends EventEmitter {
     // Handle scoped "allow always" decisions
     if (decision === 'allow-session') {
       const key = `session:${sessionId}:tool:${toolName}`
+      // Evict oldest entries if at capacity
+      if (this.scopedAllows.size >= PermissionServer.MAX_SCOPED_ALLOWS) {
+        const oldest = this.scopedAllows.values().next().value
+        if (oldest !== undefined) this.scopedAllows.delete(oldest)
+      }
       this.scopedAllows.add(key)
       log(`Session-allowed ${toolName} for session ${sessionId.substring(0, 8)}…`)
     } else if (decision === 'allow-domain') {
       const domain = extractDomain(pending.toolRequest.tool_input?.url)
       if (domain) {
         const key = `session:${sessionId}:webfetch:${domain}`
+        if (this.scopedAllows.size >= PermissionServer.MAX_SCOPED_ALLOWS) {
+          const oldest = this.scopedAllows.values().next().value
+          if (oldest !== undefined) this.scopedAllows.delete(oldest)
+        }
         this.scopedAllows.add(key)
         log(`Domain-allowed ${domain} for session ${sessionId.substring(0, 8)}…`)
       }

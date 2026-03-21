@@ -124,6 +124,22 @@ let msgCounter = 0
 const nextMsgId = () => `msg-${++msgCounter}`
 const retryTimers = new Map<string, ReturnType<typeof setTimeout>>()
 
+/**
+ * Maximum number of messages kept in memory per tab.
+ * Older messages are pruned to prevent unbounded heap growth during long sessions.
+ * The ConversationView already paginates rendering, so this is a safety net.
+ */
+const MAX_MESSAGES_PER_TAB = 2000
+
+/** Prune messages array if it exceeds the limit, keeping the most recent ones. */
+function pruneMessages(messages: Message[]): Message[] {
+  if (messages.length <= MAX_MESSAGES_PER_TAB) return messages
+  return messages.slice(messages.length - MAX_MESSAGES_PER_TAB)
+}
+
+/** Maximum queued prompts per tab (backpressure) */
+const MAX_QUEUED_PROMPTS = 20
+
 function clearRetryTimer(tabId: string) {
   const timer = retryTimers.get(tabId)
   if (timer) {
@@ -827,6 +843,10 @@ export const useSessionStore = create<State>((set, get) => ({
               workingDirectory: resolvedPath,
             }
         if (isBusy) {
+          // Enforce queue backpressure — drop if too many queued
+          if (withEffectiveBase.queuedPrompts.length >= MAX_QUEUED_PROMPTS) {
+            return withEffectiveBase
+          }
           return {
             ...withEffectiveBase,
             title,
@@ -844,10 +864,10 @@ export const useSessionStore = create<State>((set, get) => ({
           attachments: [],
           retryState: null,
           lastRunOptions: runOptions,
-          messages: [
+          messages: pruneMessages([
             ...withEffectiveBase.messages,
             { id: nextMsgId(), role: 'user' as const, content: prompt, timestamp: Date.now() },
-          ],
+          ]),
         }
       }),
     }))
@@ -898,10 +918,10 @@ export const useSessionStore = create<State>((set, get) => ({
                 if (nextRunOptions) {
                   updated.lastRunOptions = nextRunOptions
                 }
-                updated.messages = [
+                updated.messages = pruneMessages([
                   ...updated.messages,
                   { id: nextMsgId(), role: 'user' as const, content: nextPrompt, timestamp: Date.now() },
-                ]
+                ])
               }
             }
             break
@@ -910,22 +930,22 @@ export const useSessionStore = create<State>((set, get) => ({
             updated.currentActivity = 'Writing...'
             const lastMsg = updated.messages[updated.messages.length - 1]
             if (lastMsg?.role === 'assistant' && !lastMsg.toolName) {
-              updated.messages = [
-                ...updated.messages.slice(0, -1),
-                { ...lastMsg, content: lastMsg.content + event.text },
-              ]
+              // Mutate in place to avoid copying the entire array on every chunk
+              const msgs = updated.messages.slice()
+              msgs[msgs.length - 1] = { ...lastMsg, content: lastMsg.content + event.text }
+              updated.messages = msgs
             } else {
-              updated.messages = [
+              updated.messages = pruneMessages([
                 ...updated.messages,
                 { id: nextMsgId(), role: 'assistant', content: event.text, timestamp: Date.now() },
-              ]
+              ])
             }
             break
           }
 
           case 'tool_call':
             updated.currentActivity = `Running ${event.toolName}...`
-            updated.messages = [
+            updated.messages = pruneMessages([
               ...updated.messages,
               {
                 id: nextMsgId(),
@@ -936,7 +956,7 @@ export const useSessionStore = create<State>((set, get) => ({
                 toolStatus: 'running',
                 timestamp: Date.now(),
               },
-            ]
+            ])
             break
 
           case 'tool_call_update': {
@@ -967,7 +987,7 @@ export const useSessionStore = create<State>((set, get) => ({
                     (m) => m.role === 'tool' && m.toolName === block.name && !m.content
                   )
                   if (!exists) {
-                    updated.messages = [
+                    updated.messages = pruneMessages([
                       ...updated.messages,
                       {
                         id: nextMsgId(),
@@ -978,7 +998,7 @@ export const useSessionStore = create<State>((set, get) => ({
                         toolStatus: 'completed',
                         timestamp: Date.now(),
                       },
-                    ]
+                    ])
                   }
                 }
               }

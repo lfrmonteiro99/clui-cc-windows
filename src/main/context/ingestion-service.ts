@@ -31,6 +31,8 @@ const TOOL_ACTION_MAP: Record<string, string> = {
 const BASH_DELETE_PATTERNS = [/\brm\b/, /\bdel\b/, /\brmdir\b/, /\bRemove-Item\b/]
 
 const TEXT_FLUSH_TIMEOUT_MS = 5_000
+/** Maximum text buffer entries before forcing a flush (prevents unbounded growth). */
+const MAX_TEXT_BUFFER_ENTRIES = 500
 
 // ── Degraded mode ───────────────────────────────────────────────────────
 
@@ -343,6 +345,16 @@ export class IngestionService extends EventEmitter {
     }
 
     state.textBuffer.push(event.text)
+
+    // Force-flush if buffer is getting large (prevents unbounded growth)
+    if (state.textBuffer.length >= MAX_TEXT_BUFFER_ENTRIES) {
+      if (state.textFlushTimer) {
+        clearTimeout(state.textFlushTimer)
+        state.textFlushTimer = null
+      }
+      this.flushTextBuffer(tabId)
+      return
+    }
 
     // Reset the flush timer
     if (state.textFlushTimer) {
