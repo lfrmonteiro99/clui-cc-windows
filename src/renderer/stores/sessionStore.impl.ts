@@ -19,6 +19,7 @@ import { useNotificationStore } from './notificationStore'
 import { useMarketplaceStore } from './marketplaceStore'
 import { usePermissionStore } from './permissionStore'
 import { useAgentMemoryStore } from './agentMemoryStore'
+import { useTokenBudgetStore } from './tokenBudgetStore'
 import {
   loadStoredTabOrder,
   moveTabOrderItem,
@@ -430,6 +431,7 @@ export const useSessionStore = create<State>((set, get) => ({
 
   closeTab: (tabId) => {
     clearRetryTimer(tabId)
+    useTokenBudgetStore.getState().resetTab(tabId)
     window.clui.closeTab(tabId).catch(() => {})
 
     const s = get()
@@ -1017,6 +1019,12 @@ export const useSessionStore = create<State>((set, get) => ({
               })
             } catch {
               // Cost recording failure is non-fatal
+            }
+            // Record token usage for context bar visualization
+            try {
+              useTokenBudgetStore.getState().recordUsage(tabId, event.usage)
+            } catch {
+              // Token budget tracking failure is non-fatal
             }
             // Play notification sound if window is hidden
             playNotificationIfHidden()

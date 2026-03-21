@@ -37,6 +37,7 @@ import { useTerminalStore } from './stores/terminalStore'
 import { TerminalPanel } from './components/TerminalPanel'
 import { ModeToggle } from './components/ModeToggle'
 import { FilePeekPanel } from './components/FilePeekPanel'
+import { ContextBar } from './components/ContextBar'
 import { ContextPanel } from './components/ContextPanel'
 import { FileContextMenu } from './components/FileContextMenu'
 import { useColors, useThemeStore, spacing } from './theme'
@@ -51,6 +52,7 @@ export default function App() {
   useClaudeEvents()
   useHealthReconciliation()
 
+  const activeTabId = useSessionStore((s) => s.activeTabId)
   const activeTabStatus = useSessionStore((s) => s.tabs.find((t) => t.id === s.activeTabId)?.status)
   const addAttachments = useSessionStore((s) => s.addAttachments)
   const colors = useColors()
@@ -722,6 +724,9 @@ export default function App() {
                   </button>
                 </div>
               </div>
+
+              {/* Token budget context bar */}
+              <ContextBar tabId={activeTabId} />
 
               {/* Input pill */}
               <div

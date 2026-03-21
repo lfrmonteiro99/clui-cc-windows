@@ -10,6 +10,7 @@ import { useSessionStore } from '../../src/renderer/stores/sessionStore'
 import { useShortcutStore } from '../../src/renderer/stores/shortcutStore'
 import { useSnippetStore } from '../../src/renderer/stores/snippetStore'
 import { useTabGroupStore } from '../../src/renderer/stores/tabGroupStore'
+import { useTokenBudgetStore } from '../../src/renderer/stores/tokenBudgetStore'
 import { useWorkflowStore, type Workflow } from '../../src/renderer/stores/workflowStore'
 import { useThemeStore } from '../../src/renderer/theme'
 import type { CostSummary, Message, TabState } from '../../src/shared/types'
@@ -33,6 +34,7 @@ const stores: ResettableStore[] = [
   useShortcutStore,
   useSnippetStore,
   useTabGroupStore,
+  useTokenBudgetStore,
   useWorkflowStore,
 ]
 
