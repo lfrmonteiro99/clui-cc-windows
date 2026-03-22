@@ -236,6 +236,8 @@ export interface TabState {
   runtime: 'native' | 'wsl'
   /** WSL distribution name (only set when runtime is 'wsl') */
   wslDistro: string | null
+  /** Timestamp of last meaningful activity (message, event) — used for freshness indicator */
+  lastActivityAt: number
 }
 
 export interface Message {

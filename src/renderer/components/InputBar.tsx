@@ -8,8 +8,11 @@ import { useExportStore } from '../stores/exportStore'
 import { useSnippetStore } from '../stores/snippetStore'
 import { useWorkflowStore } from '../stores/workflowStore'
 import { AttachmentChips } from './AttachmentChips'
+import { PromptLintBar } from './PromptLintBar'
 import { SlashCommandMenu, getFilteredCommandsWithExtras, type SlashCommand } from './SlashCommandMenu'
 import { useColors } from '../theme'
+import { lintPrompt, type PromptLintWarning } from '../../shared/prompt-linter'
+import { parseTemplate, findNextSlot, findPreviousSlot, resolveVariables, hasSlots as textHasSlots } from '../../shared/template-engine'
 import type { AgentAssignment, AgentMemorySnapshot, SessionExportData } from '../../shared/types'
 
 const INPUT_MIN_HEIGHT = 20
@@ -72,6 +75,9 @@ export function InputBar() {
   const measureRef = useRef<HTMLTextAreaElement | null>(null)
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const chunksRef = useRef<Blob[]>([])
+  const [lintWarnings, setLintWarnings] = useState<PromptLintWarning[]>([])
+  const lintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [slotMode, setSlotMode] = useState(false)
 
   const sendMessage = useSessionStore((s) => s.sendMessage)
   const clearTab = useSessionStore((s) => s.clearTab)
@@ -228,6 +234,7 @@ export function InputBar() {
         measureRef.current.remove()
         measureRef.current = null
       }
+      if (lintTimerRef.current) clearTimeout(lintTimerRef.current)
     }
   }, [])
 
@@ -339,12 +346,34 @@ export function InputBar() {
     }
   }, [tab, clearTab, addSystemMessage, staticInfo, preferredModel, refreshAgentMemory, agentMemorySnapshot, activeTabId, buildCurrentExportData, openExportDialog])
 
+  const selectSlotInTextarea = useCallback((text: string, cursorPos: number, direction: 'next' | 'prev') => {
+    const slot = direction === 'next'
+      ? findNextSlot(text, cursorPos)
+      : findPreviousSlot(text, cursorPos)
+    if (slot) {
+      requestAnimationFrame(() => {
+        const el = textareaRef.current
+        if (el) {
+          el.focus()
+          el.setSelectionRange(slot.index, slot.index + slot.length)
+        }
+      })
+    }
+  }, [])
+
   const handleSlashSelect = useCallback((cmd: SlashCommand) => {
     const isSkillCommand = !!tab?.sessionSkills?.includes(cmd.command.replace(/^\//, ''))
     if (cmd.insertText) {
-      setInput(cmd.insertText)
+      const text = cmd.insertText
+      setInput(text)
       setSlashFilter(null)
-      requestAnimationFrame(() => textareaRef.current?.focus())
+      // If template has slots, enter slot navigation mode
+      if (textHasSlots(text)) {
+        setSlotMode(true)
+        selectSlotInTextarea(text, 0, 'next')
+      } else {
+        requestAnimationFrame(() => textareaRef.current?.focus())
+      }
       return
     }
     if (isSkillCommand || cmd.insertOnly) {
@@ -356,7 +385,7 @@ export function InputBar() {
     setInput('')
     setSlashFilter(null)
     executeCommand(cmd)
-  }, [executeCommand, tab?.sessionSkills])
+  }, [executeCommand, tab?.sessionSkills, selectSlotInTextarea])
 
   // ─── Send ───
   const handleSend = useCallback(async () => {
@@ -367,10 +396,40 @@ export function InputBar() {
         return
       }
     }
-    const prompt = input.trim()
+    // Resolve template variables before sending
+    let resolvedInput = input
+    const { variables } = parseTemplate(input)
+    if (variables.length > 0) {
+      const vars: Record<string, string> = {}
+      for (const v of variables) {
+        if (v === 'clipboard') {
+          try {
+            vars[v] = await navigator.clipboard.readText()
+          } catch { /* leave unresolved */ }
+        } else if (v === 'git.branch' || v === 'git.diff') {
+          try {
+            const tab = useSessionStore.getState().tabs.find((t) => t.id === useSessionStore.getState().activeTabId)
+            const cwd = tab?.workingDirectory
+            if (cwd && typeof window.clui.getGitStatus === 'function') {
+              const status = await window.clui.getGitStatus(cwd)
+              if (v === 'git.branch' && status.branch) {
+                vars[v] = status.branch
+              }
+              // git.diff is not directly available from GitStatus, leave as-is
+            }
+          } catch { /* leave unresolved */ }
+        }
+      }
+      resolvedInput = resolveVariables(input, vars)
+    }
+
+    const prompt = resolvedInput.trim()
     const clearComposer = () => {
       setInput('')
       setSlashFilter(null)
+      setSlotMode(false)
+      setLintWarnings([])
+      if (lintTimerRef.current) clearTimeout(lintTimerRef.current)
       if (textareaRef.current) {
         textareaRef.current.style.height = `${INPUT_MIN_HEIGHT}px`
       }
@@ -485,14 +544,44 @@ export function InputBar() {
       if (e.key === 'Tab') { e.preventDefault(); if (filtered.length > 0) handleSlashSelect(filtered[slashIndex]); return }
       if (e.key === 'Escape') { e.preventDefault(); setSlashFilter(null); return }
     }
+    // Slot navigation: Tab advances to next slot, Shift+Tab to previous
+    if (slotMode && e.key === 'Tab') {
+      const el = textareaRef.current
+      if (el) {
+        const cursorPos = el.selectionEnd ?? 0
+        const direction = e.shiftKey ? 'prev' : 'next'
+        const slot = direction === 'next'
+          ? findNextSlot(input, cursorPos)
+          : findPreviousSlot(input, cursorPos)
+        if (slot) {
+          e.preventDefault()
+          el.setSelectionRange(slot.index, slot.index + slot.length)
+          return
+        }
+        // No more slots — exit slot mode and let Tab behave normally
+        setSlotMode(false)
+      }
+    }
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() }
-    if (e.key === 'Escape' && !showSlashMenu) { window.clui.hideWindow() }
+    if (e.key === 'Escape' && !showSlashMenu) {
+      if (slotMode) { setSlotMode(false); return }
+      window.clui.hideWindow()
+    }
   }
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const value = e.target.value
     setInput(value)
     updateSlashFilter(value)
+    // Exit slot mode when no slots remain
+    if (slotMode && !textHasSlots(value)) {
+      setSlotMode(false)
+    }
+    // Debounced prompt linting
+    if (lintTimerRef.current) clearTimeout(lintTimerRef.current)
+    lintTimerRef.current = setTimeout(() => {
+      setLintWarnings(lintPrompt(value))
+    }, 300)
   }
 
   // ─── Paste image ───
@@ -726,6 +815,9 @@ export function InputBar() {
           {voiceError}
         </div>
       )}
+
+      {/* Prompt lint warnings */}
+      {lintWarnings.length > 0 && <PromptLintBar warnings={lintWarnings} />}
     </div>
   )
 }

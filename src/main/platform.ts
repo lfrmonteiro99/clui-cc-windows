@@ -15,6 +15,7 @@ import { execSync } from 'child_process'
 import { existsSync, readFileSync, accessSync, constants } from 'fs'
 import { homedir } from 'os'
 import { join, dirname } from 'path'
+import path from 'path'
 
 function isWin(): boolean {
   return process.platform === 'win32'
@@ -86,7 +87,10 @@ export function getLoginShellPath(): string {
  * Uses the correct PATH separator per platform (`;` on Windows, `:` on POSIX).
  */
 export function ensureBinDirInPath(binaryPath: string, env: NodeJS.ProcessEnv): void {
-  const binDir = dirname(binaryPath)
+  // Use the platform-appropriate path module so Windows paths parse correctly
+  // even when the host OS is different (e.g. tests running on Linux).
+  const platformPath = isWin() ? path.win32 : path.posix
+  const binDir = platformPath.dirname(binaryPath)
 
   // If binary is a bare name (no directory component), dirname returns '.'.
   // Don't prepend '.' to PATH.

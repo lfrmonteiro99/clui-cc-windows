@@ -22,6 +22,8 @@ import { useMarketplaceStore } from './marketplaceStore'
 import { usePermissionStore } from './permissionStore'
 import { useAgentMemoryStore } from './agentMemoryStore'
 import { useTokenBudgetStore } from './tokenBudgetStore'
+import { useFaultMemoryStore } from './faultMemoryStore'
+import { detectCorrection } from '../../shared/fault-detector'
 import {
   loadStoredTabOrder,
   moveTabOrderItem,
@@ -237,6 +239,7 @@ function makeLocalTab(): TabState {
     additionalDirs: [],
     runtime: 'native',
     wslDistro: null,
+    lastActivityAt: 0,
   }
 }
 
@@ -807,6 +810,15 @@ export const useSessionStore = create<State>((set, get) => ({
       fullPrompt = `${attachmentCtx}\n\n${prompt}`
     }
 
+    // Inject fault memory preamble for first message in session
+    if (tab.messages.length === 0) {
+      const preamble = useFaultMemoryStore.getState().generatePreamble(resolvedPath)
+      if (preamble) {
+        fullPrompt = `${preamble}\n\n${fullPrompt}`
+        useFaultMemoryStore.getState().markFactsUsed(resolvedPath)
+      }
+    }
+
     const title = tab.messages.length === 0
       ? (prompt.length > 30 ? prompt.substring(0, 27) + '...' : prompt)
       : tab.title
@@ -864,6 +876,7 @@ export const useSessionStore = create<State>((set, get) => ({
           attachments: [],
           retryState: null,
           lastRunOptions: runOptions,
+          lastActivityAt: Date.now(),
           messages: pruneMessages([
             ...withEffectiveBase.messages,
             { id: nextMsgId(), role: 'user' as const, content: prompt, timestamp: Date.now() },
@@ -885,6 +898,28 @@ export const useSessionStore = create<State>((set, get) => ({
 
     if (shouldInferFocus) {
       void get().setAgentFocus(inferFocusSummary(prompt))
+    }
+
+    // Fault memory: detect corrections in user message
+    const detected = detectCorrection(prompt)
+    if (detected) {
+      useFaultMemoryStore.getState().addFact({
+        project: resolvedPath,
+        pattern: detected.pattern,
+        correction: detected.correction,
+        context: prompt,
+        category: detected.category,
+      })
+      const label = detected.pattern && detected.correction
+        ? `use ${detected.correction} instead of ${detected.pattern}`
+        : detected.correction
+          ? detected.correction
+          : `avoid ${detected.pattern}`
+      useNotificationStore.getState().addToast({
+        type: 'info',
+        title: `Noted: ${label}`,
+        duration: 3000,
+      })
     }
   },
 
@@ -1143,6 +1178,18 @@ export const useSessionStore = create<State>((set, get) => ({
               ]
             }
             break
+        }
+
+        // Update lastActivityAt for events that indicate real session activity
+        if (
+          event.type === 'text_chunk' ||
+          event.type === 'tool_call' ||
+          event.type === 'tool_call_complete' ||
+          event.type === 'task_complete' ||
+          event.type === 'session_init' ||
+          event.type === 'task_update'
+        ) {
+          updated.lastActivityAt = Date.now()
         }
 
         return updated

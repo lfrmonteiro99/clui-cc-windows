@@ -73,6 +73,9 @@ export function makeTab(overrides: Partial<TabState> = {}): TabState {
     workingDirectory: 'C:/repo',
     hasChosenDirectory: true,
     additionalDirs: [],
+    runtime: 'native',
+    wslDistro: null,
+    lastActivityAt: 0,
     ...overrides,
   }
 }

@@ -3,9 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import {
-  FileText, PencilSimple, FileArrowUp, Terminal, MagnifyingGlass, Globe,
-  Robot, Question, Wrench, FolderOpen, Copy, Check, CaretRight, CaretDown,
-  SpinnerGap, ArrowCounterClockwise, Square,
+  Copy, Check, ArrowCounterClockwise, Square, Globe,
 } from '@phosphor-icons/react'
 import { useSessionStore } from '../stores/sessionStore'
 import { FilePath } from './FilePath'
@@ -13,9 +11,12 @@ import { isLikelyFilePath } from '../utils/file-path-detect'
 import { PermissionCard } from './PermissionCard'
 import { PermissionDeniedCard } from './PermissionDeniedCard'
 import { RetryBanner } from './RetryBanner'
-import { DiffViewer } from './DiffViewer'
 import { DirectoryPicker } from './DirectoryPicker'
+import { ToolTimeline } from './ToolTimeline'
+import { ResumeBrief } from './ResumeBrief'
 import { useColors, useThemeStore } from '../theme'
+import { generateResumeBrief, RESUME_INACTIVITY_MS, CATCH_ME_UP_PROMPT } from '../../shared/session-resume'
+import type { ResumeBrief as ResumeBriefData } from '../../shared/session-resume'
 import type { Message } from '../../shared/types'
 
 // ─── Constants ───
@@ -80,6 +81,45 @@ export function ConversationView({ overrideTabId }: { overrideTabId?: string } =
   const prevTabIdRef = useRef(resolvedTabId)
   const colors = useColors()
   const expandedUI = useThemeStore((s) => s.expandedUI)
+
+  // ─── Resume Brief state ───
+  const lastViewedAtRef = useRef<Record<string, number>>({})
+  const [resumeBrief, setResumeBrief] = useState<ResumeBriefData | null>(null)
+  const [resumeDismissed, setResumeDismissed] = useState<Set<string>>(new Set())
+
+  // Check for resume brief when tab becomes active
+  useEffect(() => {
+    if (!resolvedTabId || !tab || tab.messages.length === 0) return
+
+    const now = Date.now()
+    const lastViewed = lastViewedAtRef.current[resolvedTabId]
+
+    if (lastViewed && (now - lastViewed) >= RESUME_INACTIVITY_MS && !resumeDismissed.has(resolvedTabId)) {
+      const brief = generateResumeBrief(tab.messages, tab.status)
+      setResumeBrief(brief)
+    } else if (!lastViewed) {
+      // First time viewing — no brief needed, just record the time
+      setResumeBrief(null)
+    }
+
+    // Update last viewed timestamp
+    lastViewedAtRef.current[resolvedTabId] = now
+  }, [resolvedTabId]) // eslint-disable-line react-hooks/exhaustive-deps — intentionally only on tab switch
+
+  const handleResumeDismiss = useCallback(() => {
+    setResumeBrief(null)
+    if (resolvedTabId) {
+      setResumeDismissed((prev) => new Set(prev).add(resolvedTabId))
+    }
+  }, [resolvedTabId])
+
+  const handleCatchMeUp = useCallback(() => {
+    sendMessage(CATCH_ME_UP_PROMPT)
+    setResumeBrief(null)
+    if (resolvedTabId) {
+      setResumeDismissed((prev) => new Set(prev).add(resolvedTabId))
+    }
+  }, [sendMessage, resolvedTabId])
 
   // Reset render offset and scroll state when switching tabs
   useEffect(() => {
@@ -180,6 +220,17 @@ export function ConversationView({ overrideTabId }: { overrideTabId?: string } =
           </div>
         )}
 
+        {/* Resume brief card */}
+        <AnimatePresence>
+          {resumeBrief && (
+            <ResumeBrief
+              brief={resumeBrief}
+              onCatchMeUp={handleCatchMeUp}
+              onDismiss={handleResumeDismiss}
+            />
+          )}
+        </AnimatePresence>
+
         <div className="space-y-1 relative">
           {grouped.map((item, idx) => {
             const msgIndex = startIndex + idx
@@ -191,7 +242,7 @@ export function ConversationView({ overrideTabId }: { overrideTabId?: string } =
               case 'assistant':
                 return <AssistantMessage key={item.message.id} message={item.message} skipMotion={isHistorical} />
               case 'tool-group':
-                return <ToolGroup key={`tg-${item.messages[0].id}`} tools={item.messages} skipMotion={isHistorical} />
+                return <ToolTimeline key={`tg-${item.messages[0].id}`} tools={item.messages} skipMotion={isHistorical} />
               case 'system':
                 return <SystemMessage key={item.message.id} message={item.message} skipMotion={isHistorical} />
               default:
@@ -628,189 +679,6 @@ const AssistantMessage = React.memo(function AssistantMessage({
   )
 }, (prev, next) => prev.message.content === next.message.content && prev.skipMotion === next.skipMotion)
 
-// ─── Tool Group (collapsible timeline — Claude Code style) ───
-
-/** Build a short description from tool name + input for the collapsed summary */
-function toolSummary(tools: Message[]): string {
-  if (tools.length === 0) return ''
-  // Use first tool's context for summary
-  const first = tools[0]
-  const desc = getToolDescription(first.toolName || 'Tool', first.toolInput)
-  if (tools.length === 1) return desc
-  return `${desc} and ${tools.length - 1} more tool${tools.length > 2 ? 's' : ''}`
-}
-
-function ToolDescriptionWithFilePath({ desc, toolInput }: { desc: string; toolInput?: string }) {
-  if (!toolInput) return <>{desc}</>
-  try {
-    const parsed = JSON.parse(toolInput)
-    const fp = parsed.file_path || parsed.path
-    if (fp && desc.includes(fp)) {
-      const idx = desc.indexOf(fp)
-      return (
-        <>
-          {desc.slice(0, idx)}
-          <FilePath path={fp} displayName={fp} />
-          {desc.slice(idx + fp.length)}
-        </>
-      )
-    }
-  } catch { /* not JSON */ }
-  return <>{desc}</>
-}
-
-/** Short human-readable description from tool name + input */
-function getToolDescription(name: string, input?: string): string {
-  if (!input) return name
-
-  // Try to extract a meaningful short description from the input JSON
-  try {
-    const parsed = JSON.parse(input)
-    switch (name) {
-      case 'Read': return `Read ${parsed.file_path || parsed.path || 'file'}`
-      case 'Edit': return `Edit ${parsed.file_path || 'file'}`
-      case 'Write': return `Write ${parsed.file_path || 'file'}`
-      case 'Glob': return `Search files: ${parsed.pattern || ''}`
-      case 'Grep': return `Search: ${parsed.pattern || ''}`
-      case 'Bash': {
-        const cmd = parsed.command || ''
-        return cmd.length > 60 ? `${cmd.substring(0, 57)}...` : cmd || 'Bash'
-      }
-      case 'WebSearch': return `Search: ${parsed.query || parsed.search_query || ''}`
-      case 'WebFetch': return `Fetch: ${parsed.url || ''}`
-      case 'Agent': return `Agent: ${(parsed.prompt || parsed.description || '').substring(0, 50)}`
-      default: return name
-    }
-  } catch {
-    // Input is not JSON or is partial — show truncated raw
-    const trimmed = input.trim()
-    if (trimmed.length > 60) return `${name}: ${trimmed.substring(0, 57)}...`
-    return trimmed ? `${name}: ${trimmed}` : name
-  }
-}
-
-const ToolGroup = React.memo(function ToolGroup({ tools, skipMotion }: { tools: Message[]; skipMotion?: boolean }) {
-  const hasRunning = tools.some((t) => t.toolStatus === 'running')
-  const [expanded, setExpanded] = useState(false)
-  const colors = useColors()
-
-  const isOpen = expanded || hasRunning
-
-  if (isOpen) {
-    const inner = (
-      <div className="py-1">
-        {/* Collapse header — click to close */}
-        {!hasRunning && (
-          <div
-            className="flex items-center gap-1 cursor-pointer mb-1.5"
-            onClick={() => setExpanded(false)}
-          >
-            <CaretDown size={10} style={{ color: colors.textMuted }} />
-            <span className="text-[11px]" style={{ color: colors.textMuted }}>
-              Used {tools.length} tool{tools.length !== 1 ? 's' : ''}
-            </span>
-          </div>
-        )}
-
-        {/* Timeline */}
-        <div className="relative pl-6">
-          {/* Vertical line */}
-          <div
-            className="absolute left-[10px] top-1 bottom-1 w-px"
-            style={{ background: colors.timelineLine }}
-          />
-
-          <div className="space-y-3">
-            {tools.map((tool) => {
-              const isRunning = tool.toolStatus === 'running'
-              const toolName = tool.toolName || 'Tool'
-              const desc = getToolDescription(toolName, tool.toolInput)
-
-              return (
-                <div key={tool.id} className="relative">
-                  {/* Timeline node */}
-                  <div
-                    className="absolute -left-6 top-[1px] w-[20px] h-[20px] rounded-full flex items-center justify-center"
-                    style={{
-                      background: isRunning ? colors.toolRunningBg : colors.toolBg,
-                      border: `1px solid ${isRunning ? colors.toolRunningBorder : colors.toolBorder}`,
-                    }}
-                  >
-                    {isRunning
-                      ? <SpinnerGap size={10} className="animate-spin" style={{ color: colors.statusRunning }} />
-                      : <ToolIcon name={toolName} size={10} />
-                    }
-                  </div>
-
-                  {/* Tool description */}
-                  <div className="min-w-0">
-                    <span
-                      className="text-[12px] leading-[1.4] block truncate"
-                      style={{ color: isRunning ? colors.textSecondary : colors.textTertiary }}
-                    >
-                      <ToolDescriptionWithFilePath desc={desc} toolInput={tool.toolInput} />
-                    </span>
-
-                    {/* Inline diff viewer for Edit/Write tools */}
-                    {!isRunning && <ToolDiffOrBadge tool={tool} />}
-
-                    {isRunning && (
-                      <span className="text-[10px] mt-0.5 block" style={{ color: colors.textMuted }}>
-                        running...
-                      </span>
-                    )}
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      </div>
-    )
-
-    if (skipMotion) return inner
-
-    return (
-      <motion.div
-        initial={{ opacity: 0, height: 0 }}
-        animate={{ opacity: 1, height: 'auto' }}
-        exit={{ opacity: 0, height: 0 }}
-        transition={{ duration: 0.15 }}
-      >
-        {inner}
-      </motion.div>
-    )
-  }
-
-  // Collapsed state — summary text + chevron, no container
-  const summary = toolSummary(tools)
-
-  const inner = (
-    <div
-      className="flex items-start gap-1 cursor-pointer py-[2px]"
-      onClick={() => setExpanded(true)}
-    >
-      <CaretRight size={10} className="flex-shrink-0 mt-[2px]" style={{ color: colors.textTertiary }} />
-      <span className="text-[11px] leading-[1.4]" style={{ color: colors.textTertiary }}>
-        {summary}
-      </span>
-    </div>
-  )
-
-  if (skipMotion) return <div className="py-0.5">{inner}</div>
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 4 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.12 }}
-      className="py-0.5"
-    >
-      {inner}
-    </motion.div>
-  )
-})
-
 // ─── System Message (memoized) ───
 
 const SystemMessage = React.memo(function SystemMessage({ message, skipMotion }: { message: Message; skipMotion?: boolean }) {
@@ -844,90 +712,3 @@ const SystemMessage = React.memo(function SystemMessage({ message, skipMotion }:
   )
 })
 
-// ─── Tool Icon mapping ───
-
-function ToolIcon({ name, size = 12 }: { name: string; size?: number }) {
-  const colors = useColors()
-  const ICONS: Record<string, React.ReactNode> = {
-    Read: <FileText size={size} />,
-    Edit: <PencilSimple size={size} />,
-    Write: <FileArrowUp size={size} />,
-    Bash: <Terminal size={size} />,
-    Glob: <FolderOpen size={size} />,
-    Grep: <MagnifyingGlass size={size} />,
-    WebSearch: <Globe size={size} />,
-    WebFetch: <Globe size={size} />,
-    Agent: <Robot size={size} />,
-    AskUserQuestion: <Question size={size} />,
-  }
-
-  return (
-    <span className="flex items-center" style={{ color: colors.textTertiary }}>
-      {ICONS[name] || <Wrench size={size} />}
-    </span>
-  )
-}
-
-// ─── Tool Diff or Badge — shows DiffViewer for Edit/Write, generic badge otherwise ───
-
-/** Try to parse tool input JSON safely */
-function parseToolInput(raw?: string): Record<string, unknown> | null {
-  if (!raw) return null
-  try {
-    const parsed: unknown = JSON.parse(raw)
-    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-      return parsed as Record<string, unknown>
-    }
-    return null
-  } catch {
-    return null
-  }
-}
-
-function ToolDiffOrBadge({ tool }: { tool: Message }) {
-  const colors = useColors()
-  const toolName = tool.toolName || ''
-  const parsed = useMemo(() => parseToolInput(tool.toolInput), [tool.toolInput])
-
-  // Edit tool: has file_path, old_string, new_string
-  if (toolName === 'Edit' && parsed) {
-    const filePath = typeof parsed.file_path === 'string' ? parsed.file_path : ''
-    const oldString = typeof parsed.old_string === 'string' ? parsed.old_string : ''
-    const newString = typeof parsed.new_string === 'string' ? parsed.new_string : ''
-
-    if (filePath && (oldString || newString)) {
-      return (
-        <div className="mt-1.5">
-          <DiffViewer filePath={filePath} oldString={oldString} newString={newString} />
-        </div>
-      )
-    }
-  }
-
-  // Write tool: has file_path, content (all additions, no old content)
-  if (toolName === 'Write' && parsed) {
-    const filePath = typeof parsed.file_path === 'string' ? parsed.file_path : ''
-    const content = typeof parsed.content === 'string' ? parsed.content : ''
-
-    if (filePath && content) {
-      return (
-        <div className="mt-1.5">
-          <DiffViewer filePath={filePath} oldString="" newString={content} />
-        </div>
-      )
-    }
-  }
-
-  // Fallback: generic result badge
-  return (
-    <span
-      className="inline-block text-[10px] mt-0.5 px-1.5 py-[1px] rounded"
-      style={{
-        background: tool.toolStatus === 'error' ? colors.statusErrorBg : colors.surfaceHover,
-        color: tool.toolStatus === 'error' ? colors.statusError : colors.textMuted,
-      }}
-    >
-      Result
-    </span>
-  )
-}
