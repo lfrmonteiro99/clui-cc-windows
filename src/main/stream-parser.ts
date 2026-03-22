@@ -9,12 +9,23 @@ import type { ClaudeEvent } from '../shared/types'
 export class StreamParser extends EventEmitter {
   private buffer = ''
 
+  /** Maximum buffer size (10MB). Prevents OOM from malformed/infinite streams. */
+  private static readonly MAX_BUFFER_SIZE = 10 * 1024 * 1024
+
   /**
    * Feed a chunk of data (from stdout) into the parser.
    * Emits 'event' for each parsed JSON line.
    */
   feed(chunk: string): void {
     this.buffer += chunk
+
+    // Safety: if buffer grows beyond limit, discard it to prevent OOM
+    if (this.buffer.length > StreamParser.MAX_BUFFER_SIZE) {
+      this.emit('parse-error', `[buffer overflow] Discarded ${this.buffer.length} bytes`)
+      this.buffer = ''
+      return
+    }
+
     const lines = this.buffer.split('\n')
     // Keep the last (possibly incomplete) line in the buffer
     this.buffer = lines.pop() || ''

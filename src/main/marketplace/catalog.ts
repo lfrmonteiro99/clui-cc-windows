@@ -25,8 +25,22 @@ let cachedPlugins: CatalogPlugin[] | null = null
 let cacheTimestamp = 0
 const CACHE_TTL = 5 * 60 * 1000 // 5 minutes
 
-// Cache raw SKILL.md content keyed by skill name for direct installation
+// Cache raw SKILL.md content keyed by skill name for direct installation.
+// Bounded to prevent unbounded memory growth when browsing many skills.
+const SKILL_CACHE_MAX = 50
 const skillContentCache = new Map<string, string>()
+
+/** Evict oldest entries when cache exceeds limit (simple LRU via insertion order). */
+function skillCacheSet(key: string, value: string): void {
+  // Delete first to refresh insertion order (Map iterates in insertion order)
+  skillContentCache.delete(key)
+  skillContentCache.set(key, value)
+  if (skillContentCache.size > SKILL_CACHE_MAX) {
+    // Evict the oldest entry (first key in insertion order)
+    const oldest = skillContentCache.keys().next().value
+    if (oldest !== undefined) skillContentCache.delete(oldest)
+  }
+}
 
 // ─── fetchCatalog ───
 
@@ -127,7 +141,7 @@ export async function fetchCatalog(forceRefresh?: boolean): Promise<{ plugins: C
                 name = parsed.name
                 description = parsed.description
                 // Cache raw content for direct installation
-                skillContentCache.set(job.installName, res.body)
+                skillCacheSet(job.installName, res.body)
               }
             } catch (e) {
               log(`SKILL.md fetch failed for ${job.skillPath}`)

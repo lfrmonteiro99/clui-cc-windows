@@ -278,6 +278,13 @@ export class RunManager extends EventEmitter {
     // Snapshot diagnostics BEFORE deleting the handle so callers can still read them.
     child.on('close', (code, signal) => {
       log(`Process closed [${requestId}]: code=${code} signal=${signal}`)
+      // Remove all listeners from the child process to allow GC
+      child.removeAllListeners()
+      child.stdout?.removeAllListeners()
+      child.stderr?.removeAllListeners()
+      parser.removeAllListeners()
+      // Null out process reference so GC can reclaim ChildProcess sooner
+      handle.process = null as unknown as ChildProcess
       // Move handle to finished map so getEnrichedError still works after exit
       this._finishedRuns.set(requestId, handle)
       this.activeRuns.delete(requestId)
@@ -288,6 +295,12 @@ export class RunManager extends EventEmitter {
 
     child.on('error', (err) => {
       log(`Process error [${requestId}]: ${err.message}`)
+      // Remove all listeners from the child process to allow GC
+      child.removeAllListeners()
+      child.stdout?.removeAllListeners()
+      child.stderr?.removeAllListeners()
+      parser.removeAllListeners()
+      handle.process = null as unknown as ChildProcess
       this._finishedRuns.set(requestId, handle)
       this.activeRuns.delete(requestId)
       this.emit('error', requestId, err)

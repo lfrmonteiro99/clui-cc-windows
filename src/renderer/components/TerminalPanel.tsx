@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { TerminalTabStrip } from './TerminalTabStrip'
 import { TerminalView } from './TerminalView'
 import { TerminalStatusBar } from './TerminalStatusBar'
@@ -81,6 +81,14 @@ export function TerminalPanel() {
     return () => window.removeEventListener('clui-terminal-shortcut', handler)
   }, [])
 
+  // Track which terminal tabs have been activated at least once.
+  // Once mounted, keep mounted (xterm.js state is expensive to recreate).
+  // Tabs that were never activated are not mounted at all, saving memory.
+  const mountedTermTabs = useRef(new Set<string>())
+  if (activeTermTabId) {
+    mountedTermTabs.current.add(activeTermTabId)
+  }
+
   const activeTab = termTabs.find((t) => t.id === activeTermTabId)
 
   // node-pty unavailable state
@@ -142,15 +150,17 @@ export function TerminalPanel() {
         </div>
       )}
 
-      {/* Terminal views — all mounted, only active visible */}
+      {/* Terminal views — only mount tabs that have been activated (saves xterm.js memory) */}
       <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
-        {termTabs.map((tab) => (
-          <TerminalView
-            key={tab.id}
-            termTabId={tab.id}
-            isActive={tab.id === activeTermTabId}
-          />
-        ))}
+        {termTabs
+          .filter((tab) => tab.id === activeTermTabId || mountedTermTabs.current.has(tab.id))
+          .map((tab) => (
+            <TerminalView
+              key={tab.id}
+              termTabId={tab.id}
+              isActive={tab.id === activeTermTabId}
+            />
+          ))}
 
         {termTabs.length === 0 && !error && (
           <div

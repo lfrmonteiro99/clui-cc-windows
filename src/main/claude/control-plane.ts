@@ -964,6 +964,10 @@ export class ControlPlane extends EventEmitter {
 
   shutdown(): void {
     log('Shutting down control plane')
+    // Remove all event listeners to prevent leaks on restart
+    this.runManager.removeAllListeners()
+    this.ptyRunManager.removeAllListeners()
+    this.permissionServer.removeAllListeners()
     this.permissionServer.stop()
     for (const [tabId] of this.tabs) {
       this.closeTab(tabId)
