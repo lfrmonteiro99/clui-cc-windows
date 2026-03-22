@@ -63,5 +63,6 @@ export function makeLocalTab(): TabState {
     additionalDirs: [],
     runtime: 'native',
     wslDistro: null,
+    lastActivityAt: 0,
   }
 }

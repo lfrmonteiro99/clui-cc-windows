@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { TabStrip } from '../../../src/renderer/components/TabStrip'
 import { useSessionStore } from '../../../src/renderer/stores/sessionStore'
 import { useTabGroupStore } from '../../../src/renderer/stores/tabGroupStore'
-import { renderWithProviders, resetTestState, makeTab } from '../testUtils'
+import { renderWithProviders, resetTestState, makeTab, makeMessage } from '../testUtils'
 
 describe('TabStrip', () => {
   beforeEach(() => {
@@ -81,5 +81,125 @@ describe('TabStrip', () => {
 
     expect(screen.getByText('Backend')).toBeInTheDocument()
     expect(screen.getByRole('tab', { selected: true })).toHaveTextContent('Alpha')
+  })
+
+  describe('Session Continuity Dot (freshness indicator)', () => {
+    it('shows green (active) dot when lastActivityAt is recent and tab has messages', () => {
+      const recentTime = Date.now() - 5 * 60 * 1000 // 5 minutes ago
+      useSessionStore.setState({
+        tabs: [
+          makeTab({
+            id: 'tab-1',
+            title: 'Active',
+            status: 'idle',
+            lastActivityAt: recentTime,
+            messages: [makeMessage({ role: 'user', content: 'hello' })],
+          }),
+        ],
+        tabOrder: ['tab-1'],
+        activeTabId: 'tab-1',
+      })
+
+      renderWithProviders(<TabStrip />)
+
+      const dot = screen.getByTestId('status-dot')
+      // Green freshness color should be applied (not the idle gray)
+      expect(dot.style.background).not.toBe('')
+      expect(dot.getAttribute('title')).toMatch(/Active/)
+    })
+
+    it('shows amber (stale) dot when lastActivityAt is over 2 hours ago', () => {
+      const staleTime = Date.now() - 3 * 60 * 60 * 1000 // 3 hours ago
+      useSessionStore.setState({
+        tabs: [
+          makeTab({
+            id: 'tab-1',
+            title: 'Stale',
+            status: 'idle',
+            lastActivityAt: staleTime,
+            messages: [makeMessage({ role: 'user', content: 'hello' })],
+          }),
+        ],
+        tabOrder: ['tab-1'],
+        activeTabId: 'tab-1',
+      })
+
+      renderWithProviders(<TabStrip />)
+
+      const dot = screen.getByTestId('status-dot')
+      expect(dot.getAttribute('title')).toMatch(/Stale/)
+    })
+
+    it('shows gray (new) dot for new session with no messages', () => {
+      useSessionStore.setState({
+        tabs: [
+          makeTab({
+            id: 'tab-1',
+            title: 'New',
+            status: 'idle',
+            lastActivityAt: 0,
+            messages: [],
+          }),
+        ],
+        tabOrder: ['tab-1'],
+        activeTabId: 'tab-1',
+      })
+
+      renderWithProviders(<TabStrip />)
+
+      const dot = screen.getByTestId('status-dot')
+      expect(dot.getAttribute('title')).toBe('New session')
+    })
+
+    it('does not show freshness tooltip when tab is running', () => {
+      useSessionStore.setState({
+        tabs: [
+          makeTab({
+            id: 'tab-1',
+            title: 'Running',
+            status: 'running',
+            lastActivityAt: Date.now(),
+            messages: [makeMessage({ role: 'user', content: 'hello' })],
+          }),
+        ],
+        tabOrder: ['tab-1'],
+        activeTabId: 'tab-1',
+      })
+
+      renderWithProviders(<TabStrip />)
+
+      const dot = screen.getByTestId('status-dot')
+      // Running tabs should not show a freshness tooltip
+      expect(dot.getAttribute('title')).toBe('')
+    })
+
+    it('shows token count in tooltip when available', () => {
+      const recentTime = Date.now() - 10 * 60 * 1000 // 10 minutes ago
+      useSessionStore.setState({
+        tabs: [
+          makeTab({
+            id: 'tab-1',
+            title: 'WithTokens',
+            status: 'idle',
+            lastActivityAt: recentTime,
+            messages: [makeMessage({ role: 'user', content: 'hello' })],
+            lastResult: {
+              totalCostUsd: 0.01,
+              durationMs: 5000,
+              numTurns: 1,
+              usage: { input_tokens: 500, output_tokens: 200 },
+              sessionId: 'sess-1',
+            },
+          }),
+        ],
+        tabOrder: ['tab-1'],
+        activeTabId: 'tab-1',
+      })
+
+      renderWithProviders(<TabStrip />)
+
+      const dot = screen.getByTestId('status-dot')
+      expect(dot.getAttribute('title')).toMatch(/700 tokens/)
+    })
   })
 })

@@ -49,6 +49,8 @@ describe('snippetStore', () => {
     vi.resetModules()
     mockSessionState.tabs = []
     storage = new MemoryStorage()
+    // Mark default templates as already seeded so they don't interfere with tests
+    storage.setItem('clui-snippets-defaults-seeded', '1')
     Object.defineProperty(globalThis, 'localStorage', {
       value: storage,
       configurable: true,
@@ -98,6 +100,7 @@ describe('snippetStore', () => {
       content: 'Explain this file in plain English.',
       createdAt: 10,
       updatedAt: 20,
+      hasSlots: false,
     }])
   })
 

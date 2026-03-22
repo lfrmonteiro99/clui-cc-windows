@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { useSessionStore } from './sessionStore'
+import { hasSlots as templateHasSlots } from '../../shared/template-engine'
 
 export interface Snippet {
   id: string
@@ -8,6 +9,8 @@ export interface Snippet {
   content: string
   createdAt: number
   updatedAt: number
+  /** True when content contains [SLOT] placeholders */
+  hasSlots: boolean
 }
 
 interface SnippetState {
@@ -50,13 +53,15 @@ function loadSnippets(): Snippet[] {
       if (typeof rawSnippet.id !== 'string' || typeof rawSnippet.name !== 'string' || typeof rawSnippet.command !== 'string' || typeof rawSnippet.content !== 'string') {
         return []
       }
+      const content = rawSnippet.content
       return [{
         id: rawSnippet.id,
         name: rawSnippet.name.trim(),
         command: normalizeCommand(rawSnippet.command),
-        content: rawSnippet.content,
+        content,
         createdAt: typeof rawSnippet.createdAt === 'number' ? rawSnippet.createdAt : Date.now(),
         updatedAt: typeof rawSnippet.updatedAt === 'number' ? rawSnippet.updatedAt : Date.now(),
+        hasSlots: templateHasSlots(content),
       }]
     })
   } catch {
@@ -96,7 +101,46 @@ function collides(command: string, snippets: Snippet[], currentId?: string): boo
   return snippets.some((snippet) => snippet.command === command && snippet.id !== currentId)
 }
 
-const initialSnippets = loadSnippets()
+const DEFAULT_TEMPLATE_SNIPPETS: Array<{ name: string; command: string; content: string }> = [
+  { name: 'Fix file', command: '/fix', content: 'Fix the issue in [FILE]: [DESCRIPTION]' },
+  { name: 'Refactor file', command: '/refactor', content: 'Refactor [FILE] to [GOAL]' },
+  { name: 'Write tests', command: '/test', content: 'Write tests for [FILE]' },
+  { name: 'Explain file', command: '/explain', content: 'Explain how [FILE] works' },
+  { name: 'Review file', command: '/review', content: 'Review [FILE] for issues' },
+]
+
+const DEFAULTS_SEEDED_KEY = 'clui-snippets-defaults-seeded'
+
+function seedDefaultSnippets(existing: Snippet[]): Snippet[] {
+  try {
+    if (typeof localStorage === 'undefined') return existing
+    if (localStorage.getItem(DEFAULTS_SEEDED_KEY)) return existing
+    localStorage.setItem(DEFAULTS_SEEDED_KEY, '1')
+  } catch {
+    return existing
+  }
+
+  const existingCommands = new Set(existing.map((s) => s.command))
+  const now = Date.now()
+  const defaults: Snippet[] = DEFAULT_TEMPLATE_SNIPPETS
+    .filter((d) => !existingCommands.has(d.command) && !BUILT_IN_COMMANDS.has(d.command))
+    .map((d, i) => ({
+      id: crypto.randomUUID(),
+      name: d.name,
+      command: d.command,
+      content: d.content,
+      createdAt: now - i,
+      updatedAt: now - i,
+      hasSlots: templateHasSlots(d.content),
+    }))
+
+  if (defaults.length === 0) return existing
+  const merged = [...existing, ...defaults]
+  saveSnippets(merged)
+  return merged
+}
+
+const initialSnippets = seedDefaultSnippets(loadSnippets())
 
 export const useSnippetStore = create<SnippetState>((set, get) => ({
   snippets: initialSnippets,
@@ -117,6 +161,7 @@ export const useSnippetStore = create<SnippetState>((set, get) => ({
       content: nextContent,
       createdAt: Date.now(),
       updatedAt: Date.now(),
+      hasSlots: templateHasSlots(nextContent),
     }
 
     const snippets = [...get().snippets, snippet].sort((a, b) => b.updatedAt - a.updatedAt)
@@ -144,6 +189,7 @@ export const useSnippetStore = create<SnippetState>((set, get) => ({
         command: nextCommand,
         content: nextContent,
         updatedAt: Date.now(),
+        hasSlots: templateHasSlots(nextContent),
       } : snippet)
       .sort((a, b) => b.updatedAt - a.updatedAt)
 

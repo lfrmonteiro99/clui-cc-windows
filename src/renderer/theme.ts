@@ -141,6 +141,11 @@ const darkColors = {
   diffRemovedBg: 'rgba(239, 68, 68, 0.12)',
   diffRemovedBorder: '#ef4444',
   diffHunkHeader: '#76766e',
+
+  // Session freshness indicator
+  freshnessActive: '#7aac8c',
+  freshnessStale: '#d4a84b',
+  freshnessNew: '#8a8a80',
 } as const
 
 const lightColors = {
@@ -278,6 +283,11 @@ const lightColors = {
   diffRemovedBg: 'rgba(239, 68, 68, 0.15)',
   diffRemovedBorder: '#dc2626',
   diffHunkHeader: '#8a8a80',
+
+  // Session freshness indicator
+  freshnessActive: '#5a9e6f',
+  freshnessStale: '#c49a3c',
+  freshnessNew: '#8a8a80',
 } as const
 
 export type ColorPalette = { [K in keyof typeof darkColors]: string }

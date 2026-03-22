@@ -11,11 +11,55 @@ import { TabContextMenu } from './TabContextMenu'
 import { useColors } from '../theme'
 import type { TabState, TabStatus } from '../../shared/types'
 
-function StatusDot({ status, hasUnread, hasPermission }: { status: TabStatus; hasUnread: boolean; hasPermission: boolean }) {
+/** Thresholds for session freshness (in milliseconds) */
+const FRESHNESS_ACTIVE_THRESHOLD_MS = 30 * 60 * 1000 // 30 minutes
+const FRESHNESS_STALE_THRESHOLD_MS = 2 * 60 * 60 * 1000 // 2 hours
+
+type FreshnessLevel = 'active' | 'stale' | 'new'
+
+function getFreshnessLevel(lastActivityAt: number, messageCount: number): FreshnessLevel {
+  if (messageCount === 0 || lastActivityAt === 0) return 'new'
+  const elapsed = Date.now() - lastActivityAt
+  if (elapsed <= FRESHNESS_ACTIVE_THRESHOLD_MS) return 'active'
+  if (elapsed >= FRESHNESS_STALE_THRESHOLD_MS) return 'stale'
+  // Between 30min and 2h — still "active" (not stale yet)
+  return 'active'
+}
+
+function formatElapsed(ms: number): string {
+  if (ms < 60_000) return 'just now'
+  const minutes = Math.floor(ms / 60_000)
+  if (minutes < 60) return `${minutes}m ago`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours}h ago`
+  const days = Math.floor(hours / 24)
+  return `${days}d ago`
+}
+
+function getFreshnessTooltip(lastActivityAt: number, messageCount: number, tokenCount: number): string {
+  if (messageCount === 0 || lastActivityAt === 0) return 'New session'
+  const elapsed = Date.now() - lastActivityAt
+  const timeStr = formatElapsed(elapsed)
+  const tokenStr = tokenCount > 0 ? ` \u00b7 ${tokenCount.toLocaleString()} tokens` : ''
+  if (elapsed >= FRESHNESS_STALE_THRESHOLD_MS) return `Stale \u00b7 ${timeStr}${tokenStr}`
+  return `Active ${timeStr}${tokenStr}`
+}
+
+interface StatusDotProps {
+  status: TabStatus
+  hasUnread: boolean
+  hasPermission: boolean
+  lastActivityAt: number
+  messageCount: number
+  tokenCount: number
+}
+
+function StatusDot({ status, hasUnread, hasPermission, lastActivityAt, messageCount, tokenCount }: StatusDotProps) {
   const colors = useColors()
   let bg: string = colors.statusIdle
   let pulse = false
   let glow = false
+  let tooltip = ''
 
   if (status === 'dead' || status === 'failed') {
     bg = colors.statusError
@@ -27,15 +71,32 @@ function StatusDot({ status, hasUnread, hasPermission }: { status: TabStatus; ha
     pulse = true
   } else if (hasUnread) {
     bg = colors.statusComplete
+  } else {
+    // Idle or completed without unread — show freshness indicator
+    const freshness = getFreshnessLevel(lastActivityAt, messageCount)
+    switch (freshness) {
+      case 'active':
+        bg = colors.freshnessActive
+        break
+      case 'stale':
+        bg = colors.freshnessStale
+        break
+      case 'new':
+        bg = colors.freshnessNew
+        break
+    }
+    tooltip = getFreshnessTooltip(lastActivityAt, messageCount, tokenCount)
   }
 
   return (
     <span
+      data-testid="status-dot"
       className={`w-[6px] h-[6px] rounded-full flex-shrink-0 ${pulse ? 'animate-pulse-dot' : ''}`}
       style={{
         background: bg,
         ...(glow ? { boxShadow: `0 0 6px 2px ${colors.statusPermissionGlow}` } : {}),
       }}
+      title={tooltip}
     />
   )
 }
@@ -102,7 +163,17 @@ function TabItem({
         cursor: isDragging ? 'grabbing' : 'grab',
       }}
     >
-      <StatusDot status={tab.status} hasUnread={tab.hasUnread} hasPermission={tab.permissionQueue.length > 0} />
+      <StatusDot
+        status={tab.status}
+        hasUnread={tab.hasUnread}
+        hasPermission={tab.permissionQueue.length > 0}
+        lastActivityAt={tab.lastActivityAt}
+        messageCount={tab.messages.length}
+        tokenCount={
+          (tab.lastResult?.usage.input_tokens ?? 0) +
+          (tab.lastResult?.usage.output_tokens ?? 0)
+        }
+      />
       <span className="truncate flex-1">{tab.title}</span>
       {tab.runtime === 'wsl' && (
         <span
