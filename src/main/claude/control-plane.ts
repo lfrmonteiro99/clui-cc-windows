@@ -86,6 +86,11 @@ export class ControlPlane extends EventEmitter {
   private retrievalService: RetrievalService | null = null
   /** Optional budget enforcer for per-tab spending limits. */
   budgetEnforcer: BudgetEnforcer | null = null
+  /** Stored listener references for clean individual removal on shutdown */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private _wiredListeners: Array<{ emitter: EventEmitter; event: string; listener: (...args: any[]) => void }> = []
+  /** Prevents double-wiring if constructor is somehow called again */
+  private _eventsWired = false
 
   constructor(interactivePty = false) {
     super()
@@ -105,10 +110,14 @@ export class ControlPlane extends EventEmitter {
         // No hook server → dispatch falls back to --allowedTools
       })
 
+    // Guard against double-wiring
+    if (this._eventsWired) return
+    this._eventsWired = true
+
     // Wire permission server events → normalized events for renderer.
     // 4-arg signature: (questionId, toolRequest, tabId, options)
     // tabId comes directly from per-run token registration — no session_id lookup needed.
-    this.permissionServer.on('permission-request', (questionId: string, toolRequest: HookToolRequest, tabId: string, options: PermissionOption[]) => {
+    this._on(this.permissionServer, 'permission-request', (questionId: string, toolRequest: HookToolRequest, tabId: string, options: PermissionOption[]) => {
       // Verify tab still exists — deny immediately if closed (prevents 5-min timeout hang)
       if (!this.tabs.has(tabId)) {
         log(`Permission request for closed tab ${tabId.substring(0, 8)}… — auto-denying`)
@@ -147,7 +156,7 @@ export class ControlPlane extends EventEmitter {
 
     // ─── Wire RunManager events → ControlPlane routing ───
 
-    this.runManager.on('normalized', (requestId: string, event: NormalizedEvent) => {
+    this._on(this.runManager, 'normalized', (requestId: string, event: NormalizedEvent) => {
       const tabId = this._findTabByRequest(requestId)
       if (!tabId) return
 
@@ -179,7 +188,7 @@ export class ControlPlane extends EventEmitter {
       this.emit('event', tabId, event)
     })
 
-    this.runManager.on('exit', (requestId: string, code: number | null, signal: string | null, sessionId: string | null) => {
+    this._on(this.runManager, 'exit', (requestId: string, code: number | null, signal: string | null, sessionId: string | null) => {
       // Clean up per-run token
       const runToken = this.runTokens.get(requestId)
       if (runToken) {
@@ -249,7 +258,7 @@ export class ControlPlane extends EventEmitter {
       this._processQueue(tabId)
     })
 
-    this.runManager.on('error', (requestId: string, err: Error) => {
+    this._on(this.runManager, 'error', (requestId: string, err: Error) => {
       // Clean up per-run token
       const runToken = this.runTokens.get(requestId)
       if (runToken) {
@@ -316,7 +325,7 @@ export class ControlPlane extends EventEmitter {
    */
   private _wirePtyEvents(): void {
     // Normalized events → same routing as RunManager
-    this.ptyRunManager.on('normalized', (requestId: string, event: NormalizedEvent) => {
+    this._on(this.ptyRunManager, 'normalized', (requestId: string, event: NormalizedEvent) => {
       const tabId = this._findTabByRequest(requestId)
       if (!tabId) return
 
@@ -346,7 +355,7 @@ export class ControlPlane extends EventEmitter {
     })
 
     // Exit events
-    this.ptyRunManager.on('exit', (requestId: string, code: number | null, signal: number | null, sessionId: string | null) => {
+    this._on(this.ptyRunManager, 'exit', (requestId: string, code: number | null, signal: number | null, sessionId: string | null) => {
       // Clean up per-run token
       const runToken = this.runTokens.get(requestId)
       if (runToken) {
@@ -409,7 +418,7 @@ export class ControlPlane extends EventEmitter {
     })
 
     // Error events
-    this.ptyRunManager.on('error', (requestId: string, err: Error) => {
+    this._on(this.ptyRunManager, 'error', (requestId: string, err: Error) => {
       // Clean up per-run token
       const runToken = this.runTokens.get(requestId)
       if (runToken) {
@@ -964,13 +973,24 @@ export class ControlPlane extends EventEmitter {
 
   shutdown(): void {
     log('Shutting down control plane')
-    // Remove all event listeners to prevent leaks on restart
-    this.runManager.removeAllListeners()
-    this.ptyRunManager.removeAllListeners()
-    this.permissionServer.removeAllListeners()
+    // Remove individually tracked listeners to avoid disrupting other code's listeners
+    for (const { emitter, event, listener } of this._wiredListeners) {
+      emitter.removeListener(event, listener)
+    }
+    this._wiredListeners = []
+    this._eventsWired = false
     this.permissionServer.stop()
     for (const [tabId] of this.tabs) {
       this.closeTab(tabId)
     }
+  }
+
+  /**
+   * Wire a listener and store the reference for clean individual removal in shutdown().
+   */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private _on(emitter: EventEmitter, event: string, listener: (...args: any[]) => void): void {
+    emitter.on(event, listener)
+    this._wiredListeners.push({ emitter, event, listener })
   }
 }

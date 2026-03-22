@@ -218,15 +218,22 @@ const api: CluiAPI = {
 
   // ─── Event listeners ───
   onEvent: (callback) => {
-    const channels = [
-      IPC.TEXT_CHUNK, IPC.TOOL_CALL, IPC.TOOL_CALL_UPDATE,
-      IPC.TOOL_CALL_COMPLETE, IPC.TASK_UPDATE, IPC.TASK_COMPLETE,
-      IPC.SESSION_DEAD, IPC.SESSION_INIT, IPC.ERROR, IPC.RATE_LIMIT,
-    ]
-    // Single unified handler — all normalized events come through one channel
+    // Single-event handler for low-frequency events
     const handler = (_e: Electron.IpcRendererEvent, tabId: string, event: NormalizedEvent) => callback(tabId, event)
     ipcRenderer.on(IPC.NORMALIZED_EVENT, handler)
-    return () => ipcRenderer.removeListener(IPC.NORMALIZED_EVENT, handler)
+
+    // Batch handler for high-frequency streaming events (text_chunk, tool_call_update)
+    const batchHandler = (_e: Electron.IpcRendererEvent, entries: Array<{ tabId: string; event: NormalizedEvent }>) => {
+      for (const entry of entries) {
+        callback(entry.tabId, entry.event)
+      }
+    }
+    ipcRenderer.on(IPC.NORMALIZED_EVENT_BATCH, batchHandler)
+
+    return () => {
+      ipcRenderer.removeListener(IPC.NORMALIZED_EVENT, handler)
+      ipcRenderer.removeListener(IPC.NORMALIZED_EVENT_BATCH, batchHandler)
+    }
   },
 
   onTabStatusChange: (callback) => {

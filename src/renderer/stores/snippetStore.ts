@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { useSessionStore } from './sessionStore'
 import { hasSlots as templateHasSlots } from '../../shared/template-engine'
+import { createEvictionManager } from './store-eviction'
 
 export interface Snippet {
   id: string
@@ -140,70 +141,89 @@ function seedDefaultSnippets(existing: Snippet[]): Snippet[] {
   return merged
 }
 
+// ─── Eviction manager ───
+// Caps snippets at 500 entries (LRU). No TTL — snippets are user-created
+// named items that should only age out when the collection grows very large.
+
+const snippetEviction = createEvictionManager<string>(
+  { maxEntries: 500, evictionInterval: 60_000 },
+)
+
 const initialSnippets = seedDefaultSnippets(loadSnippets())
 
-export const useSnippetStore = create<SnippetState>((set, get) => ({
-  snippets: initialSnippets,
-  managerOpen: false,
+// Seed the tracker from persisted snippets so LRU order is accurate from startup
+initialSnippets.forEach((s) => snippetEviction.touch(s.id))
 
-  addSnippet: (name, command, content) => {
-    const nextCommand = normalizeCommand(command)
-    const nextName = name.trim()
-    const nextContent = content.trim()
-    if (!nextName || !nextContent || !isValidCommand(nextCommand) || collides(nextCommand, get().snippets)) {
-      return null
-    }
+export const useSnippetStore = create<SnippetState>((set, get) => {
+  // Start periodic pruning
+  snippetEviction.startInterval(() => get().snippets.map((s) => s.id))
 
-    const snippet: Snippet = {
-      id: crypto.randomUUID(),
-      name: nextName,
-      command: nextCommand,
-      content: nextContent,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-      hasSlots: templateHasSlots(nextContent),
-    }
+  return {
+    snippets: initialSnippets,
+    managerOpen: false,
 
-    const snippets = [...get().snippets, snippet].sort((a, b) => b.updatedAt - a.updatedAt)
-    saveSnippets(snippets)
-    set({ snippets })
-    return snippet
-  },
+    addSnippet: (name, command, content) => {
+      const nextCommand = normalizeCommand(command)
+      const nextName = name.trim()
+      const nextContent = content.trim()
+      if (!nextName || !nextContent || !isValidCommand(nextCommand) || collides(nextCommand, get().snippets)) {
+        return null
+      }
 
-  updateSnippet: (id, updates) => {
-    const current = get().snippets.find((snippet) => snippet.id === id)
-    if (!current) return false
-
-    const nextName = (updates.name ?? current.name).trim()
-    const nextCommand = normalizeCommand(updates.command ?? current.command)
-    const nextContent = (updates.content ?? current.content).trim()
-
-    if (!nextName || !nextContent || !isValidCommand(nextCommand) || collides(nextCommand, get().snippets, id)) {
-      return false
-    }
-
-    const snippets = get().snippets
-      .map((snippet) => snippet.id === id ? {
-        ...snippet,
+      const snippet: Snippet = {
+        id: crypto.randomUUID(),
         name: nextName,
         command: nextCommand,
         content: nextContent,
+        createdAt: Date.now(),
         updatedAt: Date.now(),
         hasSlots: templateHasSlots(nextContent),
-      } : snippet)
-      .sort((a, b) => b.updatedAt - a.updatedAt)
+      }
 
-    saveSnippets(snippets)
-    set({ snippets })
-    return true
-  },
+      snippetEviction.touch(snippet.id)
+      const snippets = [...get().snippets, snippet].sort((a, b) => b.updatedAt - a.updatedAt)
+      saveSnippets(snippets)
+      set({ snippets })
+      return snippet
+    },
 
-  deleteSnippet: (id) => {
-    const snippets = get().snippets.filter((snippet) => snippet.id !== id)
-    saveSnippets(snippets)
-    set({ snippets })
-  },
+    updateSnippet: (id, updates) => {
+      const current = get().snippets.find((snippet) => snippet.id === id)
+      if (!current) return false
 
-  openManager: () => set({ managerOpen: true }),
-  closeManager: () => set({ managerOpen: false }),
-}))
+      const nextName = (updates.name ?? current.name).trim()
+      const nextCommand = normalizeCommand(updates.command ?? current.command)
+      const nextContent = (updates.content ?? current.content).trim()
+
+      if (!nextName || !nextContent || !isValidCommand(nextCommand) || collides(nextCommand, get().snippets, id)) {
+        return false
+      }
+
+      snippetEviction.touch(id)
+      const snippets = get().snippets
+        .map((snippet) => snippet.id === id ? {
+          ...snippet,
+          name: nextName,
+          command: nextCommand,
+          content: nextContent,
+          updatedAt: Date.now(),
+          hasSlots: templateHasSlots(nextContent),
+        } : snippet)
+        .sort((a, b) => b.updatedAt - a.updatedAt)
+
+      saveSnippets(snippets)
+      set({ snippets })
+      return true
+    },
+
+    deleteSnippet: (id) => {
+      snippetEviction.delete(id)
+      const snippets = get().snippets.filter((snippet) => snippet.id !== id)
+      saveSnippets(snippets)
+      set({ snippets })
+    },
+
+    openManager: () => set({ managerOpen: true }),
+    closeManager: () => set({ managerOpen: false }),
+  }
+})

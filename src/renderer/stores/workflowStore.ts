@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { useSessionStore } from './sessionStore'
+import { createEvictionManager } from './store-eviction'
 
 // ─── Types ───
 
@@ -199,101 +200,133 @@ async function executeWorkflow(workflow: Workflow): Promise<void> {
   executionAbortController = null
 }
 
+// ─── Eviction manager ───
+// Caps workflows at 200 entries and prunes those not updated in 30 days.
+
+const WORKFLOW_MAX_ENTRIES = 200
+const WORKFLOW_TTL_MS = 30 * 24 * 60 * 60_000 // 30 days
+
+const workflowEviction = createEvictionManager<string>(
+  { maxEntries: WORKFLOW_MAX_ENTRIES, maxAgeMs: WORKFLOW_TTL_MS, evictionInterval: 60_000 },
+)
+
+// Pre-populate tracker and filter out already-stale workflows on startup.
+const rawWorkflows = loadWorkflows()
+rawWorkflows.forEach((w) => workflowEviction.touch(w.id))
+
+const initialEvictableIds = new Set(
+  rawWorkflows
+    .filter((w) => Date.now() - w.updatedAt > WORKFLOW_TTL_MS)
+    .map((w) => w.id),
+)
+
+const initialWorkflows = rawWorkflows.filter((w) => !initialEvictableIds.has(w.id))
+if (initialEvictableIds.size > 0) {
+  saveWorkflows(initialWorkflows)
+}
+
 // ─── Store ───
 
-const initialWorkflows = loadWorkflows()
+export const useWorkflowStore = create<WorkflowState>((set, get) => {
+  // Start periodic pruning — removes workflows that haven't been updated in 30 days
+  // or when the total count exceeds 200 (LRU order).
+  workflowEviction.startInterval(() => get().workflows.map((w) => w.id))
 
-export const useWorkflowStore = create<WorkflowState>((set, get) => ({
-  workflows: initialWorkflows,
-  activeExecution: null,
-  managerOpen: false,
-  editorOpen: false,
-  editingWorkflow: null,
-
-  addWorkflow: (name, steps) => {
-    const trimmedName = name.trim()
-    if (!trimmedName || steps.length === 0) return null
-    if (steps.some((s) => !s.prompt.trim())) return null
-
-    const workflow: Workflow = {
-      id: crypto.randomUUID(),
-      name: trimmedName,
-      steps: steps.map((s, idx) => ({
-        id: crypto.randomUUID(),
-        prompt: s.prompt.trim(),
-        order: idx,
-      })),
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    }
-
-    const workflows = [...get().workflows, workflow].sort((a, b) => b.updatedAt - a.updatedAt)
-    saveWorkflows(workflows)
-    set({ workflows })
-    return workflow
-  },
-
-  updateWorkflow: (id, updates) => {
-    const current = get().workflows.find((w) => w.id === id)
-    if (!current) return false
-
-    const nextName = (updates.name ?? current.name).trim()
-    if (!nextName) return false
-
-    let nextSteps = current.steps
-    if (updates.steps) {
-      if (updates.steps.length === 0) return false
-      if (updates.steps.some((s) => !s.prompt.trim())) return false
-      nextSteps = updates.steps.map((s, idx) => ({
-        id: crypto.randomUUID(),
-        prompt: s.prompt.trim(),
-        order: idx,
-      }))
-    }
-
-    const workflows = get().workflows
-      .map((w) => w.id === id ? {
-        ...w,
-        name: nextName,
-        steps: nextSteps,
-        updatedAt: Date.now(),
-      } : w)
-      .sort((a, b) => b.updatedAt - a.updatedAt)
-
-    saveWorkflows(workflows)
-    set({ workflows })
-    return true
-  },
-
-  deleteWorkflow: (id) => {
-    const workflows = get().workflows.filter((w) => w.id !== id)
-    saveWorkflows(workflows)
-    set({ workflows })
-  },
-
-  runWorkflow: (workflowId) => {
-    const workflow = get().workflows.find((w) => w.id === workflowId)
-    if (!workflow || workflow.steps.length === 0) return
-    if (get().activeExecution?.status === 'running') return
-
-    void executeWorkflow(workflow)
-  },
-
-  stopWorkflow: () => {
-    if (executionAbortController) {
-      executionAbortController.abort()
-      executionAbortController = null
-    }
-  },
-
-  openManager: () => set({ managerOpen: true }),
-  closeManager: () => set({ managerOpen: false }),
-  openEditor: (workflow) => set({
-    editorOpen: true,
-    editingWorkflow: workflow ?? null,
-  }),
-  closeEditor: () => set({
+  return {
+    workflows: initialWorkflows,
+    activeExecution: null,
+    managerOpen: false,
     editorOpen: false,
     editingWorkflow: null,
-  }),
-}))
+
+    addWorkflow: (name, steps) => {
+      const trimmedName = name.trim()
+      if (!trimmedName || steps.length === 0) return null
+      if (steps.some((s) => !s.prompt.trim())) return null
+
+      const workflow: Workflow = {
+        id: crypto.randomUUID(),
+        name: trimmedName,
+        steps: steps.map((s, idx) => ({
+          id: crypto.randomUUID(),
+          prompt: s.prompt.trim(),
+          order: idx,
+        })),
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      }
+
+      workflowEviction.touch(workflow.id)
+      const workflows = [...get().workflows, workflow].sort((a, b) => b.updatedAt - a.updatedAt)
+      saveWorkflows(workflows)
+      set({ workflows })
+      return workflow
+    },
+
+    updateWorkflow: (id, updates) => {
+      const current = get().workflows.find((w) => w.id === id)
+      if (!current) return false
+
+      const nextName = (updates.name ?? current.name).trim()
+      if (!nextName) return false
+
+      let nextSteps = current.steps
+      if (updates.steps) {
+        if (updates.steps.length === 0) return false
+        if (updates.steps.some((s) => !s.prompt.trim())) return false
+        nextSteps = updates.steps.map((s, idx) => ({
+          id: crypto.randomUUID(),
+          prompt: s.prompt.trim(),
+          order: idx,
+        }))
+      }
+
+      workflowEviction.touch(id)
+      const workflows = get().workflows
+        .map((w) => w.id === id ? {
+          ...w,
+          name: nextName,
+          steps: nextSteps,
+          updatedAt: Date.now(),
+        } : w)
+        .sort((a, b) => b.updatedAt - a.updatedAt)
+
+      saveWorkflows(workflows)
+      set({ workflows })
+      return true
+    },
+
+    deleteWorkflow: (id) => {
+      workflowEviction.delete(id)
+      const workflows = get().workflows.filter((w) => w.id !== id)
+      saveWorkflows(workflows)
+      set({ workflows })
+    },
+
+    runWorkflow: (workflowId) => {
+      const workflow = get().workflows.find((w) => w.id === workflowId)
+      if (!workflow || workflow.steps.length === 0) return
+      if (get().activeExecution?.status === 'running') return
+
+      void executeWorkflow(workflow)
+    },
+
+    stopWorkflow: () => {
+      if (executionAbortController) {
+        executionAbortController.abort()
+        executionAbortController = null
+      }
+    },
+
+    openManager: () => set({ managerOpen: true }),
+    closeManager: () => set({ managerOpen: false }),
+    openEditor: (workflow) => set({
+      editorOpen: true,
+      editingWorkflow: workflow ?? null,
+    }),
+    closeEditor: () => set({
+      editorOpen: false,
+      editingWorkflow: null,
+    }),
+  }
+})

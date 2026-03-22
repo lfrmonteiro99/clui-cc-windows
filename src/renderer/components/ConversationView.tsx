@@ -66,10 +66,18 @@ export function ConversationView({ overrideTabId }: { overrideTabId?: string } =
   const activeTabId = useSessionStore((s) => s.activeTabId)
   const resolvedTabId = overrideTabId || activeTabId
 
-  // Narrow selector: only re-render when THIS tab changes, not all tabs
+  // Narrow selector: only re-render when THIS tab's essential fields change
   const tab = useSessionStore(
     (s) => s.tabs.find((t) => t.id === (overrideTabId || s.activeTabId)),
-    (a, b) => a === b,
+    (a, b) => {
+      if (a === b) return true
+      if (!a || !b) return a === b
+      return (
+        a.id === b.id &&
+        a.messages.length === b.messages.length &&
+        a.status === b.status
+      )
+    },
   )
   const sendMessage = useSessionStore((s) => s.sendMessage)
   const staticInfo = useSessionStore((s) => s.staticInfo)
@@ -138,11 +146,13 @@ export function ConversationView({ overrideTabId }: { overrideTabId?: string } =
   }, [])
 
   // Auto-scroll when content changes and user is near bottom.
+  // Intentionally track only message count and queue lengths — not content length —
+  // so streaming chunks (which only mutate content, not count) do not trigger a scroll.
   const msgCount = tab?.messages.length ?? 0
-  const lastMsg = tab?.messages[tab.messages.length - 1]
+  const lastMsgRole = tab?.messages[tab.messages.length - 1]?.role ?? ''
   const permissionQueueLen = tab?.permissionQueue?.length ?? 0
   const queuedCount = tab?.queuedPrompts?.length ?? 0
-  const scrollTrigger = `${msgCount}:${lastMsg?.content?.length ?? 0}:${permissionQueueLen}:${queuedCount}`
+  const scrollTrigger = `${msgCount}:${lastMsgRole}:${permissionQueueLen}:${queuedCount}`
 
   useEffect(() => {
     if (isNearBottomRef.current && scrollRef.current) {
@@ -377,7 +387,7 @@ function EmptyState() {
 
 // ─── Copy Button ───
 
-function CopyButton({ text }: { text: string }) {
+const CopyButton = React.memo(function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false)
   const colors = useColors()
 
@@ -408,11 +418,11 @@ function CopyButton({ text }: { text: string }) {
       <span>{copied ? 'Copied' : 'Copy'}</span>
     </motion.button>
   )
-}
+})
 
 // ─── Interrupt Button ───
 
-function InterruptButton({ tabId }: { tabId: string }) {
+const InterruptButton = React.memo(function InterruptButton({ tabId }: { tabId: string }) {
   const colors = useColors()
 
   const handleStop = () => {
@@ -440,7 +450,7 @@ function InterruptButton({ tabId }: { tabId: string }) {
       <span>Interrupt</span>
     </motion.button>
   )
-}
+})
 
 // ─── User Message (memoized — only re-renders when message reference changes) ───
 
@@ -479,7 +489,7 @@ const UserMessage = React.memo(function UserMessage({ message, skipMotion }: { m
 
 // ─── Queued Message (waiting at bottom until processed) ───
 
-function QueuedMessage({ content }: { content: string }) {
+const QueuedMessage = React.memo(function QueuedMessage({ content }: { content: string }) {
   const colors = useColors()
 
   return (
@@ -504,7 +514,7 @@ function QueuedMessage({ content }: { content: string }) {
       </div>
     </motion.div>
   )
-}
+})
 
 // ─── Table scroll wrapper — fade edges when horizontally scrollable ───
 

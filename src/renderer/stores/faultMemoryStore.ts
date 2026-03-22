@@ -8,11 +8,13 @@
 
 import { create } from 'zustand'
 import type { ProjectFact, FactCategory } from '../../shared/fault-memory-types'
+import { createEvictionManager } from './store-eviction'
 
 // ─── Persistence helpers ───
 
 const STORAGE_KEY = 'clui-fault-memory'
 const MAX_FACTS_PER_PROJECT = 100
+const FACT_TTL_MS = 7 * 24 * 60 * 60_000 // 7 days
 
 function loadFacts(): ProjectFact[] {
   try {
@@ -76,97 +78,128 @@ interface FaultMemoryState {
   closeManager: () => void
 }
 
-const initialFacts = loadFacts()
+// ─── Eviction manager ───
+// Global cap: 100 facts per project × many projects, but also prune by age (7 days).
 
-export const useFaultMemoryStore = create<FaultMemoryState>((set, get) => ({
-  facts: initialFacts,
-  managerOpen: false,
+const faultEviction = createEvictionManager<string>(
+  { maxEntries: MAX_FACTS_PER_PROJECT * 10, maxAgeMs: FACT_TTL_MS, evictionInterval: 60_000 },
+)
 
-  addFact: (factInput) => {
-    const { facts } = get()
+// Pre-populate eviction tracker from loaded facts and discard already-stale entries.
+const rawFacts = loadFacts()
+rawFacts.forEach((f) => faultEviction.touch(f.id))
 
-    // Deduplicate: skip if an identical correction+pattern already exists for this project
-    const duplicate = facts.find(
-      (f) =>
-        f.project === factInput.project &&
-        f.correction.toLowerCase() === factInput.correction.toLowerCase() &&
-        f.pattern.toLowerCase() === factInput.pattern.toLowerCase(),
-    )
-    if (duplicate) return duplicate
+const initialEvictableIds = new Set(
+  rawFacts
+    .filter((f) => Date.now() - f.createdAt > FACT_TTL_MS)
+    .map((f) => f.id),
+)
 
-    const newFact: ProjectFact = {
-      ...factInput,
-      id: crypto.randomUUID(),
-      createdAt: Date.now(),
-      usageCount: 0,
-      lastUsedAt: 0,
-    }
+const initialFacts = rawFacts.filter((f) => !initialEvictableIds.has(f.id))
+if (initialEvictableIds.size > 0) {
+  saveFacts(initialFacts)
+}
 
-    let projectFacts = facts.filter((f) => f.project === factInput.project)
-    const otherFacts = facts.filter((f) => f.project !== factInput.project)
+export const useFaultMemoryStore = create<FaultMemoryState>((set, get) => {
+  // Start periodic pruning
+  faultEviction.startInterval(() => get().facts.map((f) => f.id))
 
-    projectFacts = [...projectFacts, newFact]
+  return {
+    facts: initialFacts,
+    managerOpen: false,
 
-    // Enforce per-project limit — evict oldest first
-    if (projectFacts.length > MAX_FACTS_PER_PROJECT) {
-      projectFacts = projectFacts
-        .sort((a, b) => b.createdAt - a.createdAt)
-        .slice(0, MAX_FACTS_PER_PROJECT)
-    }
+    addFact: (factInput) => {
+      const { facts } = get()
 
-    const nextFacts = [...otherFacts, ...projectFacts]
-    saveFacts(nextFacts)
-    set({ facts: nextFacts })
-    return newFact
-  },
+      // Deduplicate: skip if an identical correction+pattern already exists for this project
+      const duplicate = facts.find(
+        (f) =>
+          f.project === factInput.project &&
+          f.correction.toLowerCase() === factInput.correction.toLowerCase() &&
+          f.pattern.toLowerCase() === factInput.pattern.toLowerCase(),
+      )
+      if (duplicate) return duplicate
 
-  getFactsForProject: (project) => {
-    return get().facts.filter((f) => f.project === project)
-  },
-
-  removeFact: (id) => {
-    const facts = get().facts.filter((f) => f.id !== id)
-    saveFacts(facts)
-    set({ facts })
-  },
-
-  clearProjectFacts: (project) => {
-    const facts = get().facts.filter((f) => f.project !== project)
-    saveFacts(facts)
-    set({ facts })
-  },
-
-  generatePreamble: (project) => {
-    const projectFacts = get().facts.filter((f) => f.project === project)
-    if (projectFacts.length === 0) return ''
-
-    const lines = projectFacts.map((f) => {
-      if (f.pattern && f.correction) {
-        return `- Use ${f.correction}, not ${f.pattern}.`
+      const newFact: ProjectFact = {
+        ...factInput,
+        id: crypto.randomUUID(),
+        createdAt: Date.now(),
+        usageCount: 0,
+        lastUsedAt: 0,
       }
-      if (f.correction) {
-        return `- ${f.correction}.`
+
+      let projectFacts = facts.filter((f) => f.project === factInput.project)
+      const otherFacts = facts.filter((f) => f.project !== factInput.project)
+
+      projectFacts = [...projectFacts, newFact]
+
+      // Enforce per-project limit — evict oldest first
+      if (projectFacts.length > MAX_FACTS_PER_PROJECT) {
+        projectFacts = projectFacts
+          .sort((a, b) => b.createdAt - a.createdAt)
+          .slice(0, MAX_FACTS_PER_PROJECT)
       }
-      if (f.pattern) {
-        return `- Avoid ${f.pattern}.`
-      }
-      return null
-    }).filter(Boolean)
 
-    if (lines.length === 0) return ''
-    return `Project conventions:\n${lines.join('\n')}`
-  },
+      faultEviction.touch(newFact.id)
+      const nextFacts = [...otherFacts, ...projectFacts]
+      saveFacts(nextFacts)
+      set({ facts: nextFacts })
+      return newFact
+    },
 
-  markFactsUsed: (project) => {
-    const now = Date.now()
-    const facts = get().facts.map((f) => {
-      if (f.project !== project) return f
-      return { ...f, usageCount: f.usageCount + 1, lastUsedAt: now }
-    })
-    saveFacts(facts)
-    set({ facts })
-  },
+    getFactsForProject: (project) => {
+      return get().facts.filter((f) => f.project === project)
+    },
 
-  openManager: () => set({ managerOpen: true }),
-  closeManager: () => set({ managerOpen: false }),
-}))
+    removeFact: (id) => {
+      faultEviction.delete(id)
+      const facts = get().facts.filter((f) => f.id !== id)
+      saveFacts(facts)
+      set({ facts })
+    },
+
+    clearProjectFacts: (project) => {
+      get().facts
+        .filter((f) => f.project === project)
+        .forEach((f) => faultEviction.delete(f.id))
+      const facts = get().facts.filter((f) => f.project !== project)
+      saveFacts(facts)
+      set({ facts })
+    },
+
+    generatePreamble: (project) => {
+      const projectFacts = get().facts.filter((f) => f.project === project)
+      if (projectFacts.length === 0) return ''
+
+      const lines = projectFacts.map((f) => {
+        if (f.pattern && f.correction) {
+          return `- Use ${f.correction}, not ${f.pattern}.`
+        }
+        if (f.correction) {
+          return `- ${f.correction}.`
+        }
+        if (f.pattern) {
+          return `- Avoid ${f.pattern}.`
+        }
+        return null
+      }).filter(Boolean)
+
+      if (lines.length === 0) return ''
+      return `Project conventions:\n${lines.join('\n')}`
+    },
+
+    markFactsUsed: (project) => {
+      const now = Date.now()
+      const facts = get().facts.map((f) => {
+        if (f.project !== project) return f
+        faultEviction.touch(f.id)
+        return { ...f, usageCount: f.usageCount + 1, lastUsedAt: now }
+      })
+      saveFacts(facts)
+      set({ facts })
+    },
+
+    openManager: () => set({ managerOpen: true }),
+    closeManager: () => set({ managerOpen: false }),
+  }
+})

@@ -112,7 +112,7 @@ vi.mock('../../../resources/notification.mp3', () => ({
 }))
 
 // Now import the store — modules are already mocked
-import { useSessionStore } from '../../src/renderer/stores/sessionStore.impl'
+import { useSessionStore, getMessageContent } from '../../src/renderer/stores/sessionStore.impl'
 
 // ─── Helpers ───
 
@@ -302,22 +302,20 @@ describe('handleNormalizedEvent', () => {
       const tab = getTab(tabId)!
       expect(tab.messages).toHaveLength(1)
       expect(tab.messages[0].role).toBe('assistant')
-      expect(tab.messages[0].content).toBe('Hello')
+      expect(getMessageContent(tab.messages[0])).toBe('Hello')
       expect(tab.currentActivity).toBe('Writing...')
     })
 
     it('appends text to the last assistant message', () => {
       const tabId = seedTab({
-        messages: [
-          { id: 'msg-1', role: 'assistant', content: 'Hello ', timestamp: Date.now() },
-        ],
+        messages: [{ id: 'msg-1', role: 'assistant', content: 'Hello ', timestamp: Date.now() }],
       })
 
       dispatchEvent(tabId, { type: 'text_chunk', text: 'World' })
 
       const tab = getTab(tabId)!
       expect(tab.messages).toHaveLength(1)
-      expect(tab.messages[0].content).toBe('Hello World')
+      expect(getMessageContent(tab.messages[0])).toBe('Hello World')
     })
 
     it('creates new assistant message when last message is a tool message', () => {
@@ -332,7 +330,7 @@ describe('handleNormalizedEvent', () => {
       const tab = getTab(tabId)!
       expect(tab.messages).toHaveLength(2)
       expect(tab.messages[1].role).toBe('assistant')
-      expect(tab.messages[1].content).toBe('After tool')
+      expect(getMessageContent(tab.messages[1])).toBe('After tool')
     })
 
     it('creates new assistant message when last message is an assistant message with toolName', () => {
@@ -346,7 +344,7 @@ describe('handleNormalizedEvent', () => {
 
       const tab = getTab(tabId)!
       expect(tab.messages).toHaveLength(2)
-      expect(tab.messages[1].content).toBe('new text')
+      expect(getMessageContent(tab.messages[1])).toBe('new text')
     })
 
     it('accumulates multiple text chunks into a single message', () => {
@@ -358,7 +356,7 @@ describe('handleNormalizedEvent', () => {
 
       const tab = getTab(tabId)!
       expect(tab.messages).toHaveLength(1)
-      expect(tab.messages[0].content).toBe('Part 1 Part 2 Part 3')
+      expect(getMessageContent(tab.messages[0])).toBe('Part 1 Part 2 Part 3')
     })
   })
 
