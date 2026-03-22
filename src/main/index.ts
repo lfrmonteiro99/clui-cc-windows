@@ -8,8 +8,10 @@ import { ensureSkills, type SkillStatus } from './skills/installer'
 import { fetchCatalog, listInstalled, installPlugin, uninstallPlugin } from './marketplace/catalog'
 import { log as _log, LOG_FILE, flushLogs } from './logger'
 import { getProjectSessionKey } from './session-path'
-import { getWindowConfig } from './window-config'
-import { loadShortcutConfig, saveShortcutConfig, getSafeAlternatives } from './shortcut-config'
+import { getWindowConfig, calculateWindowWidth } from './window-config'
+import { loadShortcutConfig, saveShortcutConfig, getSafeAlternatives, validateShortcut } from './shortcut-config'
+import { loadWindowPosition, saveWindowPosition, loadWindowSettings, saveWindowSettings } from './window-persistence'
+import { getLogFilePath, rotateLogsIfNeeded } from './logger'
 import { buildTerminalCommand } from './terminal-launch'
 import { buildScreenshotCommand, getScreenshotTempPath } from './screenshot'
 import { SettingsManager } from './settings-manager'
@@ -176,18 +178,27 @@ if (ingestionService) {
 // ─── Window Creation ───
 
 function createWindow(): void {
+  // Rotate logs on startup if needed
+  rotateLogsIfNeeded()
+
   const cursor = screen.getCursorScreenPoint()
   const display = screen.getDisplayNearestPoint(cursor)
   const { width: screenWidth, height: screenHeight } = display.workAreaSize
   const { x: dx, y: dy } = display.workArea
 
-  const x = dx + Math.round((screenWidth - BAR_WIDTH) / 2)
-  const y = dy + screenHeight - PILL_HEIGHT - PILL_BOTTOM_MARGIN
+  // Dynamic width based on user preference and screen size
+  const persistedSettings = loadWindowSettings()
+  const windowWidth = calculateWindowWidth(screenWidth, persistedSettings.widthMode as any)
+
+  // Use saved position if available, otherwise center at bottom
+  const savedPos = loadWindowPosition()
+  const x = savedPos?.x ?? dx + Math.round((screenWidth - windowWidth) / 2)
+  const y = savedPos?.y ?? dy + screenHeight - PILL_HEIGHT - PILL_BOTTOM_MARGIN
 
   const winConfig = getWindowConfig()
 
   mainWindow = new BrowserWindow({
-    width: BAR_WIDTH,
+    width: windowWidth,
     height: PILL_HEIGHT,
     x,
     y,
@@ -218,6 +229,10 @@ function createWindow(): void {
   mainWindow.setAlwaysOnTop(true, 'screen-saver')
 
   mainWindow.once('ready-to-show', () => {
+    // Restore saved opacity
+    if (persistedSettings.opacity < 1.0) {
+      mainWindow?.setOpacity(persistedSettings.opacity)
+    }
     mainWindow?.show()
     // Enable OS-level click-through for transparent regions.
     // { forward: true } ensures mousemove events still reach the renderer
@@ -227,6 +242,14 @@ function createWindow(): void {
     }
     if (process.env.ELECTRON_RENDERER_URL) {
       mainWindow?.webContents.openDevTools({ mode: 'detach' })
+    }
+  })
+
+  // Save position when user drags the overlay
+  mainWindow.on('moved', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      const bounds = mainWindow.getBounds()
+      saveWindowPosition(bounds)
     }
   })
 
@@ -317,6 +340,76 @@ ipcMain.on(IPC.SET_IGNORE_MOUSE_EVENTS, (event, ignore: boolean, options?: { for
   if (win && !win.isDestroyed()) {
     win.setIgnoreMouseEvents(ignore, options || {})
   }
+})
+
+// ─── Window customization IPC ───
+
+ipcMain.on(IPC.SET_OPACITY, (_event, opacity: number) => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    const clamped = Math.min(1.0, Math.max(0.3, opacity))
+    mainWindow.setOpacity(clamped)
+    saveWindowSettings({ opacity: clamped, widthMode: loadWindowSettings().widthMode })
+    log(`IPC SET_OPACITY: ${clamped}`)
+  }
+})
+
+ipcMain.on(IPC.SET_DRAGGABLE, (_event, _draggable: boolean) => {
+  // Draggable is handled renderer-side via -webkit-app-region: drag
+  log(`IPC SET_DRAGGABLE: ${_draggable}`)
+})
+
+ipcMain.handle(IPC.SET_TOGGLE_SHORTCUT, (_event, shortcut: string) => {
+  if (!validateShortcut(shortcut)) {
+    log(`IPC SET_TOGGLE_SHORTCUT: invalid shortcut "${shortcut}"`)
+    return { ok: false, error: 'Invalid shortcut — must include a modifier and a key' }
+  }
+
+  globalShortcut.unregisterAll()
+  const registered = globalShortcut.register(shortcut, () => toggleWindow(`shortcut ${shortcut}`))
+  if (registered) {
+    saveShortcutConfig({ primary: shortcut })
+    // Re-register secondary
+    globalShortcut.register('CommandOrControl+Shift+K', () => toggleWindow('shortcut Cmd/Ctrl+Shift+K'))
+    log(`IPC SET_TOGGLE_SHORTCUT: registered ${shortcut}`)
+    return { ok: true }
+  }
+  // Restore previous shortcut on failure
+  const prev = loadShortcutConfig()
+  globalShortcut.register(prev.primary, () => toggleWindow(`shortcut ${prev.primary}`))
+  globalShortcut.register('CommandOrControl+Shift+K', () => toggleWindow('shortcut Cmd/Ctrl+Shift+K'))
+  log(`IPC SET_TOGGLE_SHORTCUT: failed to register "${shortcut}", restored ${prev.primary}`)
+  return { ok: false, error: `Could not register "${shortcut}" — it may be in use by another app` }
+})
+
+ipcMain.handle(IPC.GET_LOG_PATH, () => {
+  return getLogFilePath()
+})
+
+ipcMain.on(IPC.SET_LOG_LEVEL, (_event, level: string) => {
+  log(`IPC SET_LOG_LEVEL: ${level}`)
+  // Level is checked at log-time via CLUI_DEBUG env var
+  if (level === 'debug') {
+    process.env.CLUI_DEBUG = '1'
+  } else {
+    delete process.env.CLUI_DEBUG
+  }
+})
+
+ipcMain.on(IPC.SET_WIDTH_MODE, (_event, mode: string) => {
+  log(`IPC SET_WIDTH_MODE: ${mode}`)
+  if (!mainWindow || mainWindow.isDestroyed()) return
+  const cursor = screen.getCursorScreenPoint()
+  const display = screen.getDisplayNearestPoint(cursor)
+  const newWidth = calculateWindowWidth(display.workAreaSize.width, mode as any)
+  const { x: dx, y: dy } = display.workArea
+  const { height: sh } = display.workAreaSize
+  mainWindow.setBounds({
+    x: dx + Math.round((display.workAreaSize.width - newWidth) / 2),
+    y: dy + sh - PILL_HEIGHT - PILL_BOTTOM_MARGIN,
+    width: newWidth,
+    height: PILL_HEIGHT,
+  })
+  saveWindowSettings({ opacity: loadWindowSettings().opacity, widthMode: mode })
 })
 
 // ─── IPC Handlers (typed, strict) ───

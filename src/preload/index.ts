@@ -95,6 +95,14 @@ export interface CluiAPI {
   /** OS-level click-through for transparent window regions */
   setIgnoreMouseEvents(ignore: boolean, options?: { forward?: boolean }): void
 
+  // ─── Window customization ───
+  setOpacity(opacity: number): void
+  setDraggable(draggable: boolean): void
+  setToggleShortcut(shortcut: string): Promise<{ ok: boolean; error?: string }>
+  getLogPath(): Promise<string>
+  setLogLevel(level: string): void
+  setWidthMode(mode: string): void
+
   // ─── Event listeners (main → renderer) ───
   onEvent(callback: (tabId: string, event: NormalizedEvent) => void): () => void
   onTabStatusChange(callback: (tabId: string, newStatus: string, oldStatus: string) => void): () => void
@@ -215,6 +223,14 @@ const api: CluiAPI = {
   setIgnoreMouseEvents: (ignore, options) =>
     ipcRenderer.send(IPC.SET_IGNORE_MOUSE_EVENTS, ignore, options || {}),
   setWindowWidth: (width) => ipcRenderer.send(IPC.SET_WINDOW_WIDTH, width),
+
+  // ─── Window customization ───
+  setOpacity: (opacity) => ipcRenderer.send(IPC.SET_OPACITY, opacity),
+  setDraggable: (draggable) => ipcRenderer.send(IPC.SET_DRAGGABLE, draggable),
+  setToggleShortcut: (shortcut) => ipcRenderer.invoke(IPC.SET_TOGGLE_SHORTCUT, shortcut),
+  getLogPath: () => ipcRenderer.invoke(IPC.GET_LOG_PATH),
+  setLogLevel: (level) => ipcRenderer.send(IPC.SET_LOG_LEVEL, level),
+  setWidthMode: (mode) => ipcRenderer.send(IPC.SET_WIDTH_MODE, mode),
 
   // ─── Event listeners ───
   onEvent: (callback) => {

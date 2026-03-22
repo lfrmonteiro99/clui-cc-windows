@@ -635,6 +635,14 @@ export const IPC = {
   CONTEXT_MEMORY_CREATED: 'clui:context-memory-created',
   CONTEXT_SESSION_RECORDED: 'clui:context-session-recorded',
 
+  // Window customization
+  SET_OPACITY: 'clui:set-opacity',
+  SET_DRAGGABLE: 'clui:set-draggable',
+  SET_TOGGLE_SHORTCUT: 'clui:set-toggle-shortcut',
+  GET_LOG_PATH: 'clui:get-log-path',
+  SET_LOG_LEVEL: 'clui:set-log-level',
+  SET_WIDTH_MODE: 'clui:set-width-mode',
+
   // Legacy (kept for backward compat during migration)
   STREAM_EVENT: 'clui:stream-event',
   RUN_COMPLETE: 'clui:run-complete',

@@ -7,7 +7,11 @@ import { existsSync, mkdirSync, createWriteStream, renameSync, unlinkSync, readd
 import { join } from 'path'
 import { homedir } from 'os'
 import { net } from 'electron'
-import { log } from './logger'
+import { log as _log } from './logger'
+
+function log(msg: string): void {
+  _log('whisper', msg)
+}
 
 // ─── Config ───
 

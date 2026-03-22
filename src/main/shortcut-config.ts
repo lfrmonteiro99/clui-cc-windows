@@ -60,3 +60,18 @@ export function saveShortcutConfig(config: ShortcutConfig): void {
   mkdirSync(dirname(CONFIG_PATH), { recursive: true })
   writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2) + '\n')
 }
+
+const MODIFIERS = new Set(['Ctrl', 'Alt', 'Shift', 'Cmd', 'Meta', 'Command', 'CommandOrControl', 'CmdOrCtrl'])
+
+/**
+ * Validate an Electron accelerator shortcut string.
+ * Must contain at least one modifier AND at least one non-modifier key.
+ */
+export function validateShortcut(shortcut: string): boolean {
+  if (!shortcut || typeof shortcut !== 'string') return false
+  const parts = shortcut.split('+').map(p => p.trim()).filter(Boolean)
+  if (parts.length < 2) return false
+  const hasModifier = parts.some(p => MODIFIERS.has(p))
+  const hasKey = parts.some(p => !MODIFIERS.has(p))
+  return hasModifier && hasKey
+}
