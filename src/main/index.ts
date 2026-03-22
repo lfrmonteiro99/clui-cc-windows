@@ -30,6 +30,7 @@ import { IngestionService } from './context/ingestion-service'
 import { RetrievalService } from './context/retrieval-service'
 import { IPC } from '../shared/types'
 import type { RunOptions, NormalizedEvent, EnrichedError, ExportOptions, SessionExportData, CostRecord } from '../shared/types'
+import { IpcEventBatcher } from './ipc-batcher'
 
 const DEBUG_MODE = process.env.CLUI_DEBUG === '1'
 const SPACES_DEBUG = DEBUG_MODE || process.env.CLUI_SPACES_DEBUG === '1'
@@ -128,18 +129,29 @@ function scheduleToggleSnapshots(toggleId: number, phase: 'show' | 'hide'): void
 }
 
 
+// ─── IPC event batcher (batches high-frequency streaming events) ───
+
+const eventBatcher = new IpcEventBatcher(broadcast)
+
+/** High-frequency event types that benefit from batching during streaming */
+const BATCHED_EVENT_TYPES = new Set(['text_chunk', 'tool_call_update'])
+
 // ─── Wire ControlPlane events → renderer ───
 
 controlPlane.on('event', (tabId: string, event: NormalizedEvent) => {
-  broadcast(IPC.NORMALIZED_EVENT, tabId, event)
+  if (BATCHED_EVENT_TYPES.has(event.type)) {
+    eventBatcher.send(IPC.NORMALIZED_EVENT_BATCH, tabId, event)
+  } else {
+    eventBatcher.sendImmediate(IPC.NORMALIZED_EVENT, tabId, event)
+  }
 })
 
 controlPlane.on('tab-status-change', (tabId: string, newStatus: string, oldStatus: string) => {
-  broadcast(IPC.TAB_STATUS_CHANGE, tabId, newStatus, oldStatus)
+  eventBatcher.sendImmediate(IPC.TAB_STATUS_CHANGE, tabId, newStatus, oldStatus)
 })
 
 controlPlane.on('error', (tabId: string, error: EnrichedError) => {
-  broadcast(IPC.ENRICHED_ERROR, tabId, error)
+  eventBatcher.sendImmediate(IPC.ENRICHED_ERROR, tabId, error)
 })
 
 // ─── Context database broadcast events ───
@@ -1405,6 +1417,8 @@ app.on('will-quit', () => {
   globalShortcut.unregisterAll()
   terminalManager.shutdown()
   controlPlane.shutdown()
+  eventBatcher.flush()
+  eventBatcher.destroy()
   ingestionService?.shutdown()
   contextDb?.close()
   flushLogs()

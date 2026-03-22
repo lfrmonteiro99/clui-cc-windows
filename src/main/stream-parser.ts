@@ -5,9 +5,17 @@ import type { ClaudeEvent } from '../shared/types'
 /**
  * Parses NDJSON output from `claude -p --output-format stream-json`.
  * Each line is a JSON object. Unknown event types are emitted but never crash.
+ *
+ * Uses a chunk array and leftover string instead of string concatenation to
+ * avoid O(n²) cost when many small chunks arrive during streaming.
  */
 export class StreamParser extends EventEmitter {
-  private buffer = ''
+  /** Accumulated chunks not yet split into lines */
+  private chunks: string[] = []
+  /** Total bytes in chunks (for overflow guard) */
+  private bufferedBytes = 0
+  /** Incomplete last line carried over from the previous feed */
+  private leftover = ''
 
   /** Maximum buffer size (10MB). Prevents OOM from malformed/infinite streams. */
   private static readonly MAX_BUFFER_SIZE = 10 * 1024 * 1024
@@ -17,18 +25,34 @@ export class StreamParser extends EventEmitter {
    * Emits 'event' for each parsed JSON line.
    */
   feed(chunk: string): void {
-    this.buffer += chunk
+    this.bufferedBytes += chunk.length
 
     // Safety: if buffer grows beyond limit, discard it to prevent OOM
-    if (this.buffer.length > StreamParser.MAX_BUFFER_SIZE) {
-      this.emit('parse-error', `[buffer overflow] Discarded ${this.buffer.length} bytes`)
-      this.buffer = ''
+    if (this.bufferedBytes > StreamParser.MAX_BUFFER_SIZE) {
+      this.emit('parse-error', `[buffer overflow] Discarded ${this.bufferedBytes} bytes`)
+      this.chunks = []
+      this.bufferedBytes = 0
+      this.leftover = ''
       return
     }
 
-    const lines = this.buffer.split('\n')
-    // Keep the last (possibly incomplete) line in the buffer
-    this.buffer = lines.pop() || ''
+    this.chunks.push(chunk)
+
+    // Only join when at least one newline is present to avoid unnecessary joins
+    const combined = this.chunks.join('')
+    if (!combined.includes('\n')) {
+      // No complete lines yet — keep chunks accumulated
+      return
+    }
+
+    // Reset chunk accumulator; we're about to process
+    this.chunks = []
+    this.bufferedBytes = 0
+
+    const full = this.leftover + combined
+    const lines = full.split('\n')
+    // Keep the last (possibly incomplete) line as leftover
+    this.leftover = lines.pop() ?? ''
 
     for (const line of lines) {
       const trimmed = line.trim()
@@ -47,7 +71,13 @@ export class StreamParser extends EventEmitter {
    * Flush any remaining data in the buffer (call when stream ends).
    */
   flush(): void {
-    const trimmed = this.buffer.trim()
+    // Join any pending chunks with existing leftover
+    const remaining = this.leftover + this.chunks.join('')
+    this.chunks = []
+    this.bufferedBytes = 0
+    this.leftover = ''
+
+    const trimmed = remaining.trim()
     if (trimmed) {
       try {
         const parsed = JSON.parse(trimmed) as ClaudeEvent
@@ -56,7 +86,6 @@ export class StreamParser extends EventEmitter {
         this.emit('parse-error', trimmed)
       }
     }
-    this.buffer = ''
   }
 
   /**

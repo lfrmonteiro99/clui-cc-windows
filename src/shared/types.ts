@@ -593,6 +593,7 @@ export const IPC = {
 
   // Event broadcast (main → renderer)
   NORMALIZED_EVENT: 'clui:normalized-event',
+  NORMALIZED_EVENT_BATCH: 'clui:normalized-event-batch',
   TAB_STATUS_CHANGE: 'clui:tab-status-change',
   ENRICHED_ERROR: 'clui:enriched-error',
 

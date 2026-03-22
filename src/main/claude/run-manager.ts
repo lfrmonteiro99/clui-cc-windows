@@ -6,6 +6,7 @@ import { normalize } from './event-normalizer'
 import { log as _log } from '../logger'
 import { resolveClaudeEntryPoint, getLoginShellPath, ensureBinDirInPath } from '../platform'
 import { spawnInWsl } from '../wsl/wsl-spawner'
+import { CircularBuffer } from '../circular-buffer'
 import type { ClaudeEntryPoint } from '../platform'
 import type { ClaudeEvent, NormalizedEvent, RunOptions, EnrichedError } from '../../shared/types'
 
@@ -68,9 +69,9 @@ export interface RunHandle {
   pid: number | null
   startedAt: number
   /** Ring buffer of last N stderr lines */
-  stderrTail: string[]
+  stderrTail: CircularBuffer<string>
   /** Ring buffer of last N stdout lines */
-  stdoutTail: string[]
+  stdoutTail: CircularBuffer<string>
   /** Count of tool calls seen during this run */
   toolCallCount: number
   /** Whether any permission_request event was seen during this run */
@@ -204,8 +205,8 @@ export class RunManager extends EventEmitter {
       process: child,
       pid: child.pid || null,
       startedAt: Date.now(),
-      stderrTail: [],
-      stdoutTail: [],
+      stderrTail: new CircularBuffer<string>(MAX_RING_LINES),
+      stdoutTail: new CircularBuffer<string>(MAX_RING_LINES),
       toolCallCount: 0,
       sawPermissionRequest: false,
       permissionDenials: [],
@@ -239,7 +240,7 @@ export class RunManager extends EventEmitter {
       }
 
       // Ring buffer stdout lines (raw JSON for diagnostics)
-      this._ringPush(handle.stdoutTail, JSON.stringify(raw).substring(0, 300))
+      handle.stdoutTail.push(JSON.stringify(raw).substring(0, 300))
 
       // Emit raw event for debugging
       this.emit('raw', requestId, raw)
@@ -261,7 +262,7 @@ export class RunManager extends EventEmitter {
 
     parser.on('parse-error', (line: string) => {
       log(`Parse error [${requestId}]: ${line.substring(0, 200)}`)
-      this._ringPush(handle.stderrTail, `[parse-error] ${line.substring(0, 200)}`)
+      handle.stderrTail.push(`[parse-error] ${line.substring(0, 200)}`)
     })
 
     // ─── stderr ring buffer ───
@@ -269,7 +270,7 @@ export class RunManager extends EventEmitter {
     child.stderr?.on('data', (data: string) => {
       const lines = data.split('\n').filter((l: string) => l.trim())
       for (const line of lines) {
-        this._ringPush(handle.stderrTail, line)
+        handle.stderrTail.push(line)
       }
       log(`Stderr [${requestId}]: ${data.trim().substring(0, 500)}`)
     })
@@ -378,8 +379,8 @@ export class RunManager extends EventEmitter {
     const handle = this.activeRuns.get(requestId) || this._finishedRuns.get(requestId)
     return {
       message: `Run failed with exit code ${exitCode}`,
-      stderrTail: handle?.stderrTail.slice(-20) || [],
-      stdoutTail: handle?.stdoutTail.slice(-20) || [],
+      stderrTail: handle?.stderrTail.toArray().slice(-20) || [],
+      stdoutTail: handle?.stdoutTail.toArray().slice(-20) || [],
       exitCode,
       elapsedMs: handle ? Date.now() - handle.startedAt : 0,
       toolCallCount: handle?.toolCallCount || 0,
@@ -400,10 +401,4 @@ export class RunManager extends EventEmitter {
     return Array.from(this.activeRuns.keys())
   }
 
-  private _ringPush(buffer: string[], line: string): void {
-    buffer.push(line)
-    if (buffer.length > MAX_RING_LINES) {
-      buffer.shift()
-    }
-  }
 }

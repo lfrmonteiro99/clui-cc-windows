@@ -150,6 +150,39 @@ function clearRetryTimer(tabId: string) {
   }
 }
 
+/**
+ * Returns the effective text content of a message.
+ * During streaming, text is buffered in `_textChunks` to avoid O(n²) string
+ * concatenation. Call this helper wherever you need the final readable string.
+ */
+export function getMessageContent(msg: Message): string {
+  if (msg._textChunks && msg._textChunks.length > 0) {
+    return msg._textChunks.join('')
+  }
+  return msg.content
+}
+
+/**
+ * Flush any buffered `_textChunks` in a messages array into `content` and
+ * delete the temporary accumulator. Called once per run completion so that
+ * persisted/exported messages have a plain `content` string.
+ */
+function flushTextChunks(messages: Message[]): Message[] {
+  let dirty = false
+  for (const m of messages) {
+    if (m._textChunks && m._textChunks.length > 0) {
+      dirty = true
+      break
+    }
+  }
+  if (!dirty) return messages
+  return messages.map((m) => {
+    if (!m._textChunks || m._textChunks.length === 0) return m
+    const { _textChunks, ...rest } = m
+    return { ...rest, content: _textChunks.join('') }
+  })
+}
+
 function getResolvedProjectPath(tab: TabState | undefined, staticInfo: StaticInfo | null): string {
   if (!tab) {
     return staticInfo?.homePath || '~'
@@ -928,274 +961,293 @@ export const useSessionStore = create<State>((set, get) => ({
   handleNormalizedEvent: (tabId, event) => {
     set((s) => {
       const { activeTabId } = s
-      const tabs = s.tabs.map((tab) => {
-        if (tab.id !== tabId) return tab
-        const updated = { ...tab }
 
-        switch (event.type) {
-          case 'session_init':
-            updated.claudeSessionId = event.sessionId
-            updated.sessionModel = event.model
-            updated.sessionTools = event.tools
-            updated.sessionMcpServers = event.mcpServers
-            updated.sessionSkills = event.skills
-            updated.sessionVersion = event.version
-            // Don't change status/activity for warmup inits — they're invisible
-            if (!event.isWarmup) {
-              updated.status = 'running'
-              updated.currentActivity = 'Thinking...'
-              // Move the first queued prompt into the timeline (it's now being processed)
-              if (updated.queuedPrompts.length > 0) {
-                const [nextPrompt, ...rest] = updated.queuedPrompts
-                const [nextRunOptions, ...restRunOptions] = updated.queuedRunOptions
-                updated.queuedPrompts = rest
-                updated.queuedRunOptions = restRunOptions
-                if (nextRunOptions) {
-                  updated.lastRunOptions = nextRunOptions
-                }
-                updated.messages = pruneMessages([
-                  ...updated.messages,
-                  { id: nextMsgId(), role: 'user' as const, content: nextPrompt, timestamp: Date.now() },
-                ])
+      // ── Optimization 2: targeted single-tab update ──
+      // Find the affected tab index once. If the tab doesn't exist, bail out
+      // early returning the same state reference so React selectors skip re-renders.
+      const tabIndex = s.tabs.findIndex((t) => t.id === tabId)
+      if (tabIndex === -1) return s
+
+      const tab = s.tabs[tabIndex]
+      const updated = { ...tab }
+
+      switch (event.type) {
+        case 'session_init':
+          updated.claudeSessionId = event.sessionId
+          updated.sessionModel = event.model
+          updated.sessionTools = event.tools
+          updated.sessionMcpServers = event.mcpServers
+          updated.sessionSkills = event.skills
+          updated.sessionVersion = event.version
+          // Don't change status/activity for warmup inits — they're invisible
+          if (!event.isWarmup) {
+            updated.status = 'running'
+            updated.currentActivity = 'Thinking...'
+            // Move the first queued prompt into the timeline (it's now being processed)
+            if (updated.queuedPrompts.length > 0) {
+              const [nextPrompt, ...rest] = updated.queuedPrompts
+              const [nextRunOptions, ...restRunOptions] = updated.queuedRunOptions
+              updated.queuedPrompts = rest
+              updated.queuedRunOptions = restRunOptions
+              if (nextRunOptions) {
+                updated.lastRunOptions = nextRunOptions
               }
-            }
-            break
-
-          case 'text_chunk': {
-            updated.currentActivity = 'Writing...'
-            const lastMsg = updated.messages[updated.messages.length - 1]
-            if (lastMsg?.role === 'assistant' && !lastMsg.toolName) {
-              // Mutate in place to avoid copying the entire array on every chunk
-              const msgs = updated.messages.slice()
-              msgs[msgs.length - 1] = { ...lastMsg, content: lastMsg.content + event.text }
-              updated.messages = msgs
-            } else {
               updated.messages = pruneMessages([
                 ...updated.messages,
-                { id: nextMsgId(), role: 'assistant', content: event.text, timestamp: Date.now() },
+                { id: nextMsgId(), role: 'user' as const, content: nextPrompt, timestamp: Date.now() },
               ])
             }
-            break
           }
+          break
 
-          case 'tool_call':
-            updated.currentActivity = `Running ${event.toolName}...`
+        case 'text_chunk': {
+          updated.currentActivity = 'Writing...'
+          const lastMsg = updated.messages[updated.messages.length - 1]
+          if (lastMsg?.role === 'assistant' && !lastMsg.toolName) {
+            // ── Optimization 1: buffer chunks to avoid O(n²) string concatenation ──
+            // Chunks are joined by getMessageContent() during rendering and flushed
+            // into `content` on task_complete / error / session_dead.
+            const msgs = updated.messages.slice()
+            let chunks: string[]
+            if (lastMsg._textChunks) {
+              chunks = [...lastMsg._textChunks, event.text]
+            } else if (lastMsg.content) {
+              // Existing message with plain content (e.g. from history) — migrate it
+              chunks = [lastMsg.content, event.text]
+            } else {
+              chunks = [event.text]
+            }
+            msgs[msgs.length - 1] = { ...lastMsg, content: '', _textChunks: chunks }
+            updated.messages = msgs
+          } else {
             updated.messages = pruneMessages([
               ...updated.messages,
-              {
-                id: nextMsgId(),
-                role: 'tool',
-                content: '',
-                toolName: event.toolName,
-                toolInput: '',
-                toolStatus: 'running',
-                timestamp: Date.now(),
-              },
+              { id: nextMsgId(), role: 'assistant', content: '', _textChunks: [event.text], timestamp: Date.now() },
             ])
-            break
-
-          case 'tool_call_update': {
-            const msgs = [...updated.messages]
-            const lastTool = [...msgs].reverse().find((m) => m.role === 'tool' && m.toolStatus === 'running')
-            if (lastTool) {
-              lastTool.toolInput = (lastTool.toolInput || '') + event.partialInput
-            }
-            updated.messages = msgs
-            break
           }
+          break
+        }
 
-          case 'tool_call_complete': {
-            const msgs2 = [...updated.messages]
-            const runningTool = [...msgs2].reverse().find((m) => m.role === 'tool' && m.toolStatus === 'running')
-            if (runningTool) {
-              runningTool.toolStatus = 'completed'
-            }
-            updated.messages = msgs2
-            break
+        case 'tool_call':
+          updated.currentActivity = `Running ${event.toolName}...`
+          updated.messages = pruneMessages([
+            ...updated.messages,
+            {
+              id: nextMsgId(),
+              role: 'tool',
+              content: '',
+              toolName: event.toolName,
+              toolInput: '',
+              toolStatus: 'running',
+              timestamp: Date.now(),
+            },
+          ])
+          break
+
+        case 'tool_call_update': {
+          const msgs = [...updated.messages]
+          const lastTool = [...msgs].reverse().find((m) => m.role === 'tool' && m.toolStatus === 'running')
+          if (lastTool) {
+            lastTool.toolInput = (lastTool.toolInput || '') + event.partialInput
           }
+          updated.messages = msgs
+          break
+        }
 
-          case 'task_update':
-            if (event.message?.content) {
-              for (const block of event.message.content) {
-                if (block.type === 'tool_use' && block.name) {
-                  const exists = updated.messages.find(
-                    (m) => m.role === 'tool' && m.toolName === block.name && !m.content
-                  )
-                  if (!exists) {
-                    updated.messages = pruneMessages([
-                      ...updated.messages,
-                      {
-                        id: nextMsgId(),
-                        role: 'tool',
-                        content: '',
-                        toolName: block.name,
-                        toolInput: JSON.stringify(block.input, null, 2),
-                        toolStatus: 'completed',
-                        timestamp: Date.now(),
-                      },
-                    ])
-                  }
+        case 'tool_call_complete': {
+          const msgs2 = [...updated.messages]
+          const runningTool = [...msgs2].reverse().find((m) => m.role === 'tool' && m.toolStatus === 'running')
+          if (runningTool) {
+            runningTool.toolStatus = 'completed'
+          }
+          updated.messages = msgs2
+          break
+        }
+
+        case 'task_update':
+          if (event.message?.content) {
+            for (const block of event.message.content) {
+              if (block.type === 'tool_use' && block.name) {
+                const exists = updated.messages.find(
+                  (m) => m.role === 'tool' && m.toolName === block.name && !m.content
+                )
+                if (!exists) {
+                  updated.messages = pruneMessages([
+                    ...updated.messages,
+                    {
+                      id: nextMsgId(),
+                      role: 'tool',
+                      content: '',
+                      toolName: block.name,
+                      toolInput: JSON.stringify(block.input, null, 2),
+                      toolStatus: 'completed',
+                      timestamp: Date.now(),
+                    },
+                  ])
                 }
               }
             }
-            break
+          }
+          break
 
-          case 'task_complete':
-            updated.status = 'completed'
-            updated.activeRequestId = null
-            updated.currentActivity = ''
-            updated.permissionQueue = []
-            updated.retryState = null
-            updated.lastResult = {
-              totalCostUsd: event.costUsd,
+        case 'task_complete':
+          updated.status = 'completed'
+          updated.activeRequestId = null
+          updated.currentActivity = ''
+          updated.permissionQueue = []
+          updated.retryState = null
+          // Flush buffered text chunks into content so messages are clean for export
+          updated.messages = flushTextChunks(updated.messages)
+          updated.lastResult = {
+            totalCostUsd: event.costUsd,
+            durationMs: event.durationMs,
+            numTurns: event.numTurns,
+            usage: event.usage,
+            sessionId: event.sessionId,
+          }
+          // Mark as unread unless the user is actively viewing this tab
+          // (active tab with card expanded). A collapsed active tab still
+          // counts as "unread" — the user hasn't seen the response yet.
+          if (tabId !== activeTabId || !s.isExpanded) {
+            updated.hasUnread = true
+          }
+          // Show fallback card when tools were denied by permission settings
+          if (event.permissionDenials && event.permissionDenials.length > 0) {
+            updated.permissionDenied = { tools: event.permissionDenials }
+          } else {
+            updated.permissionDenied = null
+          }
+          // Record cost to persistent history
+          try {
+            window.clui.recordCost({
+              timestamp: Date.now(),
+              sessionId: event.sessionId,
+              model: updated.sessionModel,
+              projectPath: updated.workingDirectory,
+              costUsd: event.costUsd,
               durationMs: event.durationMs,
               numTurns: event.numTurns,
-              usage: event.usage,
-              sessionId: event.sessionId,
-            }
-            // Mark as unread unless the user is actively viewing this tab
-            // (active tab with card expanded). A collapsed active tab still
-            // counts as "unread" — the user hasn't seen the response yet.
-            if (tabId !== activeTabId || !s.isExpanded) {
-              updated.hasUnread = true
-            }
-            // Show fallback card when tools were denied by permission settings
-            if (event.permissionDenials && event.permissionDenials.length > 0) {
-              updated.permissionDenied = { tools: event.permissionDenials }
-            } else {
-              updated.permissionDenied = null
-            }
-            // Record cost to persistent history
-            try {
-              window.clui.recordCost({
-                timestamp: Date.now(),
-                sessionId: event.sessionId,
-                model: updated.sessionModel,
-                projectPath: updated.workingDirectory,
-                costUsd: event.costUsd,
-                durationMs: event.durationMs,
-                numTurns: event.numTurns,
-                inputTokens: event.usage.input_tokens ?? 0,
-                outputTokens: event.usage.output_tokens ?? 0,
-                cacheReadTokens: event.usage.cache_read_input_tokens ?? 0,
-                cacheCreationTokens: event.usage.cache_creation_input_tokens ?? 0,
-              })
-            } catch {
-              // Cost recording failure is non-fatal
-            }
-            // Record token usage for context bar visualization
-            try {
-              useTokenBudgetStore.getState().recordUsage(tabId, event.usage)
-            } catch {
-              // Token budget tracking failure is non-fatal
-            }
-            // Record cost for budget tracking
-            try {
-              useBudgetStore.getState().recordTabCost(tabId, event.costUsd)
-            } catch {
-              // Budget tracking failure is non-fatal
-            }
-            // Play notification sound if window is hidden
-            playNotificationIfHidden()
-            // Desktop notification when window is not focused
-            if (useNotificationStore.getState().desktopEnabled) {
-              window.clui.sendDesktopNotification(
-                'Task Complete',
-                `Finished in ${Math.round(event.durationMs / 1000)}s ($${event.costUsd.toFixed(4)})`,
-              ).catch(() => {})
-            }
-            break
+              inputTokens: event.usage.input_tokens ?? 0,
+              outputTokens: event.usage.output_tokens ?? 0,
+              cacheReadTokens: event.usage.cache_read_input_tokens ?? 0,
+              cacheCreationTokens: event.usage.cache_creation_input_tokens ?? 0,
+            })
+          } catch {
+            // Cost recording failure is non-fatal
+          }
+          // Record token usage for context bar visualization
+          try {
+            useTokenBudgetStore.getState().recordUsage(tabId, event.usage)
+          } catch {
+            // Token budget tracking failure is non-fatal
+          }
+          // Record cost for budget tracking
+          try {
+            useBudgetStore.getState().recordTabCost(tabId, event.costUsd)
+          } catch {
+            // Budget tracking failure is non-fatal
+          }
+          // Play notification sound if window is hidden
+          playNotificationIfHidden()
+          // Desktop notification when window is not focused
+          if (useNotificationStore.getState().desktopEnabled) {
+            window.clui.sendDesktopNotification(
+              'Task Complete',
+              `Finished in ${Math.round(event.durationMs / 1000)}s ($${event.costUsd.toFixed(4)})`,
+            ).catch(() => {})
+          }
+          break
 
-          case 'error':
-            updated.status = 'failed'
-            updated.activeRequestId = null
-            updated.currentActivity = ''
-            updated.permissionQueue = []
-            updated.permissionDenied = null
-            updated.messages = [
-              ...updated.messages,
-              { id: nextMsgId(), role: 'system', content: `Error: ${event.message}`, timestamp: Date.now() },
-            ]
-            break
+        case 'error':
+          updated.status = 'failed'
+          updated.activeRequestId = null
+          updated.currentActivity = ''
+          updated.permissionQueue = []
+          updated.permissionDenied = null
+          updated.messages = [
+            ...flushTextChunks(updated.messages),
+            { id: nextMsgId(), role: 'system', content: `Error: ${event.message}`, timestamp: Date.now() },
+          ]
+          break
 
-          case 'session_dead':
-            updated.status = 'dead'
-            updated.activeRequestId = null
-            updated.currentActivity = ''
-            updated.permissionQueue = []
-            updated.permissionDenied = null
-            updated.retryState = updated.retryState
-              ? {
-                  ...updated.retryState,
-                  isRetrying: false,
-                  nextRetryAt: null,
-                  lastError: `Session ended unexpectedly (exit ${event.exitCode})`,
-                }
-              : null
+        case 'session_dead':
+          updated.status = 'dead'
+          updated.activeRequestId = null
+          updated.currentActivity = ''
+          updated.permissionQueue = []
+          updated.permissionDenied = null
+          updated.retryState = updated.retryState
+            ? {
+                ...updated.retryState,
+                isRetrying: false,
+                nextRetryAt: null,
+                lastError: `Session ended unexpectedly (exit ${event.exitCode})`,
+              }
+            : null
+          updated.messages = [
+            ...flushTextChunks(updated.messages),
+            {
+              id: nextMsgId(),
+              role: 'system',
+              content: `Session ended unexpectedly (exit ${event.exitCode})`,
+              timestamp: Date.now(),
+            },
+          ]
+          useNotificationStore.getState().addToast({
+            type: 'error',
+            title: 'Process crashed',
+            message: `Session ended unexpectedly (exit ${event.exitCode})`,
+          })
+          break
+
+        case 'permission_request': {
+          const newReq: import('../../shared/types').PermissionRequest = {
+            questionId: event.questionId,
+            toolTitle: event.toolName,
+            toolDescription: event.toolDescription,
+            toolInput: event.toolInput,
+            options: event.options.map((o) => ({
+              optionId: o.id,
+              kind: o.kind,
+              label: o.label,
+            })),
+          }
+          updated.permissionQueue = [...updated.permissionQueue, newReq]
+          updated.currentActivity = `Waiting for permission: ${event.toolName}`
+          break
+        }
+
+        case 'rate_limit':
+          if (event.status !== 'allowed') {
             updated.messages = [
               ...updated.messages,
               {
                 id: nextMsgId(),
                 role: 'system',
-                content: `Session ended unexpectedly (exit ${event.exitCode})`,
+                content: `Rate limited (${event.rateLimitType}). Resets at ${new Date(event.resetsAt).toLocaleTimeString()}.`,
                 timestamp: Date.now(),
               },
             ]
-            useNotificationStore.getState().addToast({
-              type: 'error',
-              title: 'Process crashed',
-              message: `Session ended unexpectedly (exit ${event.exitCode})`,
-            })
-            break
-
-          case 'permission_request': {
-            const newReq: import('../../shared/types').PermissionRequest = {
-              questionId: event.questionId,
-              toolTitle: event.toolName,
-              toolDescription: event.toolDescription,
-              toolInput: event.toolInput,
-              options: event.options.map((o) => ({
-                optionId: o.id,
-                kind: o.kind,
-                label: o.label,
-              })),
-            }
-            updated.permissionQueue = [...updated.permissionQueue, newReq]
-            updated.currentActivity = `Waiting for permission: ${event.toolName}`
-            break
           }
+          break
+      }
 
-          case 'rate_limit':
-            if (event.status !== 'allowed') {
-              updated.messages = [
-                ...updated.messages,
-                {
-                  id: nextMsgId(),
-                  role: 'system',
-                  content: `Rate limited (${event.rateLimitType}). Resets at ${new Date(event.resetsAt).toLocaleTimeString()}.`,
-                  timestamp: Date.now(),
-                },
-              ]
-            }
-            break
-        }
+      // Update lastActivityAt for events that indicate real session activity
+      if (
+        event.type === 'text_chunk' ||
+        event.type === 'tool_call' ||
+        event.type === 'tool_call_complete' ||
+        event.type === 'task_complete' ||
+        event.type === 'session_init' ||
+        event.type === 'task_update'
+      ) {
+        updated.lastActivityAt = Date.now()
+      }
 
-        // Update lastActivityAt for events that indicate real session activity
-        if (
-          event.type === 'text_chunk' ||
-          event.type === 'tool_call' ||
-          event.type === 'tool_call_complete' ||
-          event.type === 'task_complete' ||
-          event.type === 'session_init' ||
-          event.type === 'task_update'
-        ) {
-          updated.lastActivityAt = Date.now()
-        }
-
-        return updated
-      })
-
-      return { tabs }
+      // ── Optimization 2: splice only the changed tab, preserve all other references ──
+      const nextTabs = s.tabs.slice()
+      nextTabs[tabIndex] = updated
+      return { tabs: nextTabs }
     })
 
     if (event.type !== 'session_dead') return
