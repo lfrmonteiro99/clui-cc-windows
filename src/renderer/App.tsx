@@ -40,11 +40,16 @@ import { FilePeekPanel } from './components/FilePeekPanel'
 import { ContextBar } from './components/ContextBar'
 import { ContextPanel } from './components/ContextPanel'
 import { FileContextMenu } from './components/FileContextMenu'
+import { DirtyStateWarning } from './components/DirtyStateWarning'
+import { SandboxRunSummary } from './components/SandboxRunSummary'
+import { FileTreePanel } from './components/FileTreePanel'
+import { StashBrowser } from './components/StashBrowser'
 import { useColors, useThemeStore, spacing } from './theme'
 import { useFilePeekStore } from './stores/filePeekStore'
 import { useContextStore } from './stores/contextStore'
 import { useContextMenuStore } from './stores/contextMenuStore'
 import { useNotificationStore } from './stores/notificationStore'
+import { useSandboxStore } from './stores/sandboxStore'
 
 const TRANSITION = { duration: 0.26, ease: [0.4, 0, 0.1, 1] as const }
 
@@ -209,6 +214,26 @@ export default function App() {
           theme.setThemeMode(theme.themeMode === 'dark' ? 'light' : 'dark')
           break
         }
+        case 'sandbox-toggle': {
+          const sandbox = useSandboxStore.getState()
+          const tabId = session.activeTabId
+          if (tabId) {
+            const current = sandbox.getTabState(tabId).enabled
+            sandbox.setEnabled(tabId, !current)
+          }
+          break
+        }
+        case 'file-tree-toggle': {
+          const sandbox = useSandboxStore.getState()
+          sandbox.setFileTreeOpen(!sandbox.fileTreeOpen)
+          break
+        }
+        case 'stash-browser':
+          useSandboxStore.getState().setStashBrowserOpen(true)
+          break
+        case 'review-changes':
+          // No-op for now — SandboxRunSummary auto-shows on diff
+          break
       }
     }
     window.addEventListener('keydown', onKeyDown)
@@ -318,6 +343,8 @@ export default function App() {
         <CommandPalette />
         <ToastContainer />
         <GitPanel open={gitPanelOpen} onClose={() => setGitPanelOpen(false)} />
+        <FileTreePanel />
+        <StashBrowser />
         {contextMenuOpen && <FileContextMenu />}
         <div data-testid="app-root" className="flex flex-col justify-end h-full" style={{ background: 'transparent' }}>
 
@@ -679,6 +706,10 @@ export default function App() {
           <AnimatePresence>
             {comparisonLauncherOpen && <ComparisonLauncher />}
           </AnimatePresence>
+
+          {/* ─── Sandbox overlays (above input) ─── */}
+          {!terminalMode && <DirtyStateWarning />}
+          {!terminalMode && <SandboxRunSummary />}
 
           {/* ─── Input row — circles float outside left ─── */}
           {/* Hidden in terminal mode — terminal captures keystrokes directly */}

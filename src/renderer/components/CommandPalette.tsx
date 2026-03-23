@@ -4,7 +4,7 @@ import { motion } from 'framer-motion'
 import {
   Plus, ClockCounterClockwise, GearSix, HeadCircuit, Lightning, DownloadSimple,
   Browser, Cpu, Moon, Sun, ArrowsOutSimple, ArrowsInSimple, X, GitBranch,
-  TerminalWindow, Broom, Brain,
+  TerminalWindow, Broom, Brain, FolderOpen, Archive, ArrowsLeftRight, Trash,
 } from '@phosphor-icons/react'
 import { usePopoverLayer } from './PopoverLayer'
 import { useColors } from '../theme'
@@ -12,6 +12,7 @@ import { useThemeStore } from '../theme'
 import { useCommandPaletteStore } from '../stores/commandPaletteStore'
 import { useSessionStore, AVAILABLE_MODELS } from '../stores/sessionStore'
 import { useContextStore } from '../stores/contextStore'
+import { useSandboxStore } from '../stores/sandboxStore'
 import { useTerminalStore } from '../stores/terminalStore'
 import { useShortcutStore } from '../stores/shortcutStore'
 import { useSnippetStore } from '../stores/snippetStore'
@@ -37,6 +38,10 @@ const ICON_MAP: Record<string, React.ReactNode> = {
   TerminalWindow: <TerminalWindow size={ICON_SIZE} />,
   Broom: <Broom size={ICON_SIZE} />,
   Brain: <Brain size={ICON_SIZE} />,
+  FolderOpen: <FolderOpen size={ICON_SIZE} />,
+  Archive: <Archive size={ICON_SIZE} />,
+  ArrowsLeftRight: <ArrowsLeftRight size={ICON_SIZE} />,
+  Trash: <Trash size={ICON_SIZE} />,
 }
 
 function resolveIcon(name: string): React.ReactNode {
@@ -82,6 +87,22 @@ function executeCommand(command: PaletteCommand): void {
     const tabId = id.replace('tab:', '')
     session.selectTab(tabId)
     if (!session.isExpanded) session.toggleExpanded()
+  } else if (id === 'sandbox-toggle') {
+    const sandbox = useSandboxStore.getState()
+    const tabId = session.activeTabId
+    if (tabId) {
+      const current = sandbox.getTabState(tabId).enabled
+      sandbox.setEnabled(tabId, !current)
+    }
+  } else if (id === 'file-tree-toggle') {
+    const sandbox = useSandboxStore.getState()
+    sandbox.setFileTreeOpen(!sandbox.fileTreeOpen)
+  } else if (id === 'stash-browser') {
+    useSandboxStore.getState().setStashBrowserOpen(true)
+  } else if (id === 'review-changes') {
+    // No-op for now — SandboxRunSummary auto-shows on diff
+  } else if (id === 'clean-worktrees') {
+    // Future: call cleanup IPC
   } else if (id === 'terminal-toggle') {
     useTerminalStore.getState().toggleMode()
   } else if (id === 'terminal-new-tab') {
@@ -112,6 +133,11 @@ function buildCommands(): PaletteCommand[] {
     { id: 'snippets', category: 'action', icon: 'Lightning', label: 'Manage Snippets' },
     { id: 'context-panel', category: 'action', icon: 'Brain', label: 'Toggle Context Panel' },
     { id: 'git-panel', category: 'action', icon: 'GitBranch', label: 'Git Context Panel' },
+    { id: 'sandbox-toggle', category: 'action' as const, icon: 'GitBranch', label: 'Toggle Sandbox Mode', description: 'Run AI in isolated worktree' },
+    { id: 'file-tree-toggle', category: 'action' as const, icon: 'FolderOpen', label: 'Toggle File Tree', description: 'Browse project files' },
+    { id: 'stash-browser', category: 'action' as const, icon: 'Archive', label: 'Browse Git Stashes', description: 'View and manage stashes' },
+    { id: 'review-changes', category: 'action' as const, icon: 'ArrowsLeftRight', label: 'Review Sandbox Changes', description: 'View diff from last run' },
+    { id: 'clean-worktrees', category: 'action' as const, icon: 'Trash', label: 'Clean Old Worktrees', description: 'Remove sandbox worktrees' },
     {
       id: 'toggle-expanded',
       category: 'action',

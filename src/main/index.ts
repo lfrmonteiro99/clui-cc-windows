@@ -25,6 +25,7 @@ import { findBinary } from './platform'
 import { TerminalManager } from './terminal/terminal-manager'
 import { handleFileRead, handleFileReveal, handleFileOpenExternal } from './file-peek-handlers'
 import { isWslAvailable, listWslDistros, checkClaudeInWsl } from './wsl/detection'
+import { WorktreeManager, GitDiffEngine, DirtyDetector, StashManager, FileLister } from './sandbox'
 import { DatabaseService } from './context/database-service'
 import { IngestionService } from './context/ingestion-service'
 import { RetrievalService } from './context/retrieval-service'
@@ -68,6 +69,12 @@ const autoAttachManager = new AutoAttachManager()
 const gitContext = new GitContextProvider()
 const terminalManager = new TerminalManager(broadcast)
 let agentMemory: AgentMemory | null = null
+
+const worktreeManager = new WorktreeManager()
+const gitDiffEngine = new GitDiffEngine()
+const dirtyDetector = new DirtyDetector()
+const stashManager = new StashManager()
+const fileLister = new FileLister()
 
 const controlPlane = new ControlPlane(INTERACTIVE_PTY)
 
@@ -1056,6 +1063,27 @@ ipcMain.handle(IPC.GIT_STATUS, (_event, cwd: string) => {
 ipcMain.handle(IPC.GIT_DIFF, (_event, cwd: string, file?: string) => {
   log(`IPC GIT_DIFF: ${cwd}${file ? ` file=${file}` : ''}`)
   return gitContext.getDiff(cwd, file)
+})
+
+// ─── Sandbox Mode IPC ───
+
+ipcMain.handle(IPC.SANDBOX_CHECK_DIRTY, async (_e, cwd: string) => dirtyDetector.check(cwd))
+ipcMain.handle(IPC.SANDBOX_GET_DIFF, async (_e, worktreePath: string, baseBranch: string) => gitDiffEngine.getDiff(worktreePath, baseBranch))
+ipcMain.handle(IPC.SANDBOX_MERGE, async (_e, repoRoot: string, worktreeBranch: string, targetBranch: string) => gitDiffEngine.merge(repoRoot, worktreeBranch, targetBranch))
+ipcMain.handle(IPC.SANDBOX_REVERT, async (_e, worktreePath: string, baseBranch: string) => {
+  await gitDiffEngine.revert(worktreePath, baseBranch)
+  return { ok: true }
+})
+ipcMain.handle(IPC.SANDBOX_AUTO_STASH, async (_e, cwd: string, message: string) => {
+  const ref = await dirtyDetector.autoStash(cwd, message)
+  return { ok: true, stashRef: ref }
+})
+ipcMain.handle(IPC.SANDBOX_LIST_FILES, async (_e, cwd: string, relativePath?: string) => fileLister.list(cwd, relativePath))
+ipcMain.handle(IPC.SANDBOX_LIST_STASHES, async (_e, cwd: string) => stashManager.list(cwd))
+ipcMain.handle(IPC.SANDBOX_GET_STASH_DIFF, async (_e, cwd: string, index: number, file?: string) => stashManager.getDiff(cwd, index, file))
+ipcMain.handle(IPC.SANDBOX_WORKTREE_STATUS, async (_e, runId: string) => {
+  const wt = worktreeManager.getWorktree(runId)
+  return wt ? { exists: true, path: wt.path, branch: wt.branch } : { exists: false }
 })
 
 // ─── File Peek IPC ───

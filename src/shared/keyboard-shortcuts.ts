@@ -13,6 +13,10 @@ export type ShortcutActionId =
   | 'open-history'
   | 'open-marketplace'
   | 'toggle-theme'
+  | 'sandbox-toggle'
+  | 'file-tree-toggle'
+  | 'stash-browser'
+  | 'review-changes'
 
 interface ShortcutDefinition {
   id: ShortcutActionId
@@ -40,6 +44,10 @@ const SHORTCUT_DEFINITIONS: ShortcutDefinition[] = [
   { id: 'command-palette', label: 'Command Palette', category: 'actions', windows: 'Ctrl+K', mac: 'Cmd+K' },
   { id: 'open-history', label: 'Open History', category: 'actions', windows: 'Ctrl+H', mac: 'Cmd+H' },
   { id: 'open-marketplace', label: 'Open Marketplace', category: 'actions', windows: 'Ctrl+M', mac: 'Cmd+M' },
+  { id: 'sandbox-toggle', label: 'Toggle Sandbox Mode', category: 'actions', windows: 'Ctrl+Alt+S', mac: 'Cmd+Alt+S' },
+  { id: 'file-tree-toggle', label: 'Toggle File Tree', category: 'actions', windows: 'Ctrl+Alt+F', mac: 'Cmd+Alt+F' },
+  { id: 'stash-browser', label: 'Browse Git Stashes', category: 'actions', windows: 'Ctrl+Alt+H', mac: 'Cmd+Alt+H' },
+  { id: 'review-changes', label: 'Review Sandbox Changes', category: 'actions', windows: 'Ctrl+Alt+R', mac: 'Cmd+Alt+R' },
 ]
 
 const SPECIAL_KEYS: Record<string, string> = {
