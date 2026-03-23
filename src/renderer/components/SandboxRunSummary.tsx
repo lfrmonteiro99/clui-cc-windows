@@ -45,15 +45,15 @@ function statusColor(
 export const SandboxRunSummary = React.memo(function SandboxRunSummary() {
   const colors = useColors()
   const activeTabId = useSessionStore((s) => s.activeTabId)
-  const tabState = useSandboxStore((s) => s.getTabState(activeTabId))
+  const pendingDiff = useSandboxStore((s) => activeTabId ? s.tabStates.get(activeTabId)?.pendingDiff ?? null : null)
+  const mergeStatus = useSandboxStore((s) => activeTabId ? s.tabStates.get(activeTabId)?.mergeStatus ?? 'idle' : 'idle')
+  const wt = useSandboxStore((s) => activeTabId ? s.tabStates.get(activeTabId)?.activeWorktree ?? null : null)
   const setMergeStatus = useSandboxStore((s) => s.setMergeStatus)
   const addToast = useNotificationStore((s) => s.addToast)
 
   const [filesExpanded, setFilesExpanded] = useState(false)
   const [merging, setMerging] = useState(false)
   const [reverting, setReverting] = useState(false)
-
-  const { pendingDiff, mergeStatus, activeWorktree: wt } = tabState
 
   // Visibility: only show when there is a pending diff AND merge is still pending
   const visible = pendingDiff !== null && mergeStatus === 'pending'
