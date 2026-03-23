@@ -4,7 +4,7 @@ import { useNotificationStore } from './notificationStore'
 
 interface MarketplaceDeps {
   fetchMarketplace: (forceRefresh?: boolean) => Promise<{ plugins: CatalogPlugin[]; error: string | null }>
-  listInstalledPlugins: () => Promise<string[]>
+  listInstalledPlugins: () => Promise<Array<{ name: string; key: string; marketplace: string; type: string }> | string[]>
   installPlugin: (
     repo: string,
     pluginName: string,
@@ -48,7 +48,7 @@ export function deriveMarketplacePluginStates(
   plugins: CatalogPlugin[],
   installedNames: string[],
 ): Record<string, PluginStatus> {
-  const installedSet = new Set(installedNames.map((name) => name.toLowerCase()))
+  const installedSet = new Set(installedNames.map((name) => String(name).toLowerCase()))
   const pluginStates: Record<string, PluginStatus> = {}
 
   for (const plugin of plugins) {
@@ -80,10 +80,14 @@ export function createMarketplaceStore(deps: MarketplaceDeps = defaultMarketplac
     loadMarketplace: async (forceRefresh) => {
       set({ loading: true, error: null })
       try {
-        const [catalog, installedNames] = await Promise.all([
+        const [catalog, rawInstalled] = await Promise.all([
           deps.fetchMarketplace(forceRefresh),
           deps.listInstalledPlugins(),
         ])
+        // Normalize: listInstalledPlugins may return objects ({ name, key, ... }) or strings
+        const installedNames = (rawInstalled || []).map((entry: unknown) =>
+          typeof entry === 'string' ? entry : (entry as { name?: string })?.name || String(entry)
+        )
 
         if (catalog.error && catalog.plugins.length === 0) {
           set({ error: catalog.error, loading: false })
