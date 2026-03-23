@@ -21,11 +21,12 @@ export function SandboxToggle() {
         border: `1px solid ${enabled ? 'rgba(34,197,94,0.25)' : colors.containerBorder}`,
         color: enabled ? colors.statusComplete : colors.textSecondary,
       }}
-      aria-label={enabled ? 'Disable sandbox mode' : 'Enable sandbox mode'}
+      aria-label={enabled ? 'Disable safe mode' : 'Enable safe mode'}
       aria-pressed={enabled}
+      title="AI changes are isolated — review and merge before they touch your files"
     >
       <GitBranch size={14} weight={enabled ? 'fill' : 'regular'} />
-      {enabled ? 'Sandbox ON' : 'Sandbox OFF'}
+      {enabled ? 'Safe Mode ON' : 'Safe Mode OFF'}
     </motion.button>
   )
 }

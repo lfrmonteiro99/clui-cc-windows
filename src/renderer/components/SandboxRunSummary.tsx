@@ -81,7 +81,7 @@ export const SandboxRunSummary = React.memo(function SandboxRunSummary() {
         setMergeStatus(activeTabId, 'merged')
         addToast({
           type: 'success',
-          title: 'Sandbox merged',
+          title: 'Changes merged',
           message: `${result.merged.length} file${result.merged.length !== 1 ? 's' : ''} merged to ${wt.baseBranch}`,
         })
       } else {
@@ -114,8 +114,8 @@ export const SandboxRunSummary = React.memo(function SandboxRunSummary() {
       setMergeStatus(activeTabId, 'reverted')
       addToast({
         type: 'info',
-        title: 'Sandbox discarded',
-        message: 'Worktree changes have been reverted',
+        title: 'Changes discarded',
+        message: 'All changes have been reverted',
       })
     } catch {
       addToast({
@@ -174,12 +174,12 @@ export const SandboxRunSummary = React.memo(function SandboxRunSummary() {
                 color: colors.textPrimary,
               }}
             >
-              Sandbox Run Complete
+              Safe Mode — Run Complete
             </span>
             <button
               data-clui-ui
               onClick={handleClose}
-              aria-label="Close sandbox summary"
+              aria-label="Close summary"
               style={{
                 display: 'flex',
                 alignItems: 'center',
