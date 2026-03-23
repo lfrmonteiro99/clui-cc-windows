@@ -106,6 +106,6 @@ describe('DirtyDetector', () => {
     // Restore stash and verify content is preserved
     git(['stash', 'pop'], repoDir)
     const content = readFileSync(join(repoDir, 'README.md'), 'utf-8')
-    expect(content).toBe('# auto stash test\n')
+    expect(content.replace(/\r\n/g, '\n')).toBe('# auto stash test\n')
   })
 })
