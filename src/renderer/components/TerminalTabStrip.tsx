@@ -10,6 +10,7 @@ export function TerminalTabStrip() {
   const setActiveTermTab = useTerminalStore((s) => s.setActiveTermTab)
   const createTermTab = useTerminalStore((s) => s.createTermTab)
   const closeTermTab = useTerminalStore((s) => s.closeTermTab)
+  const paneLayouts = useTerminalStore((s) => s.paneLayouts)
   const colors = useColors()
 
   const handleNewTab = () => {
@@ -37,6 +38,11 @@ export function TerminalTabStrip() {
         const isExited = tab.status === 'exited'
         const exitSuccess = isExited && tab.exitCode === 0
         const exitFail = isExited && tab.exitCode !== 0
+        const hasSplit = !!paneLayouts[tab.id]
+        const bellCount = tab.bellCount ?? 0
+
+        // TERM-003: Truncate title to 14 chars with ellipsis
+        const displayTitle = tab.title.length > 14 ? tab.title.slice(0, 14) + '…' : tab.title
 
         return (
           <button
@@ -49,17 +55,50 @@ export function TerminalTabStrip() {
               border: isActive ? `1px solid ${colors.tabActiveBorder}` : '1px solid transparent',
               borderBottom: isExited ? `2px solid ${exitSuccess ? '#4ade80' : '#f87171'}` : undefined,
               transition: 'background 0.1s, color 0.1s',
+              position: 'relative',
             }}
             aria-label={`Terminal tab: ${tab.title}`}
             aria-selected={isActive}
+            title={tab.title} // TERM-003: Full title on hover
           >
             {exitSuccess && <CheckCircle size={12} style={{ color: '#4ade80' }} />}
             {exitFail && <XCircle size={12} style={{ color: '#f87171' }} />}
             {!isExited && <TerminalWindow size={12} weight={isActive ? 'fill' : 'regular'} />}
+
+            {/* TERM-002: Split indicator */}
+            {hasSplit && (
+              <span
+                style={{
+                  width: 6,
+                  height: 6,
+                  borderRadius: '50%',
+                  background: colors.accent,
+                  flexShrink: 0,
+                }}
+              />
+            )}
+
             <span className="truncate" style={{ maxWidth: 100 }}>
-              {tab.title}
+              {displayTitle}
               {exitFail && ` [${tab.exitCode}]`}
             </span>
+
+            {/* TERM-008: Bell badge for background tabs */}
+            {bellCount > 0 && !isActive && (
+              <span
+                style={{
+                  position: 'absolute',
+                  top: 2,
+                  right: 2,
+                  width: 8,
+                  height: 8,
+                  borderRadius: '50%',
+                  background: colors.accent,
+                  animation: 'pulse 1s ease-in-out infinite',
+                }}
+              />
+            )}
+
             <span
               onClick={(e) => {
                 e.stopPropagation()

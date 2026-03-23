@@ -14,9 +14,13 @@ export function TerminalView({ termTabId, isActive }: TerminalViewProps) {
   const terminalRef = useRef<any>(null) // xterm Terminal instance
   const fitAddonRef = useRef<any>(null)
   const searchAddonRef = useRef<any>(null)
+  const searchTermRef = useRef<string>('')
   const colors = useColors()
   const [loaded, setLoaded] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
+  const [searchResultIndex, setSearchResultIndex] = useState(-1)
+  const [searchResultCount, setSearchResultCount] = useState(0)
+  const [bellFlash, setBellFlash] = useState(false)
 
   // Lazy-load xterm.js and initialize
   useEffect(() => {
@@ -35,14 +39,20 @@ export function TerminalView({ termTabId, isActive }: TerminalViewProps) {
       const fitAddon = new FitAddon()
       const searchAddon = new SearchAddon()
 
+      // Read settings from store
+      const storeState = useTerminalStore.getState()
+      const scrollbackSize = storeState.scrollbackSize ?? 5000
+      const backgroundOpacity = storeState.backgroundOpacity ?? 1
+      const backgroundBlur = storeState.backgroundBlur ?? 0
+
       const terminal = new Terminal({
         fontFamily: '"JetBrains Mono", "Cascadia Code", "Fira Code", Consolas, "Courier New", monospace',
         fontSize: 13,
         lineHeight: 1.3,
         cursorStyle: 'bar',
         cursorBlink: true,
-        scrollback: 5000,
-        theme: buildXtermTheme(colors),
+        scrollback: scrollbackSize,
+        theme: buildXtermTheme(colors, backgroundOpacity),
         allowTransparency: true,
         customKeyEventHandler: (e: KeyboardEvent) => {
           const isMac = navigator.platform.toLowerCase().includes('mac')
@@ -86,6 +96,22 @@ export function TerminalView({ termTabId, isActive }: TerminalViewProps) {
             return false
           }
 
+          // Split panes: Ctrl+Shift+D (horizontal), Ctrl+Shift+E (vertical)
+          if (mod && e.shiftKey && e.key === 'D' && e.type === 'keydown') {
+            window.dispatchEvent(new CustomEvent('clui-terminal-shortcut', { detail: { action: 'split-horizontal', termTabId } }))
+            return false
+          }
+          if (mod && e.shiftKey && e.key === 'E' && e.type === 'keydown') {
+            window.dispatchEvent(new CustomEvent('clui-terminal-shortcut', { detail: { action: 'split-vertical', termTabId } }))
+            return false
+          }
+
+          // Tab overview: Ctrl+Shift+O
+          if (mod && e.shiftKey && e.key === 'O' && e.type === 'keydown') {
+            window.dispatchEvent(new CustomEvent('clui-terminal-shortcut', { detail: { action: 'tab-overview' } }))
+            return false
+          }
+
           // Font zoom: Ctrl+= / Ctrl+- / Ctrl+0
           if (mod && (e.key === '=' || e.key === '+') && e.type === 'keydown') {
             window.dispatchEvent(new CustomEvent('clui-terminal-shortcut', { detail: { action: 'zoom-in' } }))
@@ -121,11 +147,60 @@ export function TerminalView({ termTabId, isActive }: TerminalViewProps) {
       terminal.loadAddon(searchAddon)
       searchAddonRef.current = searchAddon
 
+      // Try WebGL addon for GPU-accelerated rendering (TERM-001)
+      try {
+        const { WebglAddon } = await import('@xterm/addon-webgl')
+        const webglAddon = new WebglAddon()
+        webglAddon.onContextLoss(() => {
+          // Fallback: dispose WebGL, xterm.js falls back to DOM renderer
+          webglAddon.dispose()
+        })
+        terminal.loadAddon(webglAddon)
+      } catch {
+        // WebGL not available — DOM renderer is the default fallback
+      }
+
+      // Try image addon for Sixel/Kitty/iTerm2 image protocol (TERM-005)
+      const imageEnabled = storeState.imageProtocolEnabled ?? false
+      if (imageEnabled) {
+        try {
+          const { ImageAddon } = await import('@xterm/addon-image')
+          terminal.loadAddon(new ImageAddon({ sixelSupport: true }))
+        } catch {
+          // Image addon not available — skip silently
+        }
+      }
+
       terminal.open(containerRef.current!)
       fitAddon.fit()
 
       terminalRef.current = terminal
       fitAddonRef.current = fitAddon
+
+      // Tab auto-naming via OSC 0/2 title sequences (TERM-003)
+      terminal.onTitleChange((title: string) => {
+        if (!title || title.trim().length === 0) return
+        // Sanitize: strip HTML entities, limit to 100 chars
+        const sanitized = title.replace(/[<>&"']/g, '').slice(0, 100)
+        if (sanitized.length > 0) {
+          useTerminalStore.getState().updateTermTabTitle(termTabId, sanitized)
+        }
+      })
+
+      // Bell handler (TERM-008)
+      terminal.onBell(() => {
+        const bellEnabled = useTerminalStore.getState().bellEnabled ?? true
+        if (!bellEnabled) return
+
+        // Visual flash for active terminal
+        setBellFlash(true)
+        setTimeout(() => setBellFlash(false), 100)
+
+        // Increment bell count for background tabs
+        if (!isActive) {
+          useTerminalStore.getState().incrementBellCount(termTabId)
+        }
+      })
 
       // Send keystrokes to main process
       terminal.onData((data: string) => {
@@ -145,7 +220,7 @@ export function TerminalView({ termTabId, isActive }: TerminalViewProps) {
         window.clui.terminalResize(termTabId, dims.cols, dims.rows)
       }
 
-      // Listen for clear and font size events
+      // Listen for clear, font size, and scrollback events
       const shortcutHandler = (e: Event) => {
         const detail = (e as CustomEvent).detail
         if (detail?.action === 'clear' && terminalRef.current) {
@@ -157,8 +232,19 @@ export function TerminalView({ termTabId, isActive }: TerminalViewProps) {
           const newDims = fitAddonRef.current.proposeDimensions()
           if (newDims) window.clui.terminalResize(termTabId, newDims.cols, newDims.rows)
         }
+        if (detail?.action === 'scrollback-changed' && terminalRef.current) {
+          terminalRef.current.options.scrollback = detail.scrollbackSize
+        }
+        if (detail?.action === 'opacity-changed' && terminalRef.current) {
+          terminalRef.current.options.theme = buildXtermTheme(colors, detail.opacity)
+        }
       }
       window.addEventListener('clui-terminal-shortcut', shortcutHandler)
+
+      // Apply background blur if set
+      if (backgroundBlur > 0 && containerRef.current) {
+        containerRef.current.style.backdropFilter = `blur(${backgroundBlur}px)`
+      }
 
       setLoaded(true)
 
@@ -208,17 +294,19 @@ export function TerminalView({ termTabId, isActive }: TerminalViewProps) {
     return () => observer.disconnect()
   }, [isActive, termTabId, loaded])
 
-  // Focus terminal when active
+  // Focus terminal when active & clear bell count
   useEffect(() => {
     if (isActive && terminalRef.current) {
       terminalRef.current.focus()
+      useTerminalStore.getState().clearBellCount(termTabId)
     }
-  }, [isActive])
+  }, [isActive, termTabId])
 
   // Update theme
   useEffect(() => {
     if (terminalRef.current) {
-      terminalRef.current.options.theme = buildXtermTheme(colors)
+      const opacity = useTerminalStore.getState().backgroundOpacity ?? 1
+      terminalRef.current.options.theme = buildXtermTheme(colors, opacity)
     }
   }, [colors])
 
@@ -234,30 +322,74 @@ export function TerminalView({ termTabId, isActive }: TerminalViewProps) {
     return () => window.removeEventListener('clui-terminal-shortcut', handler)
   }, [termTabId])
 
-  const handleSearch = useCallback((term: string) => {
+  // Search handlers — pass the actual search term (fixes TERM-BUG-001)
+  const handleSearch = useCallback((term: string, options: { caseSensitive: boolean; regex: boolean }) => {
     if (!searchAddonRef.current) return { resultIndex: -1, resultCount: 0 }
-    const found = searchAddonRef.current.findNext(term, { caseSensitive: false, decorations: { activeMatchColorOverviewRuler: '#d97757' } })
-    // SearchAddon doesn't return counts directly; approximate
-    return { resultIndex: found ? 0 : -1, resultCount: found ? 1 : 0 }
+    searchTermRef.current = term
+
+    if (!term.trim()) {
+      searchAddonRef.current.clearDecorations()
+      setSearchResultIndex(-1)
+      setSearchResultCount(0)
+      return { resultIndex: -1, resultCount: 0 }
+    }
+
+    const found = searchAddonRef.current.findNext(term, {
+      caseSensitive: options.caseSensitive,
+      regex: options.regex,
+      decorations: {
+        activeMatchColorOverviewRuler: '#d97757',
+        matchOverviewRuler: 'rgba(217,119,87,0.15)',
+        activeMatchBackground: 'rgba(217,119,87,0.4)',
+        matchBackground: 'rgba(217,119,87,0.15)',
+      },
+    })
+
+    // Count matches by searching through buffer
+    const count = countMatches(terminalRef.current, term, options)
+    const idx = found ? 0 : -1
+    setSearchResultIndex(idx)
+    setSearchResultCount(count)
+    return { resultIndex: idx, resultCount: count }
   }, [])
 
-  const handleSearchNext = useCallback(() => {
-    if (!searchAddonRef.current) return { resultIndex: -1, resultCount: 0 }
-    const found = searchAddonRef.current.findNext('', { incremental: false })
-    return { resultIndex: found ? 0 : -1, resultCount: found ? 1 : 0 }
-  }, [])
+  const handleSearchNext = useCallback((term: string, options: { caseSensitive: boolean; regex: boolean }) => {
+    if (!searchAddonRef.current || !term.trim()) return { resultIndex: -1, resultCount: 0 }
+    searchTermRef.current = term
+    const found = searchAddonRef.current.findNext(term, {
+      caseSensitive: options.caseSensitive,
+      regex: options.regex,
+      incremental: false,
+    })
+    const count = searchResultCount
+    const idx = found ? Math.min(searchResultIndex + 1, count - 1) : -1
+    setSearchResultIndex(idx >= count ? 0 : idx)
+    return { resultIndex: idx >= count ? 0 : idx, resultCount: count }
+  }, [searchResultIndex, searchResultCount])
 
-  const handleSearchPrev = useCallback(() => {
-    if (!searchAddonRef.current) return { resultIndex: -1, resultCount: 0 }
-    const found = searchAddonRef.current.findPrevious('')
-    return { resultIndex: found ? 0 : -1, resultCount: found ? 1 : 0 }
-  }, [])
+  const handleSearchPrev = useCallback((term: string, options: { caseSensitive: boolean; regex: boolean }) => {
+    if (!searchAddonRef.current || !term.trim()) return { resultIndex: -1, resultCount: 0 }
+    searchTermRef.current = term
+    const found = searchAddonRef.current.findPrevious(term, {
+      caseSensitive: options.caseSensitive,
+      regex: options.regex,
+    })
+    const count = searchResultCount
+    const idx = found ? Math.max(searchResultIndex - 1, 0) : -1
+    setSearchResultIndex(idx < 0 ? count - 1 : idx)
+    return { resultIndex: idx < 0 ? count - 1 : idx, resultCount: count }
+  }, [searchResultIndex, searchResultCount])
 
   const handleSearchClose = useCallback(() => {
     setSearchOpen(false)
+    searchTermRef.current = ''
+    setSearchResultIndex(-1)
+    setSearchResultCount(0)
     if (searchAddonRef.current) searchAddonRef.current.clearDecorations()
     terminalRef.current?.focus()
   }, [])
+
+  const backgroundOpacity = useTerminalStore((s) => s.backgroundOpacity) ?? 1
 
   return (
     <div
@@ -269,6 +401,19 @@ export function TerminalView({ termTabId, isActive }: TerminalViewProps) {
         overflow: 'hidden',
       }}
     >
+      {/* Bell flash overlay (TERM-008) */}
+      {bellFlash && (
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            background: 'rgba(255,255,255,0.15)',
+            zIndex: 20,
+            pointerEvents: 'none',
+          }}
+        />
+      )}
+
       <AnimatePresence>
         {searchOpen && (
           <TerminalSearch
@@ -276,6 +421,8 @@ export function TerminalView({ termTabId, isActive }: TerminalViewProps) {
             onNext={handleSearchNext}
             onPrev={handleSearchPrev}
             onClose={handleSearchClose}
+            resultIndex={searchResultIndex}
+            resultCount={searchResultCount}
           />
         )}
       </AnimatePresence>
@@ -286,15 +433,66 @@ export function TerminalView({ termTabId, isActive }: TerminalViewProps) {
           flex: 1,
           padding: 4,
           overflow: 'hidden',
+          // Text shadow for readability when opacity is low (TERM-010)
+          ...(backgroundOpacity < 0.7 ? { textShadow: '0 0 2px rgba(0,0,0,0.5)' } : {}),
         }}
       />
     </div>
   )
 }
 
-function buildXtermTheme(colors: ReturnType<typeof useColors>): Record<string, string> {
+function countMatches(
+  terminal: any,
+  term: string,
+  options: { caseSensitive: boolean; regex: boolean },
+): number {
+  if (!terminal || !term) return 0
+  try {
+    const buffer = terminal.buffer?.active
+    if (!buffer) return 1
+    let count = 0
+    const totalLines = buffer.length
+    for (let i = 0; i < totalLines; i++) {
+      const line = buffer.getLine(i)
+      if (!line) continue
+      const text = line.translateToString(true)
+      if (options.regex) {
+        try {
+          const re = new RegExp(term, options.caseSensitive ? 'g' : 'gi')
+          const m = text.match(re)
+          if (m) count += m.length
+        } catch {
+          // Invalid regex
+        }
+      } else {
+        const searchText = options.caseSensitive ? text : text.toLowerCase()
+        const searchTerm = options.caseSensitive ? term : term.toLowerCase()
+        let idx = 0
+        while ((idx = searchText.indexOf(searchTerm, idx)) !== -1) {
+          count++
+          idx += searchTerm.length
+        }
+      }
+    }
+    return Math.max(count, 0)
+  } catch {
+    return 1
+  }
+}
+
+function buildXtermTheme(colors: ReturnType<typeof useColors>, opacity = 1): Record<string, string> {
+  // Convert hex background to rgba if opacity < 1
+  let background = colors.containerBg
+  if (opacity < 1) {
+    const hex = colors.containerBg.replace('#', '')
+    const r = parseInt(hex.slice(0, 2), 16)
+    const g = parseInt(hex.slice(2, 4), 16)
+    const b = parseInt(hex.slice(4, 6), 16)
+    background = `rgba(${r},${g},${b},${Math.max(0.4, opacity)})`
+  }
+
   return {
-    background: colors.containerBg,
+    background,
     foreground: colors.textPrimary,
     cursor: colors.accent,
     cursorAccent: colors.containerBg,

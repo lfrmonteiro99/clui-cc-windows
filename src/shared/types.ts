@@ -482,6 +482,7 @@ export interface TerminalTab {
   cwd: string
   status: 'active' | 'exited'
   exitCode: number | null
+  bellCount?: number
 }
 
 export interface TerminalCreateOptions {
