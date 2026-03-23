@@ -343,8 +343,6 @@ export default function App() {
         <CommandPalette />
         <ToastContainer />
         <GitPanel open={gitPanelOpen} onClose={() => setGitPanelOpen(false)} />
-        <FileTreePanel />
-        <StashBrowser />
         {contextMenuOpen && <FileContextMenu />}
         <div data-testid="app-root" className="flex flex-col justify-end h-full" style={{ background: 'transparent' }}>
 
@@ -771,6 +769,12 @@ export default function App() {
           )}
         </div>
         </div>
+      </ErrorBoundary>
+      <ErrorBoundary>
+        <FileTreePanel />
+      </ErrorBoundary>
+      <ErrorBoundary>
+        <StashBrowser />
       </ErrorBoundary>
     </PopoverLayerProvider>
   )
