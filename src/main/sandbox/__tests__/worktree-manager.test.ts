@@ -15,6 +15,7 @@ function initRepo(): string {
   git(['init', '-b', 'main'], dir)
   git(['config', 'user.email', 'test@test.com'], dir)
   git(['config', 'user.name', 'Test'], dir)
+  git(['config', 'commit.gpgsign', 'false'], dir)
   writeFileSync(join(dir, 'README.md'), '# Test\n')
   git(['add', '.'], dir)
   git(['commit', '-m', 'initial'], dir)

@@ -15,6 +15,7 @@ function initRepoWithBranch(): { repoDir: string; worktreePath: string; baseBran
   git(['init', '-b', 'main'], repoDir)
   git(['config', 'user.email', 'test@test.com'], repoDir)
   git(['config', 'user.name', 'Test'], repoDir)
+  git(['config', 'commit.gpgsign', 'false'], repoDir)
 
   // Create initial commit on main
   writeFileSync(join(repoDir, 'file1.txt'), 'original content\n')
