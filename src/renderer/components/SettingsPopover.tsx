@@ -10,6 +10,7 @@ import { useNotificationStore } from '../stores/notificationStore'
 import { usePopoverLayer } from './PopoverLayer'
 import { useColors } from '../theme'
 import { PermissionEditor } from './PermissionEditor'
+import { SandboxToggle } from './SandboxToggle'
 
 function RowToggle({
   checked,
@@ -277,6 +278,13 @@ export function SettingsPopover() {
                   label="Toggle auto-resume after unexpected session crash"
                 />
               </div>
+            </div>
+
+            <div style={{ height: 1, background: colors.popoverBorder }} />
+
+            {/* Sandbox mode */}
+            <div>
+              <SandboxToggle />
             </div>
 
             <div style={{ height: 1, background: colors.popoverBorder }} />

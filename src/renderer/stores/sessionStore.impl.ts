@@ -23,6 +23,7 @@ import { usePermissionStore } from './permissionStore'
 import { useAgentMemoryStore } from './agentMemoryStore'
 import { useTokenBudgetStore } from './tokenBudgetStore'
 import { useFaultMemoryStore } from './faultMemoryStore'
+import { useSandboxStore } from './sandboxStore'
 import { detectCorrection } from '../../shared/fault-detector'
 import {
   loadStoredTabOrder,
@@ -273,6 +274,7 @@ function makeLocalTab(): TabState {
     runtime: 'native',
     wslDistro: null,
     lastActivityAt: 0,
+    sandboxState: { enabled: false, activeWorktree: null, pendingDiff: null, mergeStatus: 'idle' as const },
   }
 }
 
@@ -1230,6 +1232,13 @@ export const useSessionStore = create<State>((set, get) => ({
             ]
           }
           break
+
+        // Sandbox events — dispatched to sandboxStore after set() completes
+        case 'sandbox_worktree_created':
+        case 'sandbox_diff_ready':
+        case 'sandbox_merge_done':
+        case 'sandbox_dirty_warning':
+          break
       }
 
       // Update lastActivityAt for events that indicate real session activity
@@ -1249,6 +1258,22 @@ export const useSessionStore = create<State>((set, get) => ({
       nextTabs[tabIndex] = updated
       return { tabs: nextTabs }
     })
+
+    // ── Sandbox event dispatch (outside set() — these mutate sandboxStore, not sessionStore) ──
+    switch (event.type) {
+      case 'sandbox_worktree_created':
+        useSandboxStore.getState().setWorktree(tabId, event.worktreeInfo)
+        break
+      case 'sandbox_diff_ready':
+        useSandboxStore.getState().setDiff(tabId, event.diff)
+        break
+      case 'sandbox_merge_done':
+        useSandboxStore.getState().setMergeStatus(tabId, event.result.ok ? 'merged' : 'conflict')
+        break
+      case 'sandbox_dirty_warning':
+        useSandboxStore.getState().setPendingDirtyWarning({ tabId, runId: event.runId, dirty: event.dirty })
+        break
+    }
 
     if (event.type !== 'session_dead') return
 

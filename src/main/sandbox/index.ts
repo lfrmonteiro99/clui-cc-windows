@@ -1,0 +1,6 @@
+export { gitExec, GitExecError, isGitRepo, guardRepoState } from './git-exec'
+export { WorktreeManager } from './worktree-manager'
+export { GitDiffEngine } from './git-diff-engine'
+export { DirtyDetector } from './dirty-detector'
+export { StashManager } from './stash-manager'
+export { FileLister } from './file-lister'

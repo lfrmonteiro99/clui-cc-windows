@@ -6,6 +6,10 @@ import { AgentMemory } from '../agent-memory'
 import type { RetrievalService } from '../context/retrieval-service'
 import { BudgetEnforcer } from '../budget-enforcer'
 import type { HookToolRequest, PermissionOption } from '../hooks/permission-server'
+import { WorktreeManager } from '../sandbox/worktree-manager'
+import { GitDiffEngine } from '../sandbox/git-diff-engine'
+import { DirtyDetector } from '../sandbox/dirty-detector'
+import type { WorktreeInfo } from '../../shared/sandbox-types'
 import { log as _log } from '../logger'
 import type {
   TabStatus,
@@ -86,6 +90,12 @@ export class ControlPlane extends EventEmitter {
   private retrievalService: RetrievalService | null = null
   /** Optional budget enforcer for per-tab spending limits. */
   budgetEnforcer: BudgetEnforcer | null = null
+  /** Sandbox worktree manager for isolated runs. */
+  private worktreeManager = new WorktreeManager()
+  /** Sandbox diff engine for post-run diff generation. */
+  private gitDiffEngine = new GitDiffEngine()
+  /** Sandbox dirty detector for pre-run working directory checks. */
+  private dirtyDetector = new DirtyDetector()
   /** Stored listener references for clean individual removal on shutdown */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private _wiredListeners: Array<{ emitter: EventEmitter; event: string; listener: (...args: any[]) => void }> = []
@@ -232,6 +242,18 @@ export class ControlPlane extends EventEmitter {
 
       if (code === 0) {
         this._setTabStatus(tabId, 'completed')
+
+        // Generate sandbox diff if this was a sandboxed run (fire-and-forget)
+        const sandboxWt = this.worktreeManager.getWorktree(requestId)
+        if (sandboxWt) {
+          this.gitDiffEngine.getDiff(sandboxWt.path, sandboxWt.baseBranch)
+            .then((diff) => {
+              this.emit('event', tabId, { type: 'sandbox_diff_ready', runId: requestId, diff })
+            })
+            .catch((err) => {
+              log(`Post-run diff generation failed: ${(err as Error).message}`)
+            })
+        }
       } else if (signal === 'SIGINT' || signal === 'SIGKILL') {
         // Cancelled by user
         this._setTabStatus(tabId, 'failed')
@@ -395,6 +417,18 @@ export class ControlPlane extends EventEmitter {
 
       if (code === 0) {
         this._setTabStatus(tabId, 'completed')
+
+        // Generate sandbox diff if this was a sandboxed run (fire-and-forget)
+        const sandboxWt = this.worktreeManager.getWorktree(requestId)
+        if (sandboxWt) {
+          this.gitDiffEngine.getDiff(sandboxWt.path, sandboxWt.baseBranch)
+            .then((diff) => {
+              this.emit('event', tabId, { type: 'sandbox_diff_ready', runId: requestId, diff })
+            })
+            .catch((err) => {
+              log(`Post-run diff generation failed: ${(err as Error).message}`)
+            })
+        }
       } else if (signal) {
         this._setTabStatus(tabId, 'failed')
       } else {
@@ -537,6 +571,11 @@ export class ControlPlane extends EventEmitter {
     // Cancel active run if any
     if (tab.activeRequestId) {
       this.cancel(tab.activeRequestId)
+
+      // Clean up sandbox worktree for the active run (fire-and-forget)
+      this.worktreeManager.removeWorktree(tab.activeRequestId).catch((err) => {
+        log(`Sandbox cleanup failed for active run ${tab.activeRequestId}: ${(err as Error).message}`)
+      })
 
       // Resolve and clean up the inflight promise so it doesn't leak.
       // The exit handler may never fire for this tab since we're deleting it.
@@ -741,6 +780,36 @@ export class ControlPlane extends EventEmitter {
       const cliBudget = this.budgetEnforcer.getCliBudgetForTab(tabId)
       if (cliBudget !== null) {
         options = { ...options, maxBudgetUsd: cliBudget }
+      }
+    }
+
+    // ─── Sandbox Mode ───
+    let sandboxWorktree: WorktreeInfo | null = null
+    if (options.sandbox?.enableWorktree) {
+      // Pre-run dirty check
+      if (options.sandbox.enableDirtyCheck && !options.sandbox.skipDirtyCheck) {
+        try {
+          const dirty = await this.dirtyDetector.check(options.projectPath)
+          if (dirty.isDirty) {
+            this.emit('event', tabId, { type: 'sandbox_dirty_warning', runId: requestId, dirty })
+            if (options.sandbox.autoStash) {
+              await this.dirtyDetector.autoStash(options.projectPath, `CLUI auto-stash ${requestId}`)
+            }
+          }
+        } catch (err) {
+          log(`Sandbox dirty check failed: ${(err as Error).message}`)
+        }
+      }
+
+      // Create isolated worktree
+      try {
+        sandboxWorktree = await this.worktreeManager.createWorktree(options.projectPath, requestId)
+        options = { ...options, projectPath: sandboxWorktree.path }
+        this.emit('event', tabId, { type: 'sandbox_worktree_created', worktreeInfo: sandboxWorktree })
+        log(`Sandbox worktree ready: ${sandboxWorktree.path}`)
+      } catch (err) {
+        log(`Sandbox worktree creation failed, running in normal mode: ${(err as Error).message}`)
+        // Fall through to normal run — don't block on sandbox failure
       }
     }
 
@@ -983,6 +1052,10 @@ export class ControlPlane extends EventEmitter {
     for (const [tabId] of this.tabs) {
       this.closeTab(tabId)
     }
+    // Clean up any remaining sandbox worktrees (safety net for orphaned worktrees)
+    this.worktreeManager.cleanupAll().catch((err) => {
+      log(`Sandbox cleanup on shutdown failed: ${(err as Error).message}`)
+    })
   }
 
   /**

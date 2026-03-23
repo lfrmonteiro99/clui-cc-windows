@@ -238,6 +238,8 @@ export interface TabState {
   wslDistro: string | null
   /** Timestamp of last meaningful activity (message, event) — used for freshness indicator */
   lastActivityAt: number
+  /** Sandbox mode state for this tab */
+  sandboxState: import('./sandbox-types').SandboxTabState
 }
 
 export interface Message {
@@ -309,6 +311,10 @@ export type NormalizedEvent =
   | { type: 'rate_limit'; status: string; resetsAt: number; rateLimitType: string }
   | { type: 'usage'; usage: UsageData }
   | { type: 'permission_request'; questionId: string; toolName: string; toolDescription?: string; toolInput?: Record<string, unknown>; options: Array<{ id: string; label: string; kind?: string }> }
+  | { type: 'sandbox_worktree_created'; worktreeInfo: import('./sandbox-types').WorktreeInfo }
+  | { type: 'sandbox_diff_ready'; runId: string; diff: import('./sandbox-types').DiffSummary }
+  | { type: 'sandbox_merge_done'; runId: string; result: import('./sandbox-types').MergeResult }
+  | { type: 'sandbox_dirty_warning'; runId: string; dirty: import('./sandbox-types').DirtyState }
 
 // ─── Run Options ───
 
@@ -329,6 +335,8 @@ export interface RunOptions {
   runtime?: 'native' | 'wsl'
   /** WSL distribution name (required when runtime is 'wsl') */
   wslDistro?: string
+  /** Sandbox mode options */
+  sandbox?: import('./sandbox-types').SandboxOptions
 }
 
 // ─── Control Plane Types ───
@@ -585,6 +593,17 @@ export const IPC = {
   // Git context
   GIT_STATUS: 'clui:git-status',
   GIT_DIFF: 'clui:git-diff',
+
+  // Sandbox
+  SANDBOX_CHECK_DIRTY: 'clui:sandbox-check-dirty',
+  SANDBOX_GET_DIFF: 'clui:sandbox-get-diff',
+  SANDBOX_MERGE: 'clui:sandbox-merge',
+  SANDBOX_REVERT: 'clui:sandbox-revert',
+  SANDBOX_AUTO_STASH: 'clui:sandbox-auto-stash',
+  SANDBOX_LIST_FILES: 'clui:sandbox-list-files',
+  SANDBOX_LIST_STASHES: 'clui:sandbox-list-stashes',
+  SANDBOX_GET_STASH_DIFF: 'clui:sandbox-get-stash-diff',
+  SANDBOX_WORKTREE_STATUS: 'clui:sandbox-worktree-status',
 
   // Notifications
   NOTIFY_DESKTOP: 'clui:notify-desktop',

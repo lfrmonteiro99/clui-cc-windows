@@ -28,6 +28,7 @@ import type {
   ContextFileTouched,
   MemorySearchResult,
 } from '../shared/context-types'
+import type { DirtyState, DiffSummary, MergeResult, DirectoryListing, StashEntry } from '../shared/sandbox-types'
 
 export interface CluiAPI {
   // ─── Request-response (renderer → main) ───
@@ -138,6 +139,17 @@ export interface CluiAPI {
   contextGetMemoryPacketPreview(projectPath: string, tabId: string, prompt: string): Promise<string | null>
   onContextMemoryCreated(callback: (memory: ContextMemory) => void): () => void
   onContextSessionRecorded(callback: (session: ContextSessionSummary) => void): () => void
+
+  // Sandbox
+  sandboxCheckDirty(cwd: string): Promise<DirtyState>
+  sandboxGetDiff(worktreePath: string, baseBranch: string): Promise<DiffSummary>
+  sandboxMerge(repoRoot: string, worktreeBranch: string, targetBranch: string): Promise<MergeResult>
+  sandboxRevert(worktreePath: string, baseBranch: string): Promise<{ ok: boolean }>
+  sandboxAutoStash(cwd: string, message: string): Promise<{ ok: boolean; stashRef: string }>
+  sandboxListFiles(cwd: string, relativePath?: string): Promise<DirectoryListing>
+  sandboxListStashes(cwd: string): Promise<StashEntry[]>
+  sandboxGetStashDiff(cwd: string, index: number, file?: string): Promise<string>
+  sandboxWorktreeStatus(runId: string): Promise<{ exists: boolean; path?: string; branch?: string }>
 }
 
 const api: CluiAPI = {
@@ -329,6 +341,17 @@ const api: CluiAPI = {
     ipcRenderer.on(IPC.CONTEXT_SESSION_RECORDED, handler)
     return () => ipcRenderer.removeListener(IPC.CONTEXT_SESSION_RECORDED, handler)
   },
+
+  // Sandbox
+  sandboxCheckDirty: (cwd) => ipcRenderer.invoke(IPC.SANDBOX_CHECK_DIRTY, cwd),
+  sandboxGetDiff: (wt, base) => ipcRenderer.invoke(IPC.SANDBOX_GET_DIFF, wt, base),
+  sandboxMerge: (root, branch, target) => ipcRenderer.invoke(IPC.SANDBOX_MERGE, root, branch, target),
+  sandboxRevert: (wt, base) => ipcRenderer.invoke(IPC.SANDBOX_REVERT, wt, base),
+  sandboxAutoStash: (cwd, msg) => ipcRenderer.invoke(IPC.SANDBOX_AUTO_STASH, cwd, msg),
+  sandboxListFiles: (cwd, rel) => ipcRenderer.invoke(IPC.SANDBOX_LIST_FILES, cwd, rel),
+  sandboxListStashes: (cwd) => ipcRenderer.invoke(IPC.SANDBOX_LIST_STASHES, cwd),
+  sandboxGetStashDiff: (cwd, idx, f) => ipcRenderer.invoke(IPC.SANDBOX_GET_STASH_DIFF, cwd, idx, f),
+  sandboxWorktreeStatus: (runId) => ipcRenderer.invoke(IPC.SANDBOX_WORKTREE_STATUS, runId),
 }
 
 contextBridge.exposeInMainWorld('clui', api)
