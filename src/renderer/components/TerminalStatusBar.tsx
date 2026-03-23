@@ -1,5 +1,5 @@
 import React from 'react'
-import { ChatCircle, TerminalWindow, Broom, CheckCircle, XCircle } from '@phosphor-icons/react'
+import { ChatCircle, TerminalWindow, Broom, CheckCircle, XCircle, Gear } from '@phosphor-icons/react'
 import { useTerminalStore } from '../stores/terminalStore'
 import { useColors } from '../theme'
 import type { TerminalTab } from '../../shared/types'
@@ -11,6 +11,7 @@ interface Props {
 export function TerminalStatusBar({ activeTab }: Props) {
   const toggleMode = useTerminalStore((s) => s.toggleMode)
   const fontSize = useTerminalStore((s) => s.fontSize)
+  const setSettingsOpen = useTerminalStore((s) => s.setSettingsOpen)
   const colors = useColors()
 
   const handleClear = () => {
@@ -18,6 +19,11 @@ export function TerminalStatusBar({ activeTab }: Props) {
   }
 
   const zoomPct = Math.round((fontSize / 13) * 100)
+
+  // TERM-003: Show full title (up to 30 chars) in status bar
+  const fullTitle = activeTab?.title
+    ? activeTab.title.length > 30 ? activeTab.title.slice(0, 30) + '…' : activeTab.title
+    : null
 
   return (
     <div
@@ -56,10 +62,10 @@ export function TerminalStatusBar({ activeTab }: Props) {
 
       {activeTab && (
         <>
-          {/* Shell info */}
+          {/* Shell info with full title */}
           <div className="flex items-center gap-1" style={{ color: colors.textTertiary, fontSize: 11 }}>
             <TerminalWindow size={11} />
-            <span>{activeTab.title}</span>
+            <span>{fullTitle || activeTab.title}</span>
           </div>
 
           {/* CWD */}
@@ -111,6 +117,25 @@ export function TerminalStatusBar({ activeTab }: Props) {
             onMouseLeave={(e) => (e.currentTarget.style.color = colors.textMuted)}
           >
             <Broom size={14} />
+          </button>
+
+          {/* TERM-012: Settings gear button */}
+          <button
+            onClick={() => setSettingsOpen(true)}
+            className="flex items-center justify-center border-0 cursor-pointer rounded"
+            style={{
+              width: 24,
+              height: 24,
+              background: 'transparent',
+              color: colors.textMuted,
+              transition: 'color 0.1s',
+            }}
+            title="Terminal Settings"
+            aria-label="Terminal Settings"
+            onMouseEnter={(e) => (e.currentTarget.style.color = colors.textPrimary)}
+            onMouseLeave={(e) => (e.currentTarget.style.color = colors.textMuted)}
+          >
+            <Gear size={14} />
           </button>
 
           {/* Exit status */}

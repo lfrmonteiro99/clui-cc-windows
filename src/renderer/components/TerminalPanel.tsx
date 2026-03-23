@@ -2,6 +2,9 @@ import React, { useEffect, useRef, useState } from 'react'
 import { TerminalTabStrip } from './TerminalTabStrip'
 import { TerminalView } from './TerminalView'
 import { TerminalStatusBar } from './TerminalStatusBar'
+import { TerminalSettings } from './TerminalSettings'
+import { TabOverview } from './TabOverview'
+import { SplitPane } from './SplitPane'
 import { useTerminalStore } from '../stores/terminalStore'
 import { useSessionStore } from '../stores/sessionStore'
 import { useColors } from '../theme'
@@ -12,6 +15,7 @@ export function TerminalPanel() {
   const createTermTab = useTerminalStore((s) => s.createTermTab)
   const handleTerminalExit = useTerminalStore((s) => s.handleTerminalExit)
   const ptyAvailable = useTerminalStore((s) => s.ptyAvailable)
+  const paneLayouts = useTerminalStore((s) => s.paneLayouts)
   const colors = useColors()
   const [error, setError] = useState<string | null>(null)
 
@@ -75,6 +79,21 @@ export function TerminalPanel() {
         case 'zoom-reset':
           store.setFontSize(13)
           break
+        // TERM-002: Split panes
+        case 'split-horizontal':
+          if (store.activeTermTabId) {
+            store.splitPane(store.activeTermTabId, 'horizontal').catch(() => {})
+          }
+          break
+        case 'split-vertical':
+          if (store.activeTermTabId) {
+            store.splitPane(store.activeTermTabId, 'vertical').catch(() => {})
+          }
+          break
+        // TERM-006: Tab overview
+        case 'tab-overview':
+          store.setTabOverviewOpen(!store.overviewOpen)
+          break
       }
     }
     window.addEventListener('clui-terminal-shortcut', handler)
@@ -82,8 +101,6 @@ export function TerminalPanel() {
   }, [])
 
   // Track which terminal tabs have been activated at least once.
-  // Once mounted, keep mounted (xterm.js state is expensive to recreate).
-  // Tabs that were never activated are not mounted at all, saving memory.
   const mountedTermTabs = useRef(new Set<string>())
   if (activeTermTabId) {
     mountedTermTabs.current.add(activeTermTabId)
@@ -139,7 +156,7 @@ export function TerminalPanel() {
     <div
       data-clui-ui
       className="flex flex-col"
-      style={{ height: '100%', minHeight: 0 }}
+      style={{ height: '100%', minHeight: 0, position: 'relative' }}
     >
       <TerminalTabStrip />
 
@@ -150,17 +167,38 @@ export function TerminalPanel() {
         </div>
       )}
 
-      {/* Terminal views — only mount tabs that have been activated (saves xterm.js memory) */}
+      {/* Terminal views */}
       <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
         {termTabs
           .filter((tab) => tab.id === activeTermTabId || mountedTermTabs.current.has(tab.id))
-          .map((tab) => (
-            <TerminalView
-              key={tab.id}
-              termTabId={tab.id}
-              isActive={tab.id === activeTermTabId}
-            />
-          ))}
+          .map((tab) => {
+            const layout = paneLayouts[tab.id]
+            const isVisible = tab.id === activeTermTabId
+
+            if (layout) {
+              // TERM-002: Split pane layout
+              return (
+                <div
+                  key={tab.id}
+                  style={{
+                    display: isVisible ? 'flex' : 'none',
+                    flex: 1,
+                    height: '100%',
+                  }}
+                >
+                  <SplitPane layout={layout} activeTermTabId={activeTermTabId} />
+                </div>
+              )
+            }
+
+            return (
+              <TerminalView
+                key={tab.id}
+                termTabId={tab.id}
+                isActive={isVisible}
+              />
+            )
+          })}
 
         {termTabs.length === 0 && !error && (
           <div
@@ -170,9 +208,15 @@ export function TerminalPanel() {
             No terminal tabs open
           </div>
         )}
+
+        {/* TERM-006: Tab overview overlay */}
+        <TabOverview />
       </div>
 
       <TerminalStatusBar activeTab={activeTab ?? null} />
+
+      {/* TERM-012: Settings panel */}
+      <TerminalSettings />
     </div>
   )
 }

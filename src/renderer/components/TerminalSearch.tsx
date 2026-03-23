@@ -1,20 +1,27 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react'
 import { motion } from 'framer-motion'
-import { MagnifyingGlass, CaretUp, CaretDown, X } from '@phosphor-icons/react'
+import { MagnifyingGlass, CaretUp, CaretDown, X, TextAa, BracketsCurly } from '@phosphor-icons/react'
 import { useColors } from '../theme'
 
-interface Props {
-  onSearch: (term: string) => { resultIndex: number; resultCount: number }
-  onNext: () => { resultIndex: number; resultCount: number }
-  onPrev: () => { resultIndex: number; resultCount: number }
-  onClose: () => void
+interface SearchOptions {
+  caseSensitive: boolean
+  regex: boolean
 }
 
-export function TerminalSearch({ onSearch, onNext, onPrev, onClose }: Props) {
+interface Props {
+  onSearch: (term: string, options: SearchOptions) => { resultIndex: number; resultCount: number }
+  onNext: (term: string, options: SearchOptions) => { resultIndex: number; resultCount: number }
+  onPrev: (term: string, options: SearchOptions) => { resultIndex: number; resultCount: number }
+  onClose: () => void
+  resultIndex: number
+  resultCount: number
+}
+
+export function TerminalSearch({ onSearch, onNext, onPrev, onClose, resultIndex, resultCount }: Props) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [query, setQuery] = useState('')
-  const [resultIndex, setResultIndex] = useState(-1)
-  const [resultCount, setResultCount] = useState(0)
+  const [caseSensitive, setCaseSensitive] = useState(false)
+  const [regex, setRegex] = useState(false)
   const debounceRef = useRef<ReturnType<typeof setTimeout>>()
   const colors = useColors()
 
@@ -24,21 +31,34 @@ export function TerminalSearch({ onSearch, onNext, onPrev, onClose }: Props) {
     return () => clearTimeout(debounceRef.current)
   }, [])
 
-  const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value
-    setQuery(val)
+  const options: SearchOptions = { caseSensitive, regex }
+
+  const triggerSearch = useCallback((val: string, opts: SearchOptions) => {
     clearTimeout(debounceRef.current)
     debounceRef.current = setTimeout(() => {
       if (val.trim()) {
-        const result = onSearch(val)
-        setResultIndex(result.resultIndex)
-        setResultCount(result.resultCount)
+        onSearch(val, opts)
       } else {
-        setResultIndex(-1)
-        setResultCount(0)
+        onSearch('', opts)
       }
     }, 150)
   }, [onSearch])
+
+  const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value
+    setQuery(val)
+    triggerSearch(val, options)
+  }, [triggerSearch, options])
+
+  // Re-trigger search when toggles change
+  useEffect(() => {
+    if (query.trim()) {
+      clearTimeout(debounceRef.current)
+      debounceRef.current = setTimeout(() => {
+        onSearch(query, { caseSensitive, regex })
+      }, 150)
+    }
+  }, [caseSensitive, regex])
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Escape') {
@@ -46,27 +66,29 @@ export function TerminalSearch({ onSearch, onNext, onPrev, onClose }: Props) {
       onClose()
     } else if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
-      const result = onNext()
-      setResultIndex(result.resultIndex)
-      setResultCount(result.resultCount)
+      if (query.trim()) onNext(query, options)
     } else if (e.key === 'Enter' && e.shiftKey) {
       e.preventDefault()
-      const result = onPrev()
-      setResultIndex(result.resultIndex)
-      setResultCount(result.resultCount)
+      if (query.trim()) onPrev(query, options)
     }
-  }, [onNext, onPrev, onClose])
+    // Alt+C: toggle case sensitive
+    if (e.altKey && e.key === 'c') {
+      e.preventDefault()
+      setCaseSensitive((prev) => !prev)
+    }
+    // Alt+E: toggle regex
+    if (e.altKey && e.key === 'e') {
+      e.preventDefault()
+      setRegex((prev) => !prev)
+    }
+  }, [onNext, onPrev, onClose, query, options])
 
   const handleNext = () => {
-    const result = onNext()
-    setResultIndex(result.resultIndex)
-    setResultCount(result.resultCount)
+    if (query.trim()) onNext(query, options)
   }
 
   const handlePrev = () => {
-    const result = onPrev()
-    setResultIndex(result.resultIndex)
-    setResultCount(result.resultCount)
+    if (query.trim()) onPrev(query, options)
   }
 
   const noMatch = query.trim().length > 0 && resultCount === 0
@@ -83,7 +105,7 @@ export function TerminalSearch({ onSearch, onNext, onPrev, onClose }: Props) {
         top: 8,
         right: 8,
         zIndex: 10,
-        width: 280,
+        width: 320,
         height: 36,
         display: 'flex',
         alignItems: 'center',
@@ -91,7 +113,7 @@ export function TerminalSearch({ onSearch, onNext, onPrev, onClose }: Props) {
         padding: '0 8px',
         background: colors.popoverBg,
         backdropFilter: 'blur(12px)',
-        border: `1px solid ${colors.popoverBorder}`,
+        border: `1px solid ${noMatch ? colors.statusError : colors.popoverBorder}`,
         borderRadius: 8,
         boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
       }}
@@ -116,6 +138,42 @@ export function TerminalSearch({ onSearch, onNext, onPrev, onClose }: Props) {
           minWidth: 0,
         }}
       />
+
+      {/* Case sensitive toggle */}
+      <button
+        onClick={() => setCaseSensitive((prev) => !prev)}
+        style={{
+          background: caseSensitive ? colors.accentSoft : 'transparent',
+          border: 'none',
+          cursor: 'pointer',
+          color: caseSensitive ? colors.accent : colors.textMuted,
+          padding: 2,
+          display: 'flex',
+          borderRadius: 3,
+        }}
+        title="Case Sensitive (Alt+C)"
+        aria-label="Toggle case sensitive"
+      >
+        <TextAa size={14} />
+      </button>
+
+      {/* Regex toggle */}
+      <button
+        onClick={() => setRegex((prev) => !prev)}
+        style={{
+          background: regex ? colors.accentSoft : 'transparent',
+          border: 'none',
+          cursor: 'pointer',
+          color: regex ? colors.accent : colors.textMuted,
+          padding: 2,
+          display: 'flex',
+          borderRadius: 3,
+        }}
+        title="Regex (Alt+E)"
+        aria-label="Toggle regex"
+      >
+        <BracketsCurly size={14} />
+      </button>
 
       {/* Match counter */}
       {query.trim().length > 0 && (
