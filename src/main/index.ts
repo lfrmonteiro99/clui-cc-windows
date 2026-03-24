@@ -30,7 +30,8 @@ import { DatabaseService } from './context/database-service'
 import { IngestionService } from './context/ingestion-service'
 import { RetrievalService } from './context/retrieval-service'
 import { IPC } from '../shared/types'
-import type { RunOptions, NormalizedEvent, EnrichedError, ExportOptions, SessionExportData, CostRecord } from '../shared/types'
+import type { RunOptions, NormalizedEvent, EnrichedError, ExportOptions, SessionExportData, CostRecord, ShellExecRequest } from '../shared/types'
+import { executeShell } from './shell-executor'
 import { IpcEventBatcher } from './ipc-batcher'
 import { cleanOrphanedPromptFiles } from './claude/prompt-file'
 
@@ -1069,6 +1070,13 @@ ipcMain.handle(IPC.GIT_STATUS, (_event, cwd: string) => {
 ipcMain.handle(IPC.GIT_DIFF, (_event, cwd: string, file?: string) => {
   log(`IPC GIT_DIFF: ${cwd}${file ? ` file=${file}` : ''}`)
   return gitContext.getDiff(cwd, file)
+})
+
+// ─── Inline Shell IPC ───
+
+ipcMain.handle(IPC.SHELL_EXEC, async (_event, request: ShellExecRequest) => {
+  log(`IPC SHELL_EXEC: tab=${request.tabId} cmd=${request.command.substring(0, 100)} cwd=${request.cwd}`)
+  return executeShell(request)
 })
 
 // ─── Sandbox Mode IPC ───
