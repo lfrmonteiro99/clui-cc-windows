@@ -337,6 +337,10 @@ export interface TokenUsageSnapshot {
   lastUpdated: number
 }
 
+// ─── Effort Levels ───
+
+export type EffortLevel = 'low' | 'medium' | 'high' | 'max'
+
 // ─── Run Options ───
 
 export interface RunOptions {
@@ -358,6 +362,8 @@ export interface RunOptions {
   wslDistro?: string
   /** Sandbox mode options */
   sandbox?: import('./sandbox-types').SandboxOptions
+  /** CLI effort level (controls reasoning depth) */
+  effort?: EffortLevel
   /** Fork an existing session into a new independent branch */
   forkSession?: boolean
   /** Session ID to fork from (used with forkSession) */

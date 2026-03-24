@@ -914,12 +914,15 @@ export const useSessionStore = create<State>((set, get) => ({
       prompt,
       preferredModel,
     )
+    // Resolve effort level for this tab
+    const effortResult = useModelRouterStore.getState().getEffortForTab(activeTabId)
     const runOptions: RunOptions = {
       prompt: fullPrompt,
       projectPath: resolvedPath,
       sessionId: tab.claudeSessionId || undefined,
       model: resolvedModel || undefined,
       addDirs: tab.additionalDirs.length > 0 ? tab.additionalDirs : undefined,
+      effort: effortResult.level,
     }
 
     clearRetryTimer(activeTabId)
