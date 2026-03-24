@@ -7,6 +7,7 @@ import { useComparisonStore } from '../stores/comparisonStore'
 import { useExportStore } from '../stores/exportStore'
 import { useSnippetStore } from '../stores/snippetStore'
 import { useWorkflowStore } from '../stores/workflowStore'
+import { useModelRouterStore } from '../stores/modelRouterStore'
 import { AttachmentChips } from './AttachmentChips'
 import { PromptLintBar } from './PromptLintBar'
 import { SlashCommandMenu, getFilteredCommandsWithExtras, type SlashCommand } from './SlashCommandMenu'
@@ -328,10 +329,25 @@ export function InputBar() {
         useWorkflowStore.getState().openManager()
         break
       }
+      case '/effort': {
+        const { getEffortForTab } = useModelRouterStore.getState()
+        const current = getEffortForTab(activeTabId)
+        addSystemMessage(
+          `Effort: ${current.level} (${current.source})\n\n` +
+          'Set effort: /effort low|medium|high|max|auto\n' +
+          '  low — fast, minimal reasoning\n' +
+          '  medium — balanced\n' +
+          '  high — thorough (default)\n' +
+          '  max — exhaustive reasoning\n' +
+          '  auto — derive from prompt complexity'
+        )
+        break
+      }
       case '/help': {
         const lines = [
           '/clear — Clear conversation history',
           '/compare — Compare two models side-by-side',
+          '/effort — Set effort level (low/medium/high/max/auto)',
           '/export — Export this session to Markdown or JSON',
           '/cost — Show token usage and cost',
           '/model — Show model info & switch models',
@@ -500,6 +516,25 @@ export function InputBar() {
       }
       return
     }
+    const effortMatch = prompt.match(/^\/effort\s+(\S+)/i)
+    if (effortMatch) {
+      const arg = effortMatch[1].toLowerCase()
+      const validLevels = ['low', 'medium', 'high', 'max'] as const
+      if (arg === 'auto') {
+        useModelRouterStore.getState().setEffort(activeTabId, null)
+        clearComposer()
+        addSystemMessage('Effort reset to auto (derived from prompt complexity).')
+      } else if (validLevels.includes(arg as typeof validLevels[number])) {
+        useModelRouterStore.getState().setEffort(activeTabId, arg as typeof validLevels[number])
+        clearComposer()
+        addSystemMessage(`Effort set to ${arg}.`)
+      } else {
+        clearComposer()
+        addSystemMessage(`Unknown effort level "${effortMatch[1]}". Valid: low, medium, high, max, auto`)
+      }
+      return
+    }
+
     if (!prompt && attachments.length === 0) return
     if (isConnecting) return
     clearComposer()
@@ -818,6 +853,9 @@ export function InputBar() {
 
       {/* Prompt lint warnings */}
       {lintWarnings.length > 0 && <PromptLintBar warnings={lintWarnings} />}
+
+      {/* Effort level indicator */}
+      <EffortIndicator tabId={activeTabId} colors={colors} />
     </div>
   )
 }
@@ -890,6 +928,40 @@ function VoiceButtons({ voiceState, isConnecting, colors, onToggle, onCancel, on
         </motion.div>
       )}
     </AnimatePresence>
+  )
+}
+
+// ─── Effort Level Indicator ───
+
+const EFFORT_COLORS: Record<string, (c: ReturnType<typeof useColors>) => string> = {
+  low: (c) => c.textTertiary,
+  medium: (c) => c.accent,
+  high: (c) => c.statusComplete,
+  max: (c) => c.statusRunning,
+}
+
+function EffortIndicator({ tabId, colors }: { tabId: string; colors: ReturnType<typeof useColors> }) {
+  const effort = useModelRouterStore.getState().getEffortForTab(tabId)
+  // Subscribe to effortOverrides and routingHistory changes
+  const effortOverrides = useModelRouterStore((s) => s.effortOverrides)
+  const routingHistoryLen = useModelRouterStore((s) => s.routingHistory.length)
+
+  // Re-derive on changes (the selectors above trigger re-renders)
+  const current = useModelRouterStore.getState().getEffortForTab(tabId)
+  const colorFn = EFFORT_COLORS[current.level] || EFFORT_COLORS.high
+  const color = colorFn(colors)
+
+  // Only show when not default (high auto)
+  if (current.level === 'high' && current.source === 'auto') return null
+
+  return (
+    <div
+      className="px-1 pb-1 text-[10px] font-mono"
+      style={{ color, opacity: 0.8 }}
+      title={`Effort: ${current.level} (${current.source})`}
+    >
+      Effort: {current.level}{current.source === 'auto' ? ' (auto)' : ''}
+    </div>
   )
 }
 

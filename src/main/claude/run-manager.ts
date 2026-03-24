@@ -129,6 +129,10 @@ export class RunManager extends EventEmitter {
       }
     }
 
+    if (options.effort) {
+      args.push('--effort', options.effort)
+    }
+
     if (options.hookSettingsPath) {
       // CLUI-scoped hook settings: the PreToolUse HTTP hook handles permissions
       // for dangerous tools (Bash, Edit, Write, MultiEdit).

@@ -316,6 +316,10 @@ export type NormalizedEvent =
   | { type: 'sandbox_merge_done'; runId: string; result: import('./sandbox-types').MergeResult }
   | { type: 'sandbox_dirty_warning'; runId: string; dirty: import('./sandbox-types').DirtyState }
 
+// ─── Effort Levels ───
+
+export type EffortLevel = 'low' | 'medium' | 'high' | 'max'
+
 // ─── Run Options ───
 
 export interface RunOptions {
@@ -337,6 +341,8 @@ export interface RunOptions {
   wslDistro?: string
   /** Sandbox mode options */
   sandbox?: import('./sandbox-types').SandboxOptions
+  /** CLI effort level (controls reasoning depth) */
+  effort?: EffortLevel
 }
 
 // ─── Control Plane Types ───
