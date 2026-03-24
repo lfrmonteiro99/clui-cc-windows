@@ -117,7 +117,9 @@ export class RunManager extends EventEmitter {
       '--permission-mode', 'default',
     ]
 
-    if (options.sessionId) {
+    if (options.forkSession && options.forkFromSessionId) {
+      args.push('--resume', options.forkFromSessionId, '--fork-session')
+    } else if (options.sessionId) {
       args.push('--resume', options.sessionId)
     }
     if (options.model) {

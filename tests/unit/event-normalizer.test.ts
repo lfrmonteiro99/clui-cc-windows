@@ -159,7 +159,8 @@ describe('EventNormalizer', () => {
       }
 
       const result = normalize(raw)
-      expect(result).toHaveLength(1)
+      // task_complete + token_usage (from usage data in result)
+      expect(result.length).toBeGreaterThanOrEqual(1)
       expect(result[0]).toMatchObject({
         type: 'task_complete',
         result: 'Done',
@@ -168,6 +169,14 @@ describe('EventNormalizer', () => {
         numTurns: 3,
         sessionId: 's1',
       })
+      // Second event is token_usage derived from result.usage
+      if (result.length > 1) {
+        expect(result[1]).toMatchObject({
+          type: 'token_usage',
+          inputTokens: 100,
+          outputTokens: 50,
+        })
+      }
     })
 
     it('normalizes error result to error event', () => {

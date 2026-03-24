@@ -328,6 +328,28 @@ export function InputBar() {
         useWorkflowStore.getState().openManager()
         break
       }
+      case '/fork': {
+        if (!tab?.claudeSessionId) {
+          addSystemMessage('Cannot fork — no active session. Send a message first.')
+          break
+        }
+        if (isBusy) {
+          addSystemMessage('Cannot fork while session is running.')
+          break
+        }
+        const projectPath = tab.hasChosenDirectory
+          ? tab.workingDirectory
+          : (staticInfo?.homePath || tab.workingDirectory || '~')
+        addSystemMessage('Forking session...')
+        window.clui.forkSession(activeTabId, projectPath)
+          .then(({ newTabId }) => {
+            useSessionStore.getState().forkTabCreated(newTabId, activeTabId, tab.title, tab.workingDirectory, tab.claudeSessionId!)
+          })
+          .catch((err: Error) => {
+            addSystemMessage(`Fork failed: ${err.message}`)
+          })
+        break
+      }
       case '/help': {
         const lines = [
           '/clear — Clear conversation history',
@@ -338,13 +360,14 @@ export function InputBar() {
           '/mcp — Show MCP server status',
           '/skills — Show available skills',
           '/workflow — Open workflow manager',
+          '/fork — Fork this session into a new tab',
           '/help — Show this list',
         ]
         addSystemMessage(lines.join('\n'))
         break
       }
     }
-  }, [tab, clearTab, addSystemMessage, staticInfo, preferredModel, refreshAgentMemory, agentMemorySnapshot, activeTabId, buildCurrentExportData, openExportDialog])
+  }, [tab, isBusy, clearTab, addSystemMessage, staticInfo, preferredModel, refreshAgentMemory, agentMemorySnapshot, activeTabId, buildCurrentExportData, openExportDialog])
 
   const selectSlotInTextarea = useCallback((text: string, cursorPos: number, direction: 'next' | 'prev') => {
     const slot = direction === 'next'

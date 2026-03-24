@@ -1,6 +1,6 @@
 import React from 'react'
 import { AnimatePresence, Reorder } from 'framer-motion'
-import { Plus, X } from '@phosphor-icons/react'
+import { Plus, X, GitFork } from '@phosphor-icons/react'
 import { useSessionStore } from '../stores/sessionStore'
 import { useTabGroupStore } from '../stores/tabGroupStore'
 import { orderTabsByTabOrder } from '../stores/tabOrder'
@@ -174,6 +174,14 @@ function TabItem({
           (tab.lastResult?.usage.output_tokens ?? 0)
         }
       />
+      {tab.parentSessionId && (
+        <GitFork
+          size={11}
+          weight="bold"
+          style={{ color: colors.textTertiary, flexShrink: 0 }}
+          title="Forked session"
+        />
+      )}
       <span className="truncate flex-1">{tab.title}</span>
       {tab.runtime === 'wsl' && (
         <span
