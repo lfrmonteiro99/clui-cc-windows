@@ -25,6 +25,7 @@ import { useTokenBudgetStore } from './tokenBudgetStore'
 import { useFaultMemoryStore } from './faultMemoryStore'
 import { useSandboxStore } from './sandboxStore'
 import { detectCorrection } from '../../shared/fault-detector'
+import { analyzeForPruning } from '../../shared/context-pruner'
 import {
   loadStoredTabOrder,
   moveTabOrderItem,
@@ -123,6 +124,7 @@ export interface State {
   clearComposeDraft: (tabId: string) => void
   retryTab: (tabId: string) => void
   stopRetrying: (tabId: string) => void
+  forkTabCreated: (newTabId: string, sourceTabId: string, parentTitle: string, workingDirectory: string, parentSessionId: string) => void
   handleNormalizedEvent: (tabId: string, event: NormalizedEvent) => void
   handleStatusChange: (tabId: string, newStatus: string, oldStatus: string) => void
   handleError: (tabId: string, error: EnrichedError) => void
@@ -280,6 +282,8 @@ function makeLocalTab(): TabState {
     wslDistro: null,
     lastActivityAt: 0,
     sandboxState: { enabled: false, activeWorktree: null, pendingDiff: null, mergeStatus: 'idle' as const },
+    tokenUsage: null,
+    contextNotificationShown: false,
   }
 }
 
@@ -368,6 +372,26 @@ export const useSessionStore = create<State>((set, get) => ({
       void get().refreshAgentMemory(homeDir)
       return tab.id
     }
+  },
+
+  forkTabCreated: (newTabId, sourceTabId, parentTitle, workingDirectory, parentSessionId) => {
+    // Count existing forks of this parent to generate a unique fork number
+    const existingForks = get().tabs.filter((t) => t.parentSessionId === parentSessionId).length
+    const forkNumber = existingForks + 1
+    const tab: TabState = {
+      ...makeLocalTab(),
+      id: newTabId,
+      title: `${parentTitle} > Fork ${forkNumber}`,
+      workingDirectory,
+      hasChosenDirectory: true,
+      parentSessionId,
+    }
+    set((s) => ({
+      tabs: orderTabsByTabOrder([...s.tabs, tab], [...s.tabOrder, tab.id]),
+      tabOrder: reconcileTabOrder([...s.tabOrder, tab.id], [...s.tabs, tab]),
+      activeTabId: tab.id,
+    }))
+    saveStoredTabOrder(get().tabOrder)
   },
 
   reorderTabs: (newOrder) => {
@@ -543,7 +567,7 @@ export const useSessionStore = create<State>((set, get) => ({
     set((s) => ({
       tabs: s.tabs.map((t) =>
         t.id === activeTabId
-          ? { ...t, messages: [], lastResult: null, currentActivity: '', permissionQueue: [], permissionDenied: null, retryState: null, lastRunOptions: null, queuedPrompts: [], queuedRunOptions: [] }
+          ? { ...t, messages: [], lastResult: null, currentActivity: '', permissionQueue: [], permissionDenied: null, retryState: null, lastRunOptions: null, queuedPrompts: [], queuedRunOptions: [], tokenUsage: null, contextNotificationShown: false }
           : t
       ),
     }))
@@ -675,6 +699,8 @@ export const useSessionStore = create<State>((set, get) => ({
               hasChosenDirectory: true,
               claudeSessionId: null,
               additionalDirs: [],
+              tokenUsage: null,
+              contextNotificationShown: false,
             }
           : t
       ),
@@ -1160,12 +1186,7 @@ export const useSessionStore = create<State>((set, get) => ({
           } catch {
             // Cost recording failure is non-fatal
           }
-          // Record token usage for context bar visualization
-          try {
-            useTokenBudgetStore.getState().recordUsage(tabId, event.usage)
-          } catch {
-            // Token budget tracking failure is non-fatal
-          }
+          // Token budget tracking now happens via token_usage events (more granular than task_complete)
           // Record cost for budget tracking
           try {
             useBudgetStore.getState().recordTabCost(tabId, event.costUsd)
@@ -1256,6 +1277,34 @@ export const useSessionStore = create<State>((set, get) => ({
           }
           break
 
+        case 'token_usage': {
+          const prev = updated.tokenUsage
+          const newUsage = {
+            inputTokens: (prev?.inputTokens ?? 0) + event.inputTokens,
+            outputTokens: (prev?.outputTokens ?? 0) + event.outputTokens,
+            totalTokens: (prev?.totalTokens ?? 0) + event.totalTokens,
+            cacheReadTokens: (prev?.cacheReadTokens ?? 0) + (event.cacheReadTokens ?? 0),
+            cacheWriteTokens: (prev?.cacheWriteTokens ?? 0) + (event.cacheWriteTokens ?? 0),
+            lastUpdated: Date.now(),
+          }
+          updated.tokenUsage = newUsage
+          break
+        }
+
+        case 'context_management': {
+          // Show a system message indicating CLI auto-compaction
+          updated.messages = pruneMessages([
+            ...updated.messages,
+            {
+              id: nextMsgId(),
+              role: 'system',
+              content: 'Context auto-compacted by CLI',
+              timestamp: Date.now(),
+            },
+          ])
+          break
+        }
+
         // Sandbox events — dispatched to sandboxStore after set() completes
         case 'sandbox_worktree_created':
         case 'sandbox_diff_ready':
@@ -1282,6 +1331,20 @@ export const useSessionStore = create<State>((set, get) => ({
       return { tabs: nextTabs }
     })
 
+    // ── Token budget sync (outside set() — mutates tokenBudgetStore, not sessionStore) ──
+    if (event.type === 'token_usage') {
+      try {
+        useTokenBudgetStore.getState().recordUsage(tabId, {
+          input_tokens: event.inputTokens,
+          output_tokens: event.outputTokens,
+          cache_read_input_tokens: event.cacheReadTokens,
+          cache_creation_input_tokens: event.cacheWriteTokens,
+        })
+      } catch {
+        // Token budget tracking failure is non-fatal
+      }
+    }
+
     // ── Sandbox event dispatch (outside set() — these mutate sandboxStore, not sessionStore) ──
     switch (event.type) {
       case 'sandbox_worktree_created':
@@ -1296,6 +1359,43 @@ export const useSessionStore = create<State>((set, get) => ({
       case 'sandbox_dirty_warning':
         useSandboxStore.getState().setPendingDirtyWarning({ tabId, runId: event.runId, dirty: event.dirty })
         break
+    }
+
+    // ── Proactive context size notification ──
+    if (event.type === 'token_usage') {
+      const tab = get().tabs.find((t) => t.id === tabId)
+      if (tab && tab.tokenUsage && !tab.contextNotificationShown) {
+        const totalTokens = tab.tokenUsage.totalTokens
+        // Threshold: notify when context exceeds 100k tokens
+        // or when context-pruner estimates > 20% savings or > 8k collapsible tokens
+        let shouldNotify = totalTokens > 100_000
+        if (!shouldNotify && tab.messages.length > 10) {
+          try {
+            const pruneResult = analyzeForPruning(tab.messages)
+            const savingsRatio = totalTokens > 0 ? pruneResult.savedTokens / totalTokens : 0
+            shouldNotify = savingsRatio > 0.2 || pruneResult.savedTokens > 8_000
+          } catch {
+            // context-pruner analysis failure is non-fatal
+          }
+        }
+
+        if (shouldNotify) {
+          set((s) => ({
+            tabs: s.tabs.map((t) =>
+              t.id === tabId ? { ...t, contextNotificationShown: true } : t
+            ),
+          }))
+          const formatted = totalTokens >= 1_000
+            ? `~${Math.round(totalTokens / 1_000)}k`
+            : String(totalTokens)
+          useNotificationStore.getState().addToast({
+            type: 'warning',
+            title: 'Large context',
+            message: `Context is getting large (${formatted} tokens). Consider starting a new session.`,
+            duration: 8000,
+          })
+        }
+      }
     }
 
     if (event.type !== 'session_dead') return

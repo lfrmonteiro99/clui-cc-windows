@@ -18,6 +18,7 @@ export type ShortcutActionId =
   | 'file-tree-toggle'
   | 'stash-browser'
   | 'review-changes'
+  | 'fork-session'
 
 interface ShortcutDefinition {
   id: ShortcutActionId
@@ -50,6 +51,7 @@ const SHORTCUT_DEFINITIONS: ShortcutDefinition[] = [
   { id: 'file-tree-toggle', label: 'Toggle File Tree', category: 'actions', windows: 'Ctrl+Alt+F', mac: 'Cmd+Alt+F' },
   { id: 'stash-browser', label: 'Browse Git Stashes', category: 'actions', windows: 'Ctrl+Alt+H', mac: 'Cmd+Alt+H' },
   { id: 'review-changes', label: 'Review Sandbox Changes', category: 'actions', windows: 'Ctrl+Alt+R', mac: 'Cmd+Alt+R' },
+  { id: 'fork-session', label: 'Fork Session', category: 'actions', windows: 'Ctrl+Shift+F', mac: 'Cmd+Shift+F' },
 ]
 
 const SPECIAL_KEYS: Record<string, string> = {
