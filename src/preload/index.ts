@@ -20,6 +20,8 @@ import type {
   AutoAttachState,
   GitStatus,
   WslStatus,
+  ShellExecRequest,
+  ShellOutput,
 } from '../shared/types'
 import type {
   ContextMemory,
@@ -54,6 +56,7 @@ export interface CluiAPI {
   transcribeAudio(audioBase64: string): Promise<{ error: string | null; transcript: string | null }>
   getDiagnostics(): Promise<any>
   respondPermission(tabId: string, questionId: string, optionId: string): Promise<boolean>
+  forkSession(tabId: string, projectPath: string): Promise<{ newTabId: string }>
   initSession(tabId: string): void
   resetTabSession(tabId: string): void
   listSessions(projectPath?: string): Promise<SessionMeta[]>
@@ -82,6 +85,7 @@ export interface CluiAPI {
   getCostHistory(limit?: number): Promise<CostRecord[]>
   getGitStatus(cwd: string): Promise<GitStatus>
   getGitDiff(cwd: string, file?: string): Promise<string>
+  shellExec(request: ShellExecRequest): Promise<ShellOutput>
   sendDesktopNotification(title: string, body: string): Promise<void>
   logRendererError(payload: { error: string; stack?: string; componentStack?: string; activeTabId?: string }): void
   getTheme(): Promise<{ isDark: boolean }>
@@ -177,6 +181,7 @@ const api: CluiAPI = {
   getDiagnostics: () => ipcRenderer.invoke(IPC.GET_DIAGNOSTICS),
   respondPermission: (tabId, questionId, optionId) =>
     ipcRenderer.invoke(IPC.RESPOND_PERMISSION, { tabId, questionId, optionId }),
+  forkSession: (tabId, projectPath) => ipcRenderer.invoke(IPC.FORK_SESSION, { tabId, projectPath }),
   initSession: (tabId) => ipcRenderer.send(IPC.INIT_SESSION, tabId),
   resetTabSession: (tabId) => ipcRenderer.send(IPC.RESET_TAB_SESSION, tabId),
   listSessions: (projectPath?: string) => ipcRenderer.invoke(IPC.LIST_SESSIONS, projectPath),
@@ -209,6 +214,7 @@ const api: CluiAPI = {
   getCostHistory: (limit) => ipcRenderer.invoke(IPC.COST_HISTORY, limit),
   getGitStatus: (cwd) => ipcRenderer.invoke(IPC.GIT_STATUS, cwd),
   getGitDiff: (cwd, file) => ipcRenderer.invoke(IPC.GIT_DIFF, cwd, file),
+  shellExec: (request) => ipcRenderer.invoke(IPC.SHELL_EXEC, request),
   sendDesktopNotification: (title: string, body: string) => ipcRenderer.invoke(IPC.NOTIFY_DESKTOP, title, body),
   logRendererError: (payload) => ipcRenderer.send(IPC.LOG_RENDERER_ERROR, payload),
   getTheme: () => ipcRenderer.invoke(IPC.GET_THEME),

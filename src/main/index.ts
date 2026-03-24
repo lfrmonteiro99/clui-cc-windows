@@ -30,8 +30,10 @@ import { DatabaseService } from './context/database-service'
 import { IngestionService } from './context/ingestion-service'
 import { RetrievalService } from './context/retrieval-service'
 import { IPC } from '../shared/types'
-import type { RunOptions, NormalizedEvent, EnrichedError, ExportOptions, SessionExportData, CostRecord } from '../shared/types'
+import type { RunOptions, NormalizedEvent, EnrichedError, ExportOptions, SessionExportData, CostRecord, ShellExecRequest } from '../shared/types'
+import { executeShell } from './shell-executor'
 import { IpcEventBatcher } from './ipc-batcher'
+import { cleanOrphanedPromptFiles } from './claude/prompt-file'
 
 const DEBUG_MODE = process.env.CLUI_DEBUG === '1'
 const SPACES_DEBUG = DEBUG_MODE || process.env.CLUI_SPACES_DEBUG === '1'
@@ -373,6 +375,11 @@ ipcMain.handle(IPC.CREATE_TAB, () => {
   return { tabId }
 })
 
+ipcMain.handle(IPC.FORK_SESSION, async (_event, { tabId, projectPath }: { tabId: string; projectPath: string }) => {
+  log(`IPC FORK_SESSION: tab=${tabId} project=${projectPath}`)
+  return controlPlane.forkSession(tabId, projectPath)
+})
+
 ipcMain.on(IPC.INIT_SESSION, (_event, tabId: string) => {
   log(`IPC INIT_SESSION: ${tabId}`)
   controlPlane.initSession(tabId)
@@ -479,7 +486,7 @@ ipcMain.handle(IPC.LIST_SESSIONS, async (_e, projectPath?: string) => {
     }
     const files = readdirSync(sessionsDir).filter((f: string) => f.endsWith('.jsonl'))
 
-    const sessions: Array<{ sessionId: string; slug: string | null; firstMessage: string | null; lastTimestamp: string; size: number }> = []
+    const sessions: Array<{ sessionId: string; slug: string | null; firstMessage: string | null; lastTimestamp: string; size: number; pinned: boolean }> = []
 
     // UUID v4 regex — only consider files named as valid UUIDs
     const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -678,7 +685,7 @@ ipcMain.handle(IPC.SELECT_DIRECTORY, async () => {
   // Unparented avoids modal dimming on the transparent overlay.
   // Activation is fine here — user is actively interacting with CLUI.
   if (process.platform === 'darwin') app.focus()
-  const options = { properties: ['openDirectory'] as const }
+  const options = { properties: ['openDirectory'] as ('openDirectory')[] }
   const result = process.platform === 'darwin'
     ? await dialog.showOpenDialog(options)
     : await dialog.showOpenDialog(mainWindow, options)
@@ -701,7 +708,7 @@ ipcMain.handle(IPC.ATTACH_FILES, async () => {
   // macOS: activate app so unparented dialog appears on top
   if (process.platform === 'darwin') app.focus()
   const options = {
-    properties: ['openFile', 'multiSelections'],
+    properties: ['openFile', 'multiSelections'] as ('openFile' | 'multiSelections')[],
     filters: [
       { name: 'All Files', extensions: ['*'] },
       { name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'] },
@@ -766,7 +773,7 @@ ipcMain.handle(IPC.AUTO_ATTACH_ADD, async (_event, projectPath: string) => {
   if (process.platform === 'darwin') app.focus()
   const options = {
     defaultPath: projectPath === '~' ? homedir() : projectPath,
-    properties: ['openFile', 'multiSelections'] as const,
+    properties: ['openFile', 'multiSelections'] as ('openFile' | 'multiSelections')[],
   }
   const result = process.platform === 'darwin'
     ? await dialog.showOpenDialog(options)
@@ -1065,6 +1072,13 @@ ipcMain.handle(IPC.GIT_DIFF, (_event, cwd: string, file?: string) => {
   return gitContext.getDiff(cwd, file)
 })
 
+// ─── Inline Shell IPC ───
+
+ipcMain.handle(IPC.SHELL_EXEC, async (_event, request: ShellExecRequest) => {
+  log(`IPC SHELL_EXEC: tab=${request.tabId} cmd=${request.command.substring(0, 100)} cwd=${request.cwd}`)
+  return executeShell(request)
+})
+
 // ─── Sandbox Mode IPC ───
 
 ipcMain.handle(IPC.SANDBOX_CHECK_DIRTY, async (_e, cwd: string) => dirtyDetector.check(cwd))
@@ -1283,6 +1297,8 @@ process.on('uncaughtException', (error) => {
 // ─── App Lifecycle ───
 
 app.whenReady().then(() => {
+  // Clean up prompt temp files from previous runs (handles crashes that skip per-run cleanup)
+  cleanOrphanedPromptFiles()
   agentMemory = new AgentMemory(join(app.getPath('userData'), 'agent-memory.json'))
   controlPlane.setAgentMemory(agentMemory)
 

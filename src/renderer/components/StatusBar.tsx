@@ -1,12 +1,12 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Terminal, CaretDown, Check, FolderOpen, Plus, X, ShieldCheck, ArrowsClockwise } from '@phosphor-icons/react'
+import { Terminal, CaretDown, Check, FolderOpen, Plus, X, ShieldCheck, ArrowsClockwise, Lightning } from '@phosphor-icons/react'
 import { useSessionStore, AVAILABLE_MODELS } from '../stores/sessionStore'
 import { usePermissionStore } from '../stores/permissionStore'
 import { usePopoverLayer } from './PopoverLayer'
 import { useColors } from '../theme'
-import type { AutoAttachState } from '../../shared/types'
+import type { AutoAttachState, TokenUsageSnapshot } from '../../shared/types'
 
 /* ─── Model Picker (inline — tightly coupled to StatusBar) ─── */
 
@@ -247,6 +247,43 @@ function PermissionModePicker() {
         popoverLayer,
       )}
     </>
+  )
+}
+
+/* ─── Token Usage Indicator ─── */
+
+function formatTokenCount(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
+  if (n >= 1_000) return `~${Math.round(n / 1_000)}k`
+  return String(n)
+}
+
+function TokenIndicator() {
+  const tokenUsage = useSessionStore(
+    (s) => s.tabs.find((t) => t.id === s.activeTabId)?.tokenUsage ?? null,
+    (a: TokenUsageSnapshot | null, b: TokenUsageSnapshot | null) => {
+      if (a === b) return true
+      if (!a || !b) return false
+      return a.totalTokens === b.totalTokens
+    },
+  )
+  const colors = useColors()
+
+  if (!tokenUsage || tokenUsage.totalTokens === 0) return null
+
+  const isLarge = tokenUsage.totalTokens > 100_000
+
+  return (
+    <span
+      className="flex items-center gap-0.5 text-[10px] rounded-full px-1.5 py-0.5"
+      style={{
+        color: isLarge ? colors.warningText : colors.textTertiary,
+      }}
+      title={`Input: ${formatTokenCount(tokenUsage.inputTokens)} | Output: ${formatTokenCount(tokenUsage.outputTokens)} | Cache read: ${formatTokenCount(tokenUsage.cacheReadTokens)} | Cache write: ${formatTokenCount(tokenUsage.cacheWriteTokens)}`}
+    >
+      <Lightning size={10} weight={isLarge ? 'fill' : 'regular'} />
+      {formatTokenCount(tokenUsage.totalTokens)}
+    </span>
   )
 }
 
@@ -585,6 +622,8 @@ export function StatusBar() {
         <span style={{ color: colors.textMuted, fontSize: 10 }}>|</span>
 
         <PermissionModePicker />
+
+        <TokenIndicator />
 
         {tab.agentAssignment && (
           <>

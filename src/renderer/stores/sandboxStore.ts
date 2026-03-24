@@ -132,7 +132,7 @@ export const useSandboxStore = create<SandboxState>((set, get) => ({
   loadFileTree: async (cwd, relativePath) => {
     set({ fileTreeLoading: true, fileTreeCwd: cwd })
     try {
-      const api = window.clui as Record<string, unknown>
+      const api = window.clui as unknown as Record<string, unknown>
       if (typeof api.sandboxListFiles !== 'function') {
         throw new Error('sandboxListFiles not available')
       }
@@ -150,7 +150,7 @@ export const useSandboxStore = create<SandboxState>((set, get) => ({
   loadStashes: async (cwd) => {
     set({ stashLoading: true })
     try {
-      const api = window.clui as Record<string, unknown>
+      const api = window.clui as unknown as Record<string, unknown>
       if (typeof api.sandboxListStashes !== 'function') {
         throw new Error('sandboxListStashes not available')
       }
@@ -164,7 +164,7 @@ export const useSandboxStore = create<SandboxState>((set, get) => ({
   loadStashDiff: async (cwd, index) => {
     set({ selectedStashIndex: index, stashDiff: null })
     try {
-      const api = window.clui as Record<string, unknown>
+      const api = window.clui as unknown as Record<string, unknown>
       if (typeof api.sandboxGetStashDiff !== 'function') {
         throw new Error('sandboxGetStashDiff not available')
       }

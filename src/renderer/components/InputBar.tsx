@@ -1,6 +1,7 @@
 import React, { useState, useRef, useCallback, useEffect, useLayoutEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Microphone, ArrowUp, SpinnerGap, X, Check, Sparkle, Lightning } from '@phosphor-icons/react'
+import { Microphone, ArrowUp, SpinnerGap, X, Check, Sparkle, Lightning, Terminal } from '@phosphor-icons/react'
+import { ComposeEditor } from './ComposeEditor'
 import { useSessionStore, AVAILABLE_MODELS } from '../stores/sessionStore'
 import { useAgentMemoryStore } from '../stores/agentMemoryStore'
 import { useComparisonStore } from '../stores/comparisonStore'
@@ -71,6 +72,7 @@ export function InputBar() {
   const [slashFilter, setSlashFilter] = useState<string | null>(null)
   const [slashIndex, setSlashIndex] = useState(0)
   const [isMultiLine, setIsMultiLine] = useState(false)
+  const [isComposeOpen, setIsComposeOpen] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const wrapperRef = useRef<HTMLDivElement>(null)
   const measureRef = useRef<HTMLTextAreaElement | null>(null)
@@ -98,14 +100,18 @@ export function InputBar() {
   const preferredModel = useSessionStore((s) => s.preferredModel)
   const activeTabId = useSessionStore((s) => s.activeTabId)
   const tab = useSessionStore((s) => s.tabs.find((t) => t.id === s.activeTabId))
+  const composeDraft = useSessionStore((s) => s.composeDrafts[s.activeTabId] ?? '')
+  const setComposeDraft = useSessionStore((s) => s.setComposeDraft)
+  const clearComposeDraft = useSessionStore((s) => s.clearComposeDraft)
   const snippets = useSnippetStore((s) => s.snippets)
   const colors = useColors()
   const isBusy = tab?.status === 'running' || tab?.status === 'connecting'
   const isConnecting = tab?.status === 'connecting'
   const hasContent = input.trim().length > 0 || (tab?.attachments?.length ?? 0) > 0
   const canSend = !!tab && !isConnecting && hasContent
+  const isShellMode = input.startsWith('!')
   const attachments = tab?.attachments || []
-  const showSlashMenu = slashFilter !== null && !isConnecting
+  const showSlashMenu = slashFilter !== null && !isConnecting && !isShellMode
   const skillCommands: SlashCommand[] = (tab?.sessionSkills || []).map((skill) => ({
     command: `/${skill}`,
     description: `Run skill: ${skill}`,
@@ -138,6 +144,51 @@ export function InputBar() {
     window.addEventListener('clui-focus-input', onFocusInput as EventListener)
     return () => window.removeEventListener('clui-focus-input', onFocusInput as EventListener)
   }, [])
+
+  // Close compose editor on tab switch
+  useEffect(() => {
+    if (isComposeOpen) {
+      setIsComposeOpen(false)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTabId])
+
+  // Ctrl+G / Cmd+G — open compose editor
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      const isMod = e.ctrlKey || e.metaKey
+      if (isMod && e.key === 'g') {
+        e.preventDefault()
+        if (isComposeOpen) {
+          setIsComposeOpen(false)
+        } else if (tab?.status !== 'connecting') {
+          setIsComposeOpen(true)
+        }
+      }
+    }
+    window.addEventListener('keydown', handleGlobalKeyDown)
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown)
+  }, [isComposeOpen, tab?.status])
+
+  const handleComposeSubmit = useCallback((text: string) => {
+    setIsComposeOpen(false)
+    clearComposeDraft(activeTabId)
+    setInput('')
+    sendMessage(text)
+    requestAnimationFrame(() => textareaRef.current?.focus())
+  }, [activeTabId, clearComposeDraft, sendMessage])
+
+  const handleComposeCancel = useCallback((draft: string) => {
+    setIsComposeOpen(false)
+    if (draft.trim()) {
+      setComposeDraft(activeTabId, draft)
+    } else {
+      clearComposeDraft(activeTabId)
+    }
+    // Put the draft text back in the inline input
+    setInput(draft)
+    requestAnimationFrame(() => textareaRef.current?.focus())
+  }, [activeTabId, setComposeDraft, clearComposeDraft])
 
   const buildCurrentExportData = useCallback((): SessionExportData | null => {
     if (!tab || tab.messages.length === 0) {
@@ -343,6 +394,28 @@ export function InputBar() {
         )
         break
       }
+      case '/fork': {
+        if (!tab?.claudeSessionId) {
+          addSystemMessage('Cannot fork — no active session. Send a message first.')
+          break
+        }
+        if (isBusy) {
+          addSystemMessage('Cannot fork while session is running.')
+          break
+        }
+        const projectPath = tab.hasChosenDirectory
+          ? tab.workingDirectory
+          : (staticInfo?.homePath || tab.workingDirectory || '~')
+        addSystemMessage('Forking session...')
+        window.clui.forkSession(activeTabId, projectPath)
+          .then(({ newTabId }) => {
+            useSessionStore.getState().forkTabCreated(newTabId, activeTabId, tab.title, tab.workingDirectory, tab.claudeSessionId!)
+          })
+          .catch((err: Error) => {
+            addSystemMessage(`Fork failed: ${err.message}`)
+          })
+        break
+      }
       case '/help': {
         const lines = [
           '/clear — Clear conversation history',
@@ -354,13 +427,16 @@ export function InputBar() {
           '/mcp — Show MCP server status',
           '/skills — Show available skills',
           '/workflow — Open workflow manager',
+          '/fork — Fork this session into a new tab',
           '/help — Show this list',
+          '',
+          '!<command> — Run shell command inline (e.g. !git status)',
         ]
         addSystemMessage(lines.join('\n'))
         break
       }
     }
-  }, [tab, clearTab, addSystemMessage, staticInfo, preferredModel, refreshAgentMemory, agentMemorySnapshot, activeTabId, buildCurrentExportData, openExportDialog])
+  }, [tab, isBusy, clearTab, addSystemMessage, staticInfo, preferredModel, refreshAgentMemory, agentMemorySnapshot, activeTabId, buildCurrentExportData, openExportDialog])
 
   const selectSlotInTextarea = useCallback((text: string, cursorPos: number, direction: 'next' | 'prev') => {
     const slot = direction === 'next'
@@ -449,6 +525,33 @@ export function InputBar() {
       if (textareaRef.current) {
         textareaRef.current.style.height = `${INPUT_MIN_HEIGHT}px`
       }
+    }
+
+    // ─── Shell command (! prefix) ───
+    if (prompt.startsWith('!')) {
+      const shellCmd = prompt.slice(1).trim()
+      if (!shellCmd) {
+        // Empty shell command — do nothing
+        return
+      }
+      clearComposer()
+      const cwd = tab?.workingDirectory || staticInfo?.homePath || '~'
+      addSystemMessage(`$ ${shellCmd}`)
+      try {
+        const result = await window.clui.shellExec({
+          tabId: activeTabId,
+          command: shellCmd,
+          cwd,
+        })
+        // Store as JSON with marker for ShellOutput rendering in ConversationView
+        const shellMsg = JSON.stringify({ __shell__: true, ...result })
+        addSystemMessage(shellMsg)
+      } catch (err: unknown) {
+        const errMsg = err instanceof Error ? err.message : String(err)
+        addSystemMessage(`Shell error: ${errMsg}`)
+      }
+      requestAnimationFrame(() => textareaRef.current?.focus())
+      return
     }
 
     const focusMatch = prompt.match(/^\/focus\s+(.+)/i)
@@ -715,6 +818,30 @@ export function InputBar() {
         </div>
       )}
 
+      {/* Shell mode badge */}
+      <AnimatePresence>
+        {isShellMode && (
+          <motion.div
+            key="shell-badge"
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 4 }}
+            transition={{ duration: 0.1 }}
+            data-testid="shell-badge"
+            className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium"
+            style={{
+              background: colors.accentSoft,
+              color: colors.accent,
+              marginBottom: 2,
+              alignSelf: 'flex-start',
+            }}
+          >
+            <Terminal size={11} />
+            SHELL
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Single-line: inline controls. Multi-line: controls in bottom row */}
       <div className="w-full" style={{ minHeight: 50 }}>
         {isMultiLine ? (
@@ -856,6 +983,15 @@ export function InputBar() {
 
       {/* Effort level indicator */}
       <EffortIndicator tabId={activeTabId} colors={colors} />
+
+      {/* Compose editor overlay */}
+      <ComposeEditor
+        isOpen={isComposeOpen}
+        initialText={isComposeOpen ? (composeDraft || input) : ''}
+        onSubmit={handleComposeSubmit}
+        onCancel={handleComposeCancel}
+        disabled={isBusy}
+      />
     </div>
   )
 }

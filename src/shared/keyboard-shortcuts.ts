@@ -8,6 +8,7 @@ export type ShortcutActionId =
   | 'new-tab'
   | 'close-tab'
   | 'toggle-expand'
+  | 'compose-editor'
   | 'focus-input'
   | 'command-palette'
   | 'open-history'
@@ -17,6 +18,7 @@ export type ShortcutActionId =
   | 'file-tree-toggle'
   | 'stash-browser'
   | 'review-changes'
+  | 'fork-session'
 
 interface ShortcutDefinition {
   id: ShortcutActionId
@@ -39,6 +41,7 @@ const SHORTCUT_DEFINITIONS: ShortcutDefinition[] = [
   { id: 'new-tab', label: 'New Tab', category: 'navigation', windows: 'Ctrl+T', mac: 'Cmd+T' },
   { id: 'close-tab', label: 'Close Tab', category: 'navigation', windows: 'Ctrl+W', mac: 'Cmd+W' },
   { id: 'toggle-expand', label: 'Toggle Expand', category: 'view', windows: 'Ctrl+E', mac: 'Cmd+E' },
+  { id: 'compose-editor', label: 'Compose Editor', category: 'view', windows: 'Ctrl+G', mac: 'Cmd+G' },
   { id: 'focus-input', label: 'Focus Input', category: 'view', windows: 'Ctrl+L', mac: 'Cmd+L' },
   { id: 'toggle-theme', label: 'Toggle Theme', category: 'view', windows: 'Ctrl+D', mac: 'Cmd+D' },
   { id: 'command-palette', label: 'Command Palette', category: 'actions', windows: 'Ctrl+K', mac: 'Cmd+K' },
@@ -48,6 +51,7 @@ const SHORTCUT_DEFINITIONS: ShortcutDefinition[] = [
   { id: 'file-tree-toggle', label: 'Toggle File Tree', category: 'actions', windows: 'Ctrl+Alt+F', mac: 'Cmd+Alt+F' },
   { id: 'stash-browser', label: 'Browse Git Stashes', category: 'actions', windows: 'Ctrl+Alt+H', mac: 'Cmd+Alt+H' },
   { id: 'review-changes', label: 'Review Sandbox Changes', category: 'actions', windows: 'Ctrl+Alt+R', mac: 'Cmd+Alt+R' },
+  { id: 'fork-session', label: 'Fork Session', category: 'actions', windows: 'Ctrl+Shift+F', mac: 'Cmd+Shift+F' },
 ]
 
 const SPECIAL_KEYS: Record<string, string> = {

@@ -98,10 +98,37 @@ function normalizeStreamEvent(event: StreamEvent): NormalizedEvent[] {
     }
 
     case 'message_start':
-    case 'message_delta':
     case 'message_stop':
-      // These are structural events — the assembled `assistant` event handles message completion
       return []
+
+    case 'message_delta': {
+      const results: NormalizedEvent[] = []
+      const mdEvent = sub as { type: 'message_delta'; delta: { stop_reason: string | null }; usage: import('../../shared/types').UsageData; context_management?: unknown }
+
+      // Extract token usage from message_delta when present
+      if (mdEvent.usage && (mdEvent.usage.input_tokens || mdEvent.usage.output_tokens)) {
+        const input = mdEvent.usage.input_tokens ?? 0
+        const output = mdEvent.usage.output_tokens ?? 0
+        results.push({
+          type: 'token_usage',
+          inputTokens: input,
+          outputTokens: output,
+          totalTokens: input + output,
+          cacheReadTokens: mdEvent.usage.cache_read_input_tokens ?? 0,
+          cacheWriteTokens: mdEvent.usage.cache_creation_input_tokens ?? 0,
+        })
+      }
+
+      // Extract context_management when present
+      if (mdEvent.context_management) {
+        results.push({
+          type: 'context_management',
+          data: mdEvent.context_management,
+        })
+      }
+
+      return results
+    }
 
     default:
       return []
@@ -132,7 +159,7 @@ function normalizeResult(event: ResultEvent): NormalizedEvent[] {
       }))
     : undefined
 
-  return [{
+  const results: NormalizedEvent[] = [{
     type: 'task_complete',
     result: event.result || '',
     costUsd: event.total_cost_usd || 0,
@@ -142,6 +169,22 @@ function normalizeResult(event: ResultEvent): NormalizedEvent[] {
     sessionId: event.session_id,
     ...(denials && denials.length > 0 ? { permissionDenials: denials } : {}),
   }]
+
+  // Emit token_usage from result event usage data
+  const input = event.usage?.input_tokens ?? 0
+  const output = event.usage?.output_tokens ?? 0
+  if (input > 0 || output > 0) {
+    results.push({
+      type: 'token_usage',
+      inputTokens: input,
+      outputTokens: output,
+      totalTokens: input + output,
+      cacheReadTokens: event.usage?.cache_read_input_tokens ?? 0,
+      cacheWriteTokens: event.usage?.cache_creation_input_tokens ?? 0,
+    })
+  }
+
+  return results
 }
 
 function normalizeRateLimit(event: RateLimitEvent): NormalizedEvent[] {

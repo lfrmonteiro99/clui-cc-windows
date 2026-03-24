@@ -65,5 +65,7 @@ export function makeLocalTab(): TabState {
     wslDistro: null,
     lastActivityAt: 0,
     sandboxState: { enabled: false, activeWorktree: null, pendingDiff: null, mergeStatus: 'idle' as const },
+    tokenUsage: null,
+    contextNotificationShown: false,
   }
 }

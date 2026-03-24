@@ -54,92 +54,94 @@ export function TerminalView({ termTabId, isActive }: TerminalViewProps) {
         scrollback: scrollbackSize,
         theme: buildXtermTheme(colors, backgroundOpacity),
         allowTransparency: true,
-        customKeyEventHandler: (e: KeyboardEvent) => {
-          const isMac = navigator.platform.toLowerCase().includes('mac')
-          const mod = isMac ? e.metaKey : e.ctrlKey
+      })
 
-          // Copy: Ctrl+Shift+C always, or Ctrl+C/Cmd+C when text is selected
-          if (mod && e.shiftKey && e.key === 'C' && e.type === 'keydown') {
-            const sel = terminal.getSelection()
-            if (sel) navigator.clipboard.writeText(sel)
-            return false
-          }
-          if (mod && !e.shiftKey && e.key === 'c' && e.type === 'keydown') {
-            const sel = terminal.getSelection()
-            if (sel) {
-              navigator.clipboard.writeText(sel)
-              terminal.clearSelection()
-              return false // intercept — don't send SIGINT
-            }
-            return true // no selection — let SIGINT through
-          }
+      // xterm 6.0: customKeyEventHandler is set via attachCustomKeyEventHandler, not constructor options
+      terminal.attachCustomKeyEventHandler((e: KeyboardEvent) => {
+        const isMac = navigator.platform.toLowerCase().includes('mac')
+        const mod = isMac ? e.metaKey : e.ctrlKey
 
-          // Paste: Ctrl+Shift+V or Ctrl+V/Cmd+V
-          if (mod && (e.key === 'v' || e.key === 'V') && e.type === 'keydown') {
-            navigator.clipboard.readText().then((text) => {
-              if (text) terminal.paste(text)
-            })
-            return false
+        // Copy: Ctrl+Shift+C always, or Ctrl+C/Cmd+C when text is selected
+        if (mod && e.shiftKey && e.key === 'C' && e.type === 'keydown') {
+          const sel = terminal.getSelection()
+          if (sel) navigator.clipboard.writeText(sel)
+          return false
+        }
+        if (mod && !e.shiftKey && e.key === 'c' && e.type === 'keydown') {
+          const sel = terminal.getSelection()
+          if (sel) {
+            navigator.clipboard.writeText(sel)
+            terminal.clearSelection()
+            return false // intercept — don't send SIGINT
           }
+          return true // no selection — let SIGINT through
+        }
 
-          // Terminal shortcuts: new tab, close tab, cycle tabs
-          if (mod && e.shiftKey && e.key === 'T' && e.type === 'keydown') {
-            window.dispatchEvent(new CustomEvent('clui-terminal-shortcut', { detail: { action: 'new-tab' } }))
-            return false
-          }
-          if (mod && e.shiftKey && e.key === 'W' && e.type === 'keydown') {
-            window.dispatchEvent(new CustomEvent('clui-terminal-shortcut', { detail: { action: 'close-tab' } }))
-            return false
-          }
-          if (e.ctrlKey && e.key === 'Tab' && e.type === 'keydown') {
-            window.dispatchEvent(new CustomEvent('clui-terminal-shortcut', { detail: { action: e.shiftKey ? 'prev-tab' : 'next-tab' } }))
-            return false
-          }
+        // Paste: Ctrl+Shift+V or Ctrl+V/Cmd+V
+        if (mod && (e.key === 'v' || e.key === 'V') && e.type === 'keydown') {
+          navigator.clipboard.readText().then((text) => {
+            if (text) terminal.paste(text)
+          })
+          return false
+        }
 
-          // Split panes: Ctrl+Shift+D (horizontal), Ctrl+Shift+E (vertical)
-          if (mod && e.shiftKey && e.key === 'D' && e.type === 'keydown') {
-            window.dispatchEvent(new CustomEvent('clui-terminal-shortcut', { detail: { action: 'split-horizontal', termTabId } }))
-            return false
-          }
-          if (mod && e.shiftKey && e.key === 'E' && e.type === 'keydown') {
-            window.dispatchEvent(new CustomEvent('clui-terminal-shortcut', { detail: { action: 'split-vertical', termTabId } }))
-            return false
-          }
+        // Terminal shortcuts: new tab, close tab, cycle tabs
+        if (mod && e.shiftKey && e.key === 'T' && e.type === 'keydown') {
+          window.dispatchEvent(new CustomEvent('clui-terminal-shortcut', { detail: { action: 'new-tab' } }))
+          return false
+        }
+        if (mod && e.shiftKey && e.key === 'W' && e.type === 'keydown') {
+          window.dispatchEvent(new CustomEvent('clui-terminal-shortcut', { detail: { action: 'close-tab' } }))
+          return false
+        }
+        if (e.ctrlKey && e.key === 'Tab' && e.type === 'keydown') {
+          window.dispatchEvent(new CustomEvent('clui-terminal-shortcut', { detail: { action: e.shiftKey ? 'prev-tab' : 'next-tab' } }))
+          return false
+        }
 
-          // Tab overview: Ctrl+Shift+O
-          if (mod && e.shiftKey && e.key === 'O' && e.type === 'keydown') {
-            window.dispatchEvent(new CustomEvent('clui-terminal-shortcut', { detail: { action: 'tab-overview' } }))
-            return false
-          }
+        // Split panes: Ctrl+Shift+D (horizontal), Ctrl+Shift+E (vertical)
+        if (mod && e.shiftKey && e.key === 'D' && e.type === 'keydown') {
+          window.dispatchEvent(new CustomEvent('clui-terminal-shortcut', { detail: { action: 'split-horizontal', termTabId } }))
+          return false
+        }
+        if (mod && e.shiftKey && e.key === 'E' && e.type === 'keydown') {
+          window.dispatchEvent(new CustomEvent('clui-terminal-shortcut', { detail: { action: 'split-vertical', termTabId } }))
+          return false
+        }
 
-          // Font zoom: Ctrl+= / Ctrl+- / Ctrl+0
-          if (mod && (e.key === '=' || e.key === '+') && e.type === 'keydown') {
-            window.dispatchEvent(new CustomEvent('clui-terminal-shortcut', { detail: { action: 'zoom-in' } }))
-            return false
-          }
-          if (mod && e.key === '-' && e.type === 'keydown') {
-            window.dispatchEvent(new CustomEvent('clui-terminal-shortcut', { detail: { action: 'zoom-out' } }))
-            return false
-          }
-          if (mod && e.key === '0' && e.type === 'keydown') {
-            window.dispatchEvent(new CustomEvent('clui-terminal-shortcut', { detail: { action: 'zoom-reset' } }))
-            return false
-          }
+        // Tab overview: Ctrl+Shift+O
+        if (mod && e.shiftKey && e.key === 'O' && e.type === 'keydown') {
+          window.dispatchEvent(new CustomEvent('clui-terminal-shortcut', { detail: { action: 'tab-overview' } }))
+          return false
+        }
 
-          // Search: Ctrl+Shift+F
-          if (mod && e.shiftKey && e.key === 'F' && e.type === 'keydown') {
-            window.dispatchEvent(new CustomEvent('clui-terminal-shortcut', { detail: { action: 'toggle-search', termTabId } }))
-            return false
-          }
+        // Font zoom: Ctrl+= / Ctrl+- / Ctrl+0
+        if (mod && (e.key === '=' || e.key === '+') && e.type === 'keydown') {
+          window.dispatchEvent(new CustomEvent('clui-terminal-shortcut', { detail: { action: 'zoom-in' } }))
+          return false
+        }
+        if (mod && e.key === '-' && e.type === 'keydown') {
+          window.dispatchEvent(new CustomEvent('clui-terminal-shortcut', { detail: { action: 'zoom-out' } }))
+          return false
+        }
+        if (mod && e.key === '0' && e.type === 'keydown') {
+          window.dispatchEvent(new CustomEvent('clui-terminal-shortcut', { detail: { action: 'zoom-reset' } }))
+          return false
+        }
 
-          // Toggle mode: Ctrl+`
-          if (mod && e.key === '`' && e.type === 'keydown') {
-            useTerminalStore.getState().toggleMode()
-            return false
-          }
+        // Search: Ctrl+Shift+F
+        if (mod && e.shiftKey && e.key === 'F' && e.type === 'keydown') {
+          window.dispatchEvent(new CustomEvent('clui-terminal-shortcut', { detail: { action: 'toggle-search', termTabId } }))
+          return false
+        }
 
-          return true // pass everything else to PTY
-        },
+        // Toggle mode: Ctrl+`
+        if (mod && e.key === '`' && e.type === 'keydown') {
+          useTerminalStore.getState().toggleMode()
+          return false
+        }
+
+        return true // pass everything else to PTY
       })
 
       terminal.loadAddon(fitAddon)

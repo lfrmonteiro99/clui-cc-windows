@@ -240,6 +240,12 @@ export interface TabState {
   lastActivityAt: number
   /** Sandbox mode state for this tab */
   sandboxState: import('./sandbox-types').SandboxTabState
+  /** Cumulative token usage for this tab's session */
+  tokenUsage: TokenUsageSnapshot | null
+  /** Whether large-context notification has been shown for this session */
+  contextNotificationShown: boolean
+  /** Session ID of the parent session this tab was forked from */
+  parentSessionId?: string
 }
 
 export interface Message {
@@ -250,6 +256,8 @@ export interface Message {
   toolInput?: string
   toolStatus?: 'running' | 'completed' | 'error'
   timestamp: number
+  /** Internal: streaming text chunk accumulator. Joined into `content` on flush. */
+  _textChunks?: string[]
 }
 
 export interface RunResult {
@@ -315,6 +323,19 @@ export type NormalizedEvent =
   | { type: 'sandbox_diff_ready'; runId: string; diff: import('./sandbox-types').DiffSummary }
   | { type: 'sandbox_merge_done'; runId: string; result: import('./sandbox-types').MergeResult }
   | { type: 'sandbox_dirty_warning'; runId: string; dirty: import('./sandbox-types').DirtyState }
+  | { type: 'token_usage'; inputTokens: number; outputTokens: number; totalTokens: number; cacheReadTokens?: number; cacheWriteTokens?: number }
+  | { type: 'context_management'; data: unknown }
+
+// ─── Token Usage Tracking ───
+
+export interface TokenUsageSnapshot {
+  inputTokens: number
+  outputTokens: number
+  totalTokens: number
+  cacheReadTokens: number
+  cacheWriteTokens: number
+  lastUpdated: number
+}
 
 // ─── Effort Levels ───
 
@@ -343,6 +364,10 @@ export interface RunOptions {
   sandbox?: import('./sandbox-types').SandboxOptions
   /** CLI effort level (controls reasoning depth) */
   effort?: EffortLevel
+  /** Fork an existing session into a new independent branch */
+  forkSession?: boolean
+  /** Session ID to fork from (used with forkSession) */
+  forkFromSessionId?: string
 }
 
 // ─── Control Plane Types ───
@@ -496,6 +521,26 @@ export interface TerminalCreateOptions {
   cwd?: string
 }
 
+// ─── Inline Shell ───
+
+export interface ShellExecRequest {
+  tabId: string
+  command: string
+  cwd: string
+}
+
+export interface ShellOutput {
+  stdout: string
+  stderr: string
+  exitCode: number
+  /** True if output was truncated at the 50 KB cap */
+  truncated: boolean
+  /** The command that was executed */
+  command: string
+  /** Duration in milliseconds */
+  durationMs: number
+}
+
 // ─── IPC Channel Names ───
 
 export const IPC = {
@@ -535,6 +580,8 @@ export const IPC = {
   AGENT_MEMORY_RELEASE: 'clui:agent-memory-release',
   PIN_SESSION: 'clui:pin-session',
   UNPIN_SESSION: 'clui:unpin-session',
+  FORK_SESSION: 'clui:fork-session',
+  SHELL_EXEC: 'clui:shell-exec',
 
   // One-way events (main → renderer)
   TEXT_CHUNK: 'clui:text-chunk',

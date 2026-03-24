@@ -925,6 +925,35 @@ export class ControlPlane extends EventEmitter {
     return this.submitPrompt(tabId, requestId, options)
   }
 
+  // ─── Session Forking ───
+
+  /**
+   * Fork an existing session into a new independent tab.
+   * Uses `--fork-session --resume <parentSessionId>` to create a CLI-level branch.
+   * Returns the new tab ID on success.
+   */
+  async forkSession(sourceTabId: string, projectPath: string): Promise<{ newTabId: string }> {
+    const sourceTab = this.tabs.get(sourceTabId)
+    if (!sourceTab) throw new Error('Source tab not found')
+    if (!sourceTab.claudeSessionId) throw new Error('No session to fork — send a message first')
+    if (sourceTab.activeRequestId) throw new Error('Cannot fork while session is running')
+
+    const parentSessionId = sourceTab.claudeSessionId
+    const newTabId = this.createTab()
+
+    // Submit a fork prompt on the new tab.
+    // The CLI will create a new session ID from the parent and return it in the init event.
+    const requestId = `fork-${newTabId}`
+    await this.submitPrompt(newTabId, requestId, {
+      prompt: 'Continue from where we left off.',
+      projectPath,
+      forkSession: true,
+      forkFromSessionId: parentSessionId,
+    })
+
+    return { newTabId }
+  }
+
   // ─── Permission Response ───
 
   respondToPermission(tabId: string, questionId: string, optionId: string): boolean {
