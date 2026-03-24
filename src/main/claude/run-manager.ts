@@ -35,6 +35,15 @@ const CLUI_SYSTEM_HINT = [
   'You are still a software engineering assistant. Keep using your tools (Read, Edit, Bash, etc.)',
   'normally. But when presenting information, links, resources, or explanations to the user,',
   'take full advantage of the rich UI. The user expects a polished chat experience, not raw terminal text.',
+  '',
+  'DEBUGGING PROTOCOL — When the user reports a bug, error, or broken behavior:',
+  '1. INVESTIGATE FIRST. Run `git log --oneline -10` to see recent changes.',
+  '2. Read the changed files with `git show <hash> -- <file>` for anything suspicious.',
+  '3. Trace the data flow in the source code to identify the root cause.',
+  '4. Check debug logs if available (~/.clui-debug.log or browser console).',
+  '5. ONLY THEN propose and implement a fix, explaining the root cause clearly.',
+  'NEVER skip straight to attempting a fix without investigating. The git history',
+  'and source code contain the answers. Guessing wastes time and creates new bugs.',
 ].join('\n')
 
 // Tools auto-approved via --allowedTools (never trigger the permission card).
