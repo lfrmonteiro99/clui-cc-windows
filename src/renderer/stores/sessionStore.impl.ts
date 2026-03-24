@@ -79,6 +79,9 @@ export interface State {
   // Cost dashboard state
   costDashboardOpen: boolean
 
+  // Compose editor per-tab drafts
+  composeDrafts: Record<string, string>
+
   // Actions
   initStaticInfo: () => Promise<void>
   setPreferredModel: (model: string | null) => void
@@ -116,6 +119,8 @@ export interface State {
   markAgentDone: (note?: string) => Promise<boolean>
   releaseAgentWork: () => Promise<boolean>
   setTabGroup: (tabId: string, groupId: string | undefined) => void
+  setComposeDraft: (tabId: string, draft: string) => void
+  clearComposeDraft: (tabId: string) => void
   retryTab: (tabId: string) => void
   stopRetrying: (tabId: string) => void
   handleNormalizedEvent: (tabId: string, event: NormalizedEvent) => void
@@ -304,6 +309,9 @@ export const useSessionStore = create<State>((set, get) => ({
   // Cost dashboard
   costDashboardOpen: false,
 
+  // Compose editor drafts
+  composeDrafts: {},
+
   initStaticInfo: async () => {
     try {
       const result = await window.clui.start()
@@ -488,6 +496,7 @@ export const useSessionStore = create<State>((set, get) => ({
   closeTab: (tabId) => {
     clearRetryTimer(tabId)
     useTokenBudgetStore.getState().resetTab(tabId)
+    get().clearComposeDraft(tabId)
     window.clui.closeTab(tabId).catch(() => {})
 
     const s = get()
@@ -778,6 +787,20 @@ export const useSessionStore = create<State>((set, get) => ({
     set((s) => ({
       tabs: s.tabs.map((t) => (t.id === tabId ? { ...t, groupId } : t)),
     }))
+  },
+
+  setComposeDraft: (tabId, draft) => {
+    set((s) => ({
+      composeDrafts: { ...s.composeDrafts, [tabId]: draft },
+    }))
+  },
+
+  clearComposeDraft: (tabId) => {
+    set((s) => {
+      const next = { ...s.composeDrafts }
+      delete next[tabId]
+      return { composeDrafts: next }
+    })
   },
 
   retryTab: (tabId) => {

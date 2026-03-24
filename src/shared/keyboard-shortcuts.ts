@@ -8,6 +8,7 @@ export type ShortcutActionId =
   | 'new-tab'
   | 'close-tab'
   | 'toggle-expand'
+  | 'compose-editor'
   | 'focus-input'
   | 'command-palette'
   | 'open-history'
@@ -39,6 +40,7 @@ const SHORTCUT_DEFINITIONS: ShortcutDefinition[] = [
   { id: 'new-tab', label: 'New Tab', category: 'navigation', windows: 'Ctrl+T', mac: 'Cmd+T' },
   { id: 'close-tab', label: 'Close Tab', category: 'navigation', windows: 'Ctrl+W', mac: 'Cmd+W' },
   { id: 'toggle-expand', label: 'Toggle Expand', category: 'view', windows: 'Ctrl+E', mac: 'Cmd+E' },
+  { id: 'compose-editor', label: 'Compose Editor', category: 'view', windows: 'Ctrl+G', mac: 'Cmd+G' },
   { id: 'focus-input', label: 'Focus Input', category: 'view', windows: 'Ctrl+L', mac: 'Cmd+L' },
   { id: 'toggle-theme', label: 'Toggle Theme', category: 'view', windows: 'Ctrl+D', mac: 'Cmd+D' },
   { id: 'command-palette', label: 'Command Palette', category: 'actions', windows: 'Ctrl+K', mac: 'Cmd+K' },
