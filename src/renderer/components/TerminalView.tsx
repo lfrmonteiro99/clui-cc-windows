@@ -147,29 +147,25 @@ export function TerminalView({ termTabId, isActive }: TerminalViewProps) {
       terminal.loadAddon(searchAddon)
       searchAddonRef.current = searchAddon
 
-      // Try WebGL addon for GPU-accelerated rendering (TERM-001)
-      try {
-        const { WebglAddon } = await import('@xterm/addon-webgl')
-        const webglAddon = new WebglAddon()
-        webglAddon.onContextLoss(() => {
-          // Fallback: dispose WebGL, xterm.js falls back to DOM renderer
-          webglAddon.dispose()
-        })
-        terminal.loadAddon(webglAddon)
-      } catch {
-        // WebGL not available — DOM renderer is the default fallback
-      }
+      // TERM-001: WebGL addon — disabled until version compatibility with xterm 6.0 is verified.
+      // addon-webgl@0.19.0 may crash silently during render, blocking all terminal output.
+      // Re-enable when @xterm/addon-webgl releases a version with explicit xterm@6 support.
+      // try {
+      //   const { WebglAddon } = await import('@xterm/addon-webgl')
+      //   const webglAddon = new WebglAddon()
+      //   webglAddon.onContextLoss(() => webglAddon.dispose())
+      //   terminal.loadAddon(webglAddon)
+      // } catch { /* DOM fallback */ }
 
-      // Try image addon for Sixel/Kitty/iTerm2 image protocol (TERM-005)
-      const imageEnabled = storeState.imageProtocolEnabled ?? false
-      if (imageEnabled) {
-        try {
-          const { ImageAddon } = await import('@xterm/addon-image')
-          terminal.loadAddon(new ImageAddon({ sixelSupport: true }))
-        } catch {
-          // Image addon not available — skip silently
-        }
-      }
+      // TERM-005: Image addon — disabled until version compatibility with xterm 6.0 is verified.
+      // Same risk as WebGL addon above.
+      // const imageEnabled = storeState.imageProtocolEnabled ?? false
+      // if (imageEnabled) {
+      //   try {
+      //     const { ImageAddon } = await import('@xterm/addon-image')
+      //     terminal.loadAddon(new ImageAddon({ sixelSupport: true }))
+      //   } catch { /* skip */ }
+      // }
 
       terminal.open(containerRef.current!)
       fitAddon.fit()
@@ -429,10 +425,13 @@ export function TerminalView({ termTabId, isActive }: TerminalViewProps) {
       <div
         ref={containerRef}
         data-clui-ui
+        onClick={() => terminalRef.current?.focus()}
+        onMouseDown={() => terminalRef.current?.focus()}
         style={{
           flex: 1,
           padding: 4,
           overflow: 'hidden',
+          cursor: 'text',
           // Text shadow for readability when opacity is low (TERM-010)
           ...(backgroundOpacity < 0.7 ? { textShadow: '0 0 2px rgba(0,0,0,0.5)' } : {}),
         }}
