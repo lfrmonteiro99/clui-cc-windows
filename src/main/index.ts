@@ -374,6 +374,11 @@ ipcMain.handle(IPC.CREATE_TAB, () => {
   return { tabId }
 })
 
+ipcMain.handle(IPC.FORK_SESSION, async (_event, { tabId, projectPath }: { tabId: string; projectPath: string }) => {
+  log(`IPC FORK_SESSION: tab=${tabId} project=${projectPath}`)
+  return controlPlane.forkSession(tabId, projectPath)
+})
+
 ipcMain.on(IPC.INIT_SESSION, (_event, tabId: string) => {
   log(`IPC INIT_SESSION: ${tabId}`)
   controlPlane.initSession(tabId)
