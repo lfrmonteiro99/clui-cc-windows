@@ -154,11 +154,12 @@ export class RunManager extends EventEmitter {
     if (options.maxBudgetUsd) {
       args.push('--max-budget-usd', String(options.maxBudgetUsd))
     }
-    if (options.systemPrompt) {
-      args.push('--system-prompt', options.systemPrompt)
+    // Combine CLUI hint with any existing system prompt (memory packet, agent context)
+    // Uses --append-system-prompt (additive) so it doesn't replace Claude's base prompt.
+    const combinedSystemPrompt = [options.systemPrompt, CLUI_SYSTEM_HINT].filter(Boolean).join('\n\n')
+    if (combinedSystemPrompt) {
+      args.push('--append-system-prompt', combinedSystemPrompt)
     }
-    // Always tell Claude it's inside CLUI (additive, doesn't replace base prompt)
-    args.push('--append-system-prompt', CLUI_SYSTEM_HINT)
 
     if (DEBUG) {
       log(`Starting run ${requestId}: ${this.entryPoint.binary} ${args.join(' ')}`)

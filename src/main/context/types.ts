@@ -138,16 +138,16 @@ export interface SmartMemoryPacketConfig {
 }
 
 export const DEFAULT_SMART_PACKET_CONFIG: SmartMemoryPacketConfig = {
-  totalBudget: 3000,
+  totalBudget: 2000,
   tierBudgets: {
-    [ContextTier.ProjectState]: 150,
-    [ContextTier.Continuation]: 300,
-    [ContextTier.Decisions]: 600,
-    [ContextTier.Pitfalls]: 400,
-    [ContextTier.HotFiles]: 250,
-    [ContextTier.Patterns]: 300,
-    [ContextTier.RelevantMemories]: 500,
-    [ContextTier.RecentSessions]: 500,
+    [ContextTier.ProjectState]: 100,
+    [ContextTier.Continuation]: 200,
+    [ContextTier.Decisions]: 400,
+    [ContextTier.Pitfalls]: 300,
+    [ContextTier.HotFiles]: 150,
+    [ContextTier.Patterns]: 200,
+    [ContextTier.RelevantMemories]: 350,
+    [ContextTier.RecentSessions]: 300,
   },
   minDecisionImportance: 0.4,
   minPitfallImportance: 0.3,
