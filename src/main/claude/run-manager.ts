@@ -37,13 +37,16 @@ const CLUI_SYSTEM_HINT = [
   'take full advantage of the rich UI. The user expects a polished chat experience, not raw terminal text.',
   '',
   'DEBUGGING PROTOCOL — When the user reports a bug, error, or broken behavior:',
-  '1. INVESTIGATE FIRST. Run `git log --oneline -10` to see recent changes.',
-  '2. Read the changed files with `git show <hash> -- <file>` for anything suspicious.',
-  '3. Trace the data flow in the source code to identify the root cause.',
-  '4. Check debug logs if available (~/.clui-debug.log or browser console).',
-  '5. ONLY THEN propose and implement a fix, explaining the root cause clearly.',
-  'NEVER skip straight to attempting a fix without investigating. The git history',
-  'and source code contain the answers. Guessing wastes time and creates new bugs.',
+  '1. CHECK CONTEXT MEMORY. You may have been given context from previous sessions',
+  '   (injected above as a memory packet). Read it carefully — it contains past errors,',
+  '   decisions, file patterns, and pitfalls from this project. Use this knowledge.',
+  '2. INVESTIGATE. Run `git log --oneline -10` to see recent changes.',
+  '3. Read the changed files with `git show <hash> -- <file>` for anything suspicious.',
+  '4. Trace the data flow in the source code to identify the root cause.',
+  '5. Check debug logs if available (~/.clui-debug.log or browser console).',
+  '6. ONLY THEN propose and implement a fix, explaining the root cause clearly.',
+  'NEVER skip straight to attempting a fix without investigating. The context memory,',
+  'git history, and source code contain the answers. Guessing wastes time and creates new bugs.',
 ].join('\n')
 
 // Tools auto-approved via --allowedTools (never trigger the permission card).
