@@ -106,9 +106,30 @@ InputBar → window.clui.prompt(tabId, requestId, opts)
 
 **New tab state field:** Add to `TabState` in `src/shared/types.ts` → initialize in `createTab()` in both ControlPlane and sessionStore → update only via ControlPlane events.
 
+## Debugging Protocol — MANDATORY
+
+When the user reports a bug, error, or broken behavior, you MUST follow this sequence BEFORE attempting any fix:
+
+1. **`git log --oneline -10`** — check what changed recently. Most bugs come from recent commits.
+2. **Read the changed files** — `git show <hash> --stat` then `git show <hash> -- <file>` for suspicious changes.
+3. **Reproduce the issue** — read the relevant source code, trace the data flow, identify the root cause.
+4. **Check `~/.clui-debug.log`** — if the app was run with `CLUI_DEBUG=1`, the log has IPC traces and error details.
+5. **Only THEN propose a fix** — with an explanation of the root cause.
+
+**DO NOT skip to "let me try fixing this" without completing steps 1-3.** Guessing at fixes without investigation wastes time and often introduces new bugs. The git history and source code have the answers — use them.
+
+## Error Handling Rules
+
+- **Never use empty `catch {}` blocks.** Always log the error: `catch (err) { console.warn('[module] operation failed:', err) }`.
+- **Silent failures are bugs.** If an operation can fail, the failure must be visible in logs or UI.
+- **Addon/plugin loading must be logged.** When loading optional features (xterm addons, etc.), log both success and failure so debugging is possible.
+
 ## Common Pitfalls
 
 - Forgetting to restart dev server after main-process changes (renderer hot-reloads, main does not).
 - Adding raw color values instead of `useColors()` — breaks theming.
 - Mutating tab state from renderer instead of going through ControlPlane.
 - Not handling `session_dead` event — crashed Claude processes must transition tab to `dead` status.
+- Using `catch {}` (empty catch) — hides errors and makes debugging impossible. Always log.
+- Not checking `git log` before debugging — recent commits are the #1 source of new bugs.
+- Calling `getTabState()` in Zustand selectors — creates new objects each render, causes infinite re-render loops. Read directly from the Map: `s.tabStates.get(id)?.field ?? default`.
