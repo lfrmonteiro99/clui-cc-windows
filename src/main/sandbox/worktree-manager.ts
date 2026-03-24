@@ -1,4 +1,5 @@
 import { join } from 'path'
+import { existsSync, symlinkSync, lstatSync } from 'fs'
 import { rm } from 'fs/promises'
 import type { WorktreeInfo } from '../../shared/sandbox-types'
 import { gitExec, isGitRepo } from './git-exec'
@@ -36,6 +37,9 @@ export class WorktreeManager {
 
     log(`creating worktree: ${worktreePath} (branch: ${branch}, base: ${baseBranch})`)
     await gitExec(['worktree', 'add', '-b', branch, worktreePath], projectRoot)
+
+    // Symlink dependency directories so the worktree can run tests/builds
+    this.symlinkDeps(projectRoot, worktreePath)
 
     const info: WorktreeInfo = {
       path: worktreePath,
@@ -83,6 +87,28 @@ export class WorktreeManager {
     }
 
     this.handles.delete(runId)
+  }
+
+  /**
+   * Symlink common dependency/build directories from the original repo
+   * into the worktree so tests and builds work without reinstalling.
+   */
+  private symlinkDeps(sourceRoot: string, worktreePath: string): void {
+    const dirs = ['node_modules', 'vendor', '.venv', 'dist', 'build', '.next', '.nuxt']
+    for (const dir of dirs) {
+      const source = join(sourceRoot, dir)
+      const target = join(worktreePath, dir)
+      try {
+        if (existsSync(source) && !existsSync(target)) {
+          // Use 'junction' on Windows (no admin required), 'dir' symlink on POSIX
+          const type = process.platform === 'win32' ? 'junction' : 'dir'
+          symlinkSync(source, target, type)
+          log(`symlinked ${dir} → ${source}`)
+        }
+      } catch (err) {
+        log(`symlink failed for ${dir}: ${err}`)
+      }
+    }
   }
 
   /**

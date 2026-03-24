@@ -1,9 +1,9 @@
 /**
  * SandboxRunSummary — elevated modal panel shown after a sandboxed run completes.
- * Displays diff stats (insertions, deletions, files) and merge/revert action buttons.
+ * Displays diff stats (insertions, deletions, files) and merge/revert/test action buttons.
  */
 
-import React, { useState, useCallback } from 'react'
+import React, { useState, useCallback, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Check,
@@ -13,12 +13,49 @@ import {
   GitMerge,
   ArrowClockwise,
   SpinnerGap,
+  Flask,
+  ArrowRight,
+  PuzzlePiece,
 } from '@phosphor-icons/react'
 import { useColors } from '../theme'
 import { useSandboxStore } from '../stores/sandboxStore'
 import { useSessionStore } from '../stores/sessionStore'
 import { useNotificationStore } from '../stores/notificationStore'
+import { useMarketplaceStore } from '../stores/marketplaceStore'
 import type { MergeResult } from '../../shared/sandbox-types'
+
+// ─── Playwright detection (zero tokens — reads installed plugins from store) ───
+
+function useHasPlaywright(): boolean | null {
+  const installedNames = useMarketplaceStore((s) => s.installedNames)
+  const [checked, setChecked] = useState(false)
+  const [has, setHas] = useState<boolean | null>(null)
+
+  useEffect(() => {
+    if (checked) return
+    // Check from already-loaded marketplace data (no IPC, no tokens)
+    const names = installedNames.map((n) => (typeof n === 'string' ? n : '').toLowerCase())
+    const found = names.some((n) => n.includes('playwright') || n.includes('webapp-testing'))
+    if (installedNames.length > 0) {
+      setHas(found)
+      setChecked(true)
+    } else {
+      // Marketplace not loaded yet — try filesystem check via IPC (still no Claude tokens)
+      window.clui.listInstalledPlugins().then((entries) => {
+        const installed = (entries || []).map((e: unknown) =>
+          typeof e === 'string' ? e.toLowerCase() : ((e as { name?: string })?.name || '').toLowerCase()
+        )
+        setHas(installed.some((n: string) => n.includes('playwright') || n.includes('webapp-testing')))
+        setChecked(true)
+      }).catch(() => {
+        setHas(false)
+        setChecked(true)
+      })
+    }
+  }, [installedNames, checked])
+
+  return has
+}
 
 // ─── Status color for file status letter ───
 
@@ -42,6 +79,8 @@ function statusColor(
 
 // ─── Component ───
 
+const DEFAULT_TEST_PROMPT = 'Run the tests against the changes in this worktree and report results'
+
 export const SandboxRunSummary = React.memo(function SandboxRunSummary() {
   const colors = useColors()
   const activeTabId = useSessionStore((s) => s.activeTabId)
@@ -50,13 +89,54 @@ export const SandboxRunSummary = React.memo(function SandboxRunSummary() {
   const wt = useSandboxStore((s) => activeTabId ? s.tabStates.get(activeTabId)?.activeWorktree ?? null : null)
   const setMergeStatus = useSandboxStore((s) => s.setMergeStatus)
   const addToast = useNotificationStore((s) => s.addToast)
+  const sendMessage = useSessionStore((s) => s.sendMessage)
+  const openMarketplace = useMarketplaceStore((s) => s.openMarketplace)
+
+  const hasPlaywright = useHasPlaywright()
 
   const [filesExpanded, setFilesExpanded] = useState(false)
   const [merging, setMerging] = useState(false)
   const [reverting, setReverting] = useState(false)
+  const [testPromptOpen, setTestPromptOpen] = useState(false)
+  const [testPrompt, setTestPrompt] = useState(DEFAULT_TEST_PROMPT)
+  const [testing, setTesting] = useState(false)
+  const testInputRef = useRef<HTMLInputElement>(null)
+
+  // Auto-focus the test input when opened
+  useEffect(() => {
+    if (testPromptOpen && testInputRef.current) {
+      testInputRef.current.focus()
+      testInputRef.current.select()
+    }
+  }, [testPromptOpen])
 
   // Visibility: only show when there is a pending diff AND merge is still pending
   const visible = pendingDiff !== null && mergeStatus === 'pending'
+
+  // ─── Test handler ───
+
+  const handleTest = useCallback(() => {
+    if (!wt || !activeTabId || !testPrompt.trim()) return
+    setTesting(true)
+    setTestPromptOpen(false)
+
+    // Send a prompt to Claude Code CLI with the worktree as the working directory.
+    // sendMessage accepts projectPath as second arg (string, not object).
+    sendMessage(testPrompt.trim(), wt.path)
+
+    // Reset after a beat — the run is now in the conversation
+    setTimeout(() => setTesting(false), 1500)
+  }, [wt, activeTabId, testPrompt, sendMessage])
+
+  const handleTestKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      handleTest()
+    }
+    if (e.key === 'Escape') {
+      setTestPromptOpen(false)
+    }
+  }, [handleTest])
 
   // ─── Merge handler ───
 
@@ -64,7 +144,6 @@ export const SandboxRunSummary = React.memo(function SandboxRunSummary() {
     if (!wt || !pendingDiff) return
     setMerging(true)
     try {
-      // Compute repoRoot by stripping .clui-sandboxes/... from the worktree path
       const sandboxSegment = '.clui-sandboxes'
       const idx = wt.path.indexOf(sandboxSegment)
       const repoRoot = idx !== -1
@@ -128,11 +207,13 @@ export const SandboxRunSummary = React.memo(function SandboxRunSummary() {
     }
   }, [wt, activeTabId, setMergeStatus, addToast])
 
-  // ─── Close (dismiss without action — revert to idle) ───
+  // ─── Close ───
 
   const handleClose = useCallback(() => {
     setMergeStatus(activeTabId, 'idle')
   }, [activeTabId, setMergeStatus])
+
+  const busy = merging || reverting || testing
 
   return (
     <AnimatePresence>
@@ -312,6 +393,72 @@ export const SandboxRunSummary = React.memo(function SandboxRunSummary() {
             </AnimatePresence>
           </div>
 
+          {/* ── Test prompt (expandable inline input) ── */}
+          <AnimatePresence>
+            {testPromptOpen && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.18, ease: [0.4, 0, 0.2, 1] }}
+                style={{ overflow: 'hidden' }}
+              >
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    margin: '0 12px',
+                    padding: '8px 10px',
+                    borderRadius: 10,
+                    background: colors.inputPillBg,
+                    border: `1px solid ${colors.accentBorder}`,
+                  }}
+                >
+                  <Flask size={14} style={{ color: colors.accent, flexShrink: 0 }} />
+                  <input
+                    ref={testInputRef}
+                    type="text"
+                    value={testPrompt}
+                    onChange={(e) => setTestPrompt(e.target.value)}
+                    onKeyDown={handleTestKeyDown}
+                    placeholder="What should I test?"
+                    style={{
+                      flex: 1,
+                      background: 'none',
+                      border: 'none',
+                      outline: 'none',
+                      color: colors.textPrimary,
+                      fontSize: 12,
+                      fontFamily: 'inherit',
+                    }}
+                  />
+                  <button
+                    data-clui-ui
+                    onClick={handleTest}
+                    disabled={!testPrompt.trim()}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      width: 26,
+                      height: 26,
+                      borderRadius: 7,
+                      border: 'none',
+                      background: testPrompt.trim() ? colors.accent : colors.surfaceHover,
+                      color: testPrompt.trim() ? '#fff' : colors.textTertiary,
+                      cursor: testPrompt.trim() ? 'pointer' : 'default',
+                      transition: 'background 0.15s',
+                      flexShrink: 0,
+                    }}
+                  >
+                    <ArrowRight size={13} weight="bold" />
+                  </button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
           {/* ── Action buttons ── */}
           <div
             style={{
@@ -321,11 +468,84 @@ export const SandboxRunSummary = React.memo(function SandboxRunSummary() {
               padding: '8px 12px 10px',
             }}
           >
+            {/* Test button — only if Playwright is installed */}
+            {hasPlaywright === true && (
+              <button
+                data-clui-ui
+                onClick={() => setTestPromptOpen(!testPromptOpen)}
+                disabled={busy}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 6,
+                  padding: '6px 12px',
+                  borderRadius: 8,
+                  border: `1px solid ${testPromptOpen ? colors.accent : colors.accentBorder}`,
+                  background: testPromptOpen ? colors.accentLight : 'transparent',
+                  color: busy ? colors.textTertiary : colors.accent,
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: busy ? 'not-allowed' : 'pointer',
+                  transition: 'all 0.15s',
+                  flexShrink: 0,
+                }}
+                onMouseEnter={(e) => {
+                  if (!busy) e.currentTarget.style.background = colors.accentLight
+                }}
+                onMouseLeave={(e) => {
+                  if (!busy && !testPromptOpen) e.currentTarget.style.background = 'transparent'
+                }}
+              >
+                {testing ? (
+                  <SpinnerGap size={14} className="animate-spin" />
+                ) : (
+                  <Flask size={14} weight="fill" />
+                )}
+                Test
+              </button>
+            )}
+
+            {/* Suggest installing Playwright if not available */}
+            {hasPlaywright === false && (
+              <button
+                data-clui-ui
+                onClick={() => openMarketplace()}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 5,
+                  padding: '6px 10px',
+                  borderRadius: 8,
+                  border: `1px dashed ${colors.containerBorder}`,
+                  background: 'transparent',
+                  color: colors.textTertiary,
+                  fontSize: 11,
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                  transition: 'all 0.15s',
+                  flexShrink: 0,
+                }}
+                title="Install Playwright plugin to test changes before merging"
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = colors.accentBorder
+                  e.currentTarget.style.color = colors.accent
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = colors.containerBorder
+                  e.currentTarget.style.color = colors.textTertiary
+                }}
+              >
+                <PuzzlePiece size={12} />
+                Add testing
+              </button>
+            )}
+
             {/* Merge button (primary) */}
             <button
               data-clui-ui
               onClick={handleMerge}
-              disabled={merging || reverting}
+              disabled={busy}
               style={{
                 flex: 1,
                 display: 'flex',
@@ -335,22 +555,18 @@ export const SandboxRunSummary = React.memo(function SandboxRunSummary() {
                 padding: '6px 12px',
                 borderRadius: 8,
                 border: 'none',
-                background: merging || reverting ? colors.sendDisabled : colors.sendBg,
+                background: busy ? colors.sendDisabled : colors.sendBg,
                 color: colors.textOnAccent,
                 fontSize: 12,
                 fontWeight: 600,
-                cursor: merging || reverting ? 'not-allowed' : 'pointer',
+                cursor: busy ? 'not-allowed' : 'pointer',
                 transition: 'background 0.15s',
               }}
               onMouseEnter={(e) => {
-                if (!merging && !reverting) {
-                  e.currentTarget.style.background = colors.sendHover
-                }
+                if (!busy) e.currentTarget.style.background = colors.sendHover
               }}
               onMouseLeave={(e) => {
-                if (!merging && !reverting) {
-                  e.currentTarget.style.background = colors.sendBg
-                }
+                if (!busy) e.currentTarget.style.background = colors.sendBg
               }}
             >
               {merging ? (
@@ -365,7 +581,7 @@ export const SandboxRunSummary = React.memo(function SandboxRunSummary() {
             <button
               data-clui-ui
               onClick={handleRevert}
-              disabled={merging || reverting}
+              disabled={busy}
               style={{
                 flex: 1,
                 display: 'flex',
@@ -376,20 +592,20 @@ export const SandboxRunSummary = React.memo(function SandboxRunSummary() {
                 borderRadius: 8,
                 border: `1px solid ${colors.containerBorder}`,
                 background: 'transparent',
-                color: merging || reverting ? colors.textTertiary : colors.textSecondary,
+                color: busy ? colors.textTertiary : colors.textSecondary,
                 fontSize: 12,
                 fontWeight: 500,
-                cursor: merging || reverting ? 'not-allowed' : 'pointer',
+                cursor: busy ? 'not-allowed' : 'pointer',
                 transition: 'background 0.15s, color 0.15s',
               }}
               onMouseEnter={(e) => {
-                if (!merging && !reverting) {
+                if (!busy) {
                   e.currentTarget.style.background = colors.surfaceHover
                   e.currentTarget.style.color = colors.textPrimary
                 }
               }}
               onMouseLeave={(e) => {
-                if (!merging && !reverting) {
+                if (!busy) {
                   e.currentTarget.style.background = 'transparent'
                   e.currentTarget.style.color = colors.textSecondary
                 }
