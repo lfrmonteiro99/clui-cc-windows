@@ -7,7 +7,11 @@ import { existsSync, mkdirSync, createWriteStream, renameSync, unlinkSync, readd
 import { join } from 'path'
 import { homedir } from 'os'
 import { net } from 'electron'
-import { log } from './logger'
+import { log as _log } from './logger'
+
+function log(msg: string): void {
+  _log('WhisperProvisioner', msg)
+}
 
 // ─── Config ───
 
@@ -40,7 +44,7 @@ export async function ensureWhisper(onStatus: StatusCallback): Promise<void> {
   if (process.platform === 'darwin') {
     if (!existsSync(WHISPER_BIN_PATH)) {
       onStatus({ stage: 'skipped' })
-      log('[WhisperProvisioner] macOS — no pre-built binary, skipping auto-download')
+      log('macOS — no pre-built binary, skipping auto-download')
     } else {
       onStatus({ stage: 'ready' })
     }
@@ -59,7 +63,7 @@ export async function ensureWhisper(onStatus: StatusCallback): Promise<void> {
   const hasModel = existsSync(MODEL_PATH)
 
   if (hasBinary && hasModel) {
-    log('[WhisperProvisioner] Already installed')
+    log('Already installed')
     onStatus({ stage: 'ready' })
     return
   }
@@ -78,7 +82,7 @@ export async function ensureWhisper(onStatus: StatusCallback): Promise<void> {
       onStatus({ stage: 'extracting' })
       await extractWhisperBinary(zipPath, WHISPER_DIR)
       unlinkSync(zipPath)
-      log('[WhisperProvisioner] Binary installed')
+      log('Binary installed')
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       log(`[WhisperProvisioner] Binary download failed: ${msg}`)
@@ -98,7 +102,7 @@ export async function ensureWhisper(onStatus: StatusCallback): Promise<void> {
         onStatus({ stage: 'downloading-model', progress })
       })
       renameSync(tmpPath, MODEL_PATH)
-      log('[WhisperProvisioner] Model installed')
+      log('Model installed')
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       log(`[WhisperProvisioner] Model download failed: ${msg}`)
@@ -108,7 +112,7 @@ export async function ensureWhisper(onStatus: StatusCallback): Promise<void> {
   }
 
   onStatus({ stage: 'ready' })
-  log('[WhisperProvisioner] Provisioning complete')
+  log('Provisioning complete')
 }
 
 // ─── Download with progress ───
@@ -184,10 +188,10 @@ async function extractWhisperBinary(zipPath: string, destDir: string): Promise<v
       }
 
       // Clean up extract directory
-      execSync(`rmdir /s /q "${extractDir}"`, { timeout: 10000, stdio: 'ignore', shell: true })
+      execSync(`rmdir /s /q "${extractDir}"`, { timeout: 10000, stdio: 'ignore', shell: 'cmd.exe' })
     } catch (err) {
       // Clean up on failure
-      try { execSync(`rmdir /s /q "${extractDir}"`, { timeout: 5000, stdio: 'ignore', shell: true }) } catch { /* ignore */ }
+      try { execSync(`rmdir /s /q "${extractDir}"`, { timeout: 5000, stdio: 'ignore', shell: 'cmd.exe' }) } catch { /* ignore */ }
       throw err
     }
     return

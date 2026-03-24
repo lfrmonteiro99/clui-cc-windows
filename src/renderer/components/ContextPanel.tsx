@@ -226,7 +226,7 @@ function MemoriesSection({ projectPath }: { projectPath: string }) {
   const pinMemory = useContextStore((s) => s.pinMemory)
   const unpinMemory = useContextStore((s) => s.unpinMemory)
   const deleteMemory = useContextStore((s) => s.deleteMemory)
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>()
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined)
 
   const handleSearchChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {

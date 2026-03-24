@@ -22,7 +22,7 @@ export function TerminalSearch({ onSearch, onNext, onPrev, onClose, resultIndex,
   const [query, setQuery] = useState('')
   const [caseSensitive, setCaseSensitive] = useState(false)
   const [regex, setRegex] = useState(false)
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>()
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined)
   const colors = useColors()
 
   useEffect(() => {

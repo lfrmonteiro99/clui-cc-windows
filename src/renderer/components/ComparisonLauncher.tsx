@@ -13,8 +13,8 @@ export function ComparisonLauncher() {
   const closeLauncher = useComparisonStore((s) => s.closeLauncher)
   const startComparison = useComparisonStore((s) => s.startComparison)
 
-  const [modelA, setModelA] = useState(AVAILABLE_MODELS[0].id)
-  const [modelB, setModelB] = useState(AVAILABLE_MODELS[1].id)
+  const [modelA, setModelA] = useState<string>(AVAILABLE_MODELS[0].id)
+  const [modelB, setModelB] = useState<string>(AVAILABLE_MODELS[1].id)
   const [isStarting, setIsStarting] = useState(false)
 
   const handleStart = async () => {

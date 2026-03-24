@@ -169,15 +169,16 @@ export class ErrorBoundary extends React.Component<React.PropsWithChildren, Erro
   }
 
   componentDidCatch(error: Error, info: React.ErrorInfo) {
-    this.setState({ componentStack: info.componentStack })
-    console.error('[ErrorBoundary]', error, info.componentStack)
+    const stack = info.componentStack ?? ''
+    this.setState({ componentStack: stack })
+    console.error('[ErrorBoundary]', error, stack)
 
     // Persist error to ~/.clui-debug.log via IPC
     try {
       window.clui.logRendererError({
         error: error.message || 'Unknown renderer error',
         stack: error.stack,
-        componentStack: info.componentStack,
+        componentStack: stack || undefined,
       })
     } catch {
       // IPC may not be available if main process is also crashing

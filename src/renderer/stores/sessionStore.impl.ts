@@ -1,4 +1,4 @@
-import { create } from 'zustand'
+import { createWithEqualityFn as create } from 'zustand/traditional'
 import type {
   TabStatus,
   NormalizedEvent,
@@ -52,7 +52,7 @@ interface StaticInfo {
   homePath: string
 }
 
-interface State {
+export interface State {
   tabs: TabState[]
   tabOrder: string[]
   activeTabId: string

@@ -146,6 +146,20 @@ const darkColors = {
   freshnessActive: '#7aac8c',
   freshnessStale: '#d4a84b',
   freshnessNew: '#8a8a80',
+
+  // Subtle border
+  borderSubtle: '#3b3b36',
+
+  // Accent primary (alias for accent)
+  accentPrimary: '#d97757',
+
+  // Surface tertiary
+  surfaceTertiary: '#2a2a27',
+
+  // Warning variants
+  warningBg: 'rgba(212, 168, 75, 0.08)',
+  warningBorder: 'rgba(212, 168, 75, 0.25)',
+  warningText: '#d4a84b',
 } as const
 
 const lightColors = {
@@ -288,6 +302,20 @@ const lightColors = {
   freshnessActive: '#5a9e6f',
   freshnessStale: '#c49a3c',
   freshnessNew: '#8a8a80',
+
+  // Subtle border
+  borderSubtle: '#dddad2',
+
+  // Accent primary (alias for accent)
+  accentPrimary: '#d97757',
+
+  // Surface tertiary
+  surfaceTertiary: '#e4e1d8',
+
+  // Warning variants
+  warningBg: 'rgba(196, 154, 60, 0.08)',
+  warningBorder: 'rgba(196, 154, 60, 0.25)',
+  warningText: '#9a7a2e',
 } as const
 
 export type ColorPalette = { [K in keyof typeof darkColors]: string }
