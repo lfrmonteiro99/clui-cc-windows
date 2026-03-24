@@ -13,11 +13,12 @@ import { PermissionDeniedCard } from './PermissionDeniedCard'
 import { RetryBanner } from './RetryBanner'
 import { DirectoryPicker } from './DirectoryPicker'
 import { ToolTimeline } from './ToolTimeline'
+import { ShellOutput } from './ShellOutput'
 import { ResumeBrief } from './ResumeBrief'
 import { useColors, useThemeStore } from '../theme'
 import { generateResumeBrief, RESUME_INACTIVITY_MS, CATCH_ME_UP_PROMPT } from '../../shared/session-resume'
 import type { ResumeBrief as ResumeBriefData } from '../../shared/session-resume'
-import type { Message } from '../../shared/types'
+import type { Message, ShellOutput as ShellOutputType } from '../../shared/types'
 
 // ─── Constants ───
 
@@ -691,9 +692,41 @@ const AssistantMessage = React.memo(function AssistantMessage({
 
 // ─── System Message (memoized) ───
 
+const SHELL_PREFIX = '{"__shell__":true,'
+
+function tryParseShellOutput(content: string): ShellOutputType | null {
+  if (!content.startsWith(SHELL_PREFIX)) return null
+  try {
+    const parsed = JSON.parse(content)
+    if (parsed.__shell__ && typeof parsed.command === 'string') {
+      return parsed as ShellOutputType
+    }
+  } catch (err) {
+    console.warn('[ConversationView] Failed to parse shell output:', err)
+  }
+  return null
+}
+
 const SystemMessage = React.memo(function SystemMessage({ message, skipMotion }: { message: Message; skipMotion?: boolean }) {
   const isError = message.content.startsWith('Error:') || message.content.includes('unexpectedly')
   const colors = useColors()
+
+  // Check if this is a shell output message
+  const shellOutput = tryParseShellOutput(message.content)
+  if (shellOutput) {
+    const shellInner = <ShellOutput output={shellOutput} />
+    if (skipMotion) return <div className="py-1">{shellInner}</div>
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 6 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.15 }}
+        className="py-1"
+      >
+        {shellInner}
+      </motion.div>
+    )
+  }
 
   const inner = (
     <div

@@ -1,4 +1,4 @@
-import { create } from 'zustand'
+import { createWithEqualityFn as create } from 'zustand/traditional'
 import type {
   TabStatus,
   NormalizedEvent,
@@ -53,7 +53,7 @@ interface StaticInfo {
   homePath: string
 }
 
-interface State {
+export interface State {
   tabs: TabState[]
   tabOrder: string[]
   activeTabId: string
@@ -79,6 +79,9 @@ interface State {
 
   // Cost dashboard state
   costDashboardOpen: boolean
+
+  // Compose editor per-tab drafts
+  composeDrafts: Record<string, string>
 
   // Actions
   initStaticInfo: () => Promise<void>
@@ -117,6 +120,8 @@ interface State {
   markAgentDone: (note?: string) => Promise<boolean>
   releaseAgentWork: () => Promise<boolean>
   setTabGroup: (tabId: string, groupId: string | undefined) => void
+  setComposeDraft: (tabId: string, draft: string) => void
+  clearComposeDraft: (tabId: string) => void
   retryTab: (tabId: string) => void
   stopRetrying: (tabId: string) => void
   forkTabCreated: (newTabId: string, sourceTabId: string, parentTitle: string, workingDirectory: string, parentSessionId: string) => void
@@ -307,6 +312,9 @@ export const useSessionStore = create<State>((set, get) => ({
 
   // Cost dashboard
   costDashboardOpen: false,
+
+  // Compose editor drafts
+  composeDrafts: {},
 
   initStaticInfo: async () => {
     try {
@@ -512,6 +520,7 @@ export const useSessionStore = create<State>((set, get) => ({
   closeTab: (tabId) => {
     clearRetryTimer(tabId)
     useTokenBudgetStore.getState().resetTab(tabId)
+    get().clearComposeDraft(tabId)
     window.clui.closeTab(tabId).catch(() => {})
 
     const s = get()
@@ -804,6 +813,20 @@ export const useSessionStore = create<State>((set, get) => ({
     set((s) => ({
       tabs: s.tabs.map((t) => (t.id === tabId ? { ...t, groupId } : t)),
     }))
+  },
+
+  setComposeDraft: (tabId, draft) => {
+    set((s) => ({
+      composeDrafts: { ...s.composeDrafts, [tabId]: draft },
+    }))
+  },
+
+  clearComposeDraft: (tabId) => {
+    set((s) => {
+      const next = { ...s.composeDrafts }
+      delete next[tabId]
+      return { composeDrafts: next }
+    })
   },
 
   retryTab: (tabId) => {

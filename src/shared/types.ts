@@ -256,6 +256,8 @@ export interface Message {
   toolInput?: string
   toolStatus?: 'running' | 'completed' | 'error'
   timestamp: number
+  /** Internal: streaming text chunk accumulator. Joined into `content` on flush. */
+  _textChunks?: string[]
 }
 
 export interface RunResult {
@@ -513,6 +515,26 @@ export interface TerminalCreateOptions {
   cwd?: string
 }
 
+// ─── Inline Shell ───
+
+export interface ShellExecRequest {
+  tabId: string
+  command: string
+  cwd: string
+}
+
+export interface ShellOutput {
+  stdout: string
+  stderr: string
+  exitCode: number
+  /** True if output was truncated at the 50 KB cap */
+  truncated: boolean
+  /** The command that was executed */
+  command: string
+  /** Duration in milliseconds */
+  durationMs: number
+}
+
 // ─── IPC Channel Names ───
 
 export const IPC = {
@@ -553,6 +575,7 @@ export const IPC = {
   PIN_SESSION: 'clui:pin-session',
   UNPIN_SESSION: 'clui:unpin-session',
   FORK_SESSION: 'clui:fork-session',
+  SHELL_EXEC: 'clui:shell-exec',
 
   // One-way events (main → renderer)
   TEXT_CHUNK: 'clui:text-chunk',

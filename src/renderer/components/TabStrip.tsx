@@ -175,12 +175,13 @@ function TabItem({
         }
       />
       {tab.parentSessionId && (
-        <GitFork
-          size={11}
-          weight="bold"
-          style={{ color: colors.textTertiary, flexShrink: 0 }}
-          title="Forked session"
-        />
+        <span title="Forked session" style={{ display: 'flex', flexShrink: 0 }}>
+          <GitFork
+            size={11}
+            weight="bold"
+            style={{ color: colors.textTertiary }}
+          />
+        </span>
       )}
       <span className="truncate flex-1">{tab.title}</span>
       {tab.runtime === 'wsl' && (
