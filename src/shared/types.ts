@@ -250,6 +250,8 @@ export interface Message {
   toolInput?: string
   toolStatus?: 'running' | 'completed' | 'error'
   timestamp: number
+  /** Internal: streaming text chunk accumulator. Joined into `content` on flush. */
+  _textChunks?: string[]
 }
 
 export interface RunResult {

@@ -7,6 +7,7 @@ import { log as _log } from '../logger'
 import { resolveClaudeEntryPoint, getLoginShellPath, ensureBinDirInPath } from '../platform'
 import { spawnInWsl } from '../wsl/wsl-spawner'
 import { CircularBuffer } from '../circular-buffer'
+import { buildPromptArgs, cleanupPromptFile } from './prompt-file'
 import type { ClaudeEntryPoint } from '../platform'
 import type { ClaudeEvent, NormalizedEvent, RunOptions, EnrichedError } from '../../shared/types'
 
@@ -63,6 +64,8 @@ export interface RunHandle {
   sawPermissionRequest: boolean
   /** Permission denials from result event */
   permissionDenials: Array<{ tool_name: string; tool_use_id: string }>
+  /** Path to temp system prompt file (null if using inline arg or WSL) */
+  promptFilePath: string | null
 }
 
 /**
@@ -154,12 +157,13 @@ export class RunManager extends EventEmitter {
     if (options.maxBudgetUsd) {
       args.push('--max-budget-usd', String(options.maxBudgetUsd))
     }
-    // Combine CLUI hint with any existing system prompt (memory packet, agent context)
-    // Uses --append-system-prompt (additive) so it doesn't replace Claude's base prompt.
+    // Combine CLUI hint with any existing system prompt (memory packet, agent context).
+    // Delivered via temp file (--append-system-prompt-file) to avoid CLI arg length limits.
+    // WSL runs use inline --append-system-prompt to avoid path translation issues.
     const combinedSystemPrompt = [options.systemPrompt, CLUI_SYSTEM_HINT].filter(Boolean).join('\n\n')
-    if (combinedSystemPrompt) {
-      args.push('--append-system-prompt', combinedSystemPrompt)
-    }
+    const isWsl = options.runtime === 'wsl' && !!options.wslDistro
+    const promptResult = buildPromptArgs(requestId, combinedSystemPrompt, isWsl)
+    args.push(...promptResult.args)
 
     if (DEBUG) {
       log(`Starting run ${requestId}: ${this.entryPoint.binary} ${args.join(' ')}`)
@@ -196,6 +200,7 @@ export class RunManager extends EventEmitter {
       toolCallCount: 0,
       sawPermissionRequest: false,
       permissionDenials: [],
+      promptFilePath: promptResult.filePath,
     }
 
     // ─── stdout → NDJSON parser → normalizer → events ───
@@ -276,6 +281,7 @@ export class RunManager extends EventEmitter {
       this._finishedRuns.set(requestId, handle)
       this.activeRuns.delete(requestId)
       this.emit('exit', requestId, code, signal, handle.sessionId)
+      cleanupPromptFile(handle.promptFilePath)
       // Clean up finished run after a short delay (gives callers time to read diagnostics)
       setTimeout(() => this._finishedRuns.delete(requestId), 5000)
     })
@@ -291,6 +297,7 @@ export class RunManager extends EventEmitter {
       this._finishedRuns.set(requestId, handle)
       this.activeRuns.delete(requestId)
       this.emit('error', requestId, err)
+      cleanupPromptFile(handle.promptFilePath)
       setTimeout(() => this._finishedRuns.delete(requestId), 5000)
     })
 

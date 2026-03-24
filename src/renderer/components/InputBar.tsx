@@ -1,6 +1,7 @@
 import React, { useState, useRef, useCallback, useEffect, useLayoutEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Microphone, ArrowUp, SpinnerGap, X, Check, Sparkle, Lightning, Terminal } from '@phosphor-icons/react'
+import { ComposeEditor } from './ComposeEditor'
 import { useSessionStore, AVAILABLE_MODELS } from '../stores/sessionStore'
 import { useAgentMemoryStore } from '../stores/agentMemoryStore'
 import { useComparisonStore } from '../stores/comparisonStore'
@@ -70,6 +71,7 @@ export function InputBar() {
   const [slashFilter, setSlashFilter] = useState<string | null>(null)
   const [slashIndex, setSlashIndex] = useState(0)
   const [isMultiLine, setIsMultiLine] = useState(false)
+  const [isComposeOpen, setIsComposeOpen] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const wrapperRef = useRef<HTMLDivElement>(null)
   const measureRef = useRef<HTMLTextAreaElement | null>(null)
@@ -97,6 +99,9 @@ export function InputBar() {
   const preferredModel = useSessionStore((s) => s.preferredModel)
   const activeTabId = useSessionStore((s) => s.activeTabId)
   const tab = useSessionStore((s) => s.tabs.find((t) => t.id === s.activeTabId))
+  const composeDraft = useSessionStore((s) => s.composeDrafts[s.activeTabId] ?? '')
+  const setComposeDraft = useSessionStore((s) => s.setComposeDraft)
+  const clearComposeDraft = useSessionStore((s) => s.clearComposeDraft)
   const snippets = useSnippetStore((s) => s.snippets)
   const colors = useColors()
   const isBusy = tab?.status === 'running' || tab?.status === 'connecting'
@@ -138,6 +143,51 @@ export function InputBar() {
     window.addEventListener('clui-focus-input', onFocusInput as EventListener)
     return () => window.removeEventListener('clui-focus-input', onFocusInput as EventListener)
   }, [])
+
+  // Close compose editor on tab switch
+  useEffect(() => {
+    if (isComposeOpen) {
+      setIsComposeOpen(false)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTabId])
+
+  // Ctrl+G / Cmd+G — open compose editor
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      const isMod = e.ctrlKey || e.metaKey
+      if (isMod && e.key === 'g') {
+        e.preventDefault()
+        if (isComposeOpen) {
+          setIsComposeOpen(false)
+        } else if (tab?.status !== 'connecting') {
+          setIsComposeOpen(true)
+        }
+      }
+    }
+    window.addEventListener('keydown', handleGlobalKeyDown)
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown)
+  }, [isComposeOpen, tab?.status])
+
+  const handleComposeSubmit = useCallback((text: string) => {
+    setIsComposeOpen(false)
+    clearComposeDraft(activeTabId)
+    setInput('')
+    sendMessage(text)
+    requestAnimationFrame(() => textareaRef.current?.focus())
+  }, [activeTabId, clearComposeDraft, sendMessage])
+
+  const handleComposeCancel = useCallback((draft: string) => {
+    setIsComposeOpen(false)
+    if (draft.trim()) {
+      setComposeDraft(activeTabId, draft)
+    } else {
+      clearComposeDraft(activeTabId)
+    }
+    // Put the draft text back in the inline input
+    setInput(draft)
+    requestAnimationFrame(() => textareaRef.current?.focus())
+  }, [activeTabId, setComposeDraft, clearComposeDraft])
 
   const buildCurrentExportData = useCallback((): SessionExportData | null => {
     if (!tab || tab.messages.length === 0) {
@@ -872,6 +922,15 @@ export function InputBar() {
 
       {/* Prompt lint warnings */}
       {lintWarnings.length > 0 && <PromptLintBar warnings={lintWarnings} />}
+
+      {/* Compose editor overlay */}
+      <ComposeEditor
+        isOpen={isComposeOpen}
+        initialText={isComposeOpen ? (composeDraft || input) : ''}
+        onSubmit={handleComposeSubmit}
+        onCancel={handleComposeCancel}
+        disabled={isBusy}
+      />
     </div>
   )
 }

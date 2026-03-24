@@ -74,6 +74,14 @@ describe('keyboard shortcuts', () => {
     } as KeyboardEvent, false)).toBe('Alt+Shift+Left')
   })
 
+  it('includes compose-editor shortcut as Ctrl+G / Cmd+G', () => {
+    const windowsBindings = getDefaultShortcutBindings(false)
+    const macBindings = getDefaultShortcutBindings(true)
+
+    expect(windowsBindings.find((b) => b.id === 'compose-editor')?.currentKeys).toBe('Ctrl+G')
+    expect(macBindings.find((b) => b.id === 'compose-editor')?.currentKeys).toBe('Cmd+G')
+  })
+
   it('detects shortcut conflicts', () => {
     const bindings = getDefaultShortcutBindings(false)
     const conflict = findShortcutConflict(bindings, 'next-tab', 'Ctrl+Shift+Tab')
