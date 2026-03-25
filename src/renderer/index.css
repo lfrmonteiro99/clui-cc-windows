@@ -244,6 +244,18 @@ input::placeholder {
   box-shadow: 0 0 0 2px var(--clui-accent-glow, rgba(217,119,87,0.25));
 }
 
+/* ─── Conversation search highlights ─── */
+.search-highlight {
+  background: var(--clui-accent-light, rgba(217, 119, 87, 0.2));
+  border-radius: 2px;
+  padding: 0 1px;
+  color: inherit;
+}
+.search-highlight-active {
+  background: var(--clui-accent-soft, rgba(217, 119, 87, 0.45));
+  outline: 1px solid var(--clui-accent, #d97757);
+  border-radius: 2px;
+}
 /* ─── Conversation scrollbar — slightly wider, themed ─── */
 .conversation-scroll::-webkit-scrollbar {
   width: 6px;
