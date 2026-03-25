@@ -416,6 +416,22 @@ export function InputBar() {
           })
         break
       }
+      case '/agents': {
+        addSystemMessage('Fetching available agents...')
+        window.clui.listAgents()
+          .then((agents) => {
+            if (agents.length === 0) {
+              addSystemMessage('No agents configured. Use /agent <name> [prompt] to create a custom agent tab.')
+            } else {
+              const lines = agents.map((a) => `- **${a.name}**${a.description ? `: ${a.description}` : ''}`)
+              addSystemMessage(`Available agents (${agents.length}):\n${lines.join('\n')}\n\nUse: /agent <name> [prompt]`)
+            }
+          })
+          .catch((err: Error) => {
+            addSystemMessage(`Failed to list agents: ${err.message}`)
+          })
+        break
+      }
       case '/help': {
         const lines = [
           '/clear — Clear conversation history',
@@ -428,6 +444,8 @@ export function InputBar() {
           '/skills — Show available skills',
           '/workflow — Open workflow manager',
           '/fork — Fork this session into a new tab',
+          '/agent — Create a new agent tab',
+          '/agents — List available CLI agents',
           '/help — Show this list',
           '',
           '!<command> — Run shell command inline (e.g. !git status)',
@@ -635,6 +653,25 @@ export function InputBar() {
         clearComposer()
         addSystemMessage(`Unknown effort level "${effortMatch[1]}". Valid: low, medium, high, max, auto`)
       }
+      return
+    }
+
+    const agentMatch = prompt.match(/^\/agent\s+(\S+)(?:\s+(.+))?$/i)
+    if (agentMatch) {
+      clearComposer()
+      const agentName = agentMatch[1]
+      const agentPrompt = agentMatch[2]?.trim() || `You are the ${agentName} agent. Proceed with the task.`
+      const projectPath = tab?.hasChosenDirectory
+        ? tab.workingDirectory
+        : (staticInfo?.homePath || tab?.workingDirectory || '~')
+      addSystemMessage(`Creating agent tab: ${agentName}...`)
+      window.clui.createAgentTab(activeTabId, agentName, projectPath, agentPrompt)
+        .then(({ tabId: newTabId }) => {
+          useSessionStore.getState().agentTabCreated(newTabId, activeTabId, agentName, tab?.workingDirectory || '~')
+        })
+        .catch((err: Error) => {
+          addSystemMessage(`Agent tab failed: ${err.message}`)
+        })
       return
     }
 
