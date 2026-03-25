@@ -61,6 +61,10 @@ const darkColors = {
   userBubbleBorder: '#4a4a45',
   userBubbleText: '#ccc9c0',
 
+  // Assistant message
+  messageBgAssistant: 'rgba(217, 119, 87, 0.04)',
+  messageAccentBorder: '#d97757',
+
   // Tool card
   toolBg: '#353530',
   toolBorder: '#4a4a45',
@@ -216,6 +220,10 @@ const lightColors = {
   userBubble: '#edeae0',
   userBubbleBorder: '#dddad2',
   userBubbleText: '#3c3929',
+
+  // Assistant message
+  messageBgAssistant: 'rgba(217, 119, 87, 0.05)',
+  messageAccentBorder: '#d97757',
 
   // Tool card
   toolBg: '#edeae0',

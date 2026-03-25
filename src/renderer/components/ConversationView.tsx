@@ -27,6 +27,9 @@ const INITIAL_RENDER_CAP = 100
 const PAGE_SIZE = 100
 const REMARK_PLUGINS = [remarkGfm] // Hoisted — prevents re-parse on every render
 
+/** Tailwind class for vertical spacing between grouped messages. Exported for testing. */
+export const MESSAGE_GAP_CLASS = 'space-y-5'
+
 // ─── Types ───
 
 type GroupedItem =
@@ -243,7 +246,7 @@ export function ConversationView({ overrideTabId }: { overrideTabId?: string } =
           )}
         </AnimatePresence>
 
-        <div className="space-y-1 relative">
+        <div className={`${MESSAGE_GAP_CLASS} relative`}>
           {grouped.map((item, idx) => {
             const msgIndex = startIndex + idx
             const isHistorical = msgIndex < historicalThreshold
@@ -456,7 +459,7 @@ const InterruptButton = React.memo(function InterruptButton({ tabId }: { tabId: 
 
 // ─── User Message (memoized — only re-renders when message reference changes) ───
 
-const UserMessage = React.memo(function UserMessage({ message, skipMotion }: { message: Message; skipMotion?: boolean }) {
+export const UserMessage = React.memo(function UserMessage({ message, skipMotion }: { message: Message; skipMotion?: boolean }) {
   const colors = useColors()
   const content = (
     <div
@@ -626,7 +629,7 @@ function ImageCard({ src, alt, colors }: { src?: string; alt?: string; colors: R
 
 // ─── Assistant Message (memoized — only re-renders when content changes) ───
 
-const AssistantMessage = React.memo(function AssistantMessage({
+export const AssistantMessage = React.memo(function AssistantMessage({
   message,
   skipMotion,
 }: {
@@ -670,7 +673,14 @@ const AssistantMessage = React.memo(function AssistantMessage({
   }), [colors])
 
   const inner = (
-    <div data-testid="message-assistant" className="group/msg relative">
+    <div
+      data-testid="message-assistant"
+      className="group/msg relative rounded-lg px-3 py-2"
+      style={{
+        background: colors.messageBgAssistant,
+        borderLeft: `3px solid ${colors.messageAccentBorder}`,
+      }}
+    >
       <div className="text-[13px] leading-[1.6] prose-cloud min-w-0 max-w-[92%]">
         <Markdown remarkPlugins={REMARK_PLUGINS} components={markdownComponents}>
           {message.content}
@@ -719,7 +729,7 @@ function tryParseShellOutput(content: string): ShellOutputType | null {
   return null
 }
 
-const SystemMessage = React.memo(function SystemMessage({ message, skipMotion }: { message: Message; skipMotion?: boolean }) {
+export const SystemMessage = React.memo(function SystemMessage({ message, skipMotion }: { message: Message; skipMotion?: boolean }) {
   const isError = message.content.startsWith('Error:') || message.content.includes('unexpectedly')
   const colors = useColors()
 
@@ -743,24 +753,25 @@ const SystemMessage = React.memo(function SystemMessage({ message, skipMotion }:
   const inner = (
     <div
       data-testid={isError ? 'message-system-error' : 'message-system'}
-      className="text-[11px] leading-[1.5] px-2.5 py-1 rounded-lg inline-block whitespace-pre-wrap"
+      className="text-xs leading-[1.5] px-2.5 py-1 rounded-lg inline-block whitespace-pre-wrap"
       style={{
         background: isError ? colors.statusErrorBg : colors.surfaceHover,
         color: isError ? colors.statusError : colors.textTertiary,
+        fontStyle: 'italic',
       }}
     >
       {message.content}
     </div>
   )
 
-  if (skipMotion) return <div className="py-0.5">{inner}</div>
+  if (skipMotion) return <div className="py-0.5 text-center">{inner}</div>
 
   return (
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.15 }}
-      className="py-0.5"
+      className="py-0.5 text-center"
     >
       {inner}
     </motion.div>
