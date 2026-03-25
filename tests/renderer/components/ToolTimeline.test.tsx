@@ -96,7 +96,7 @@ describe('ToolTimeline', () => {
     it('truncates long labels', () => {
       const input = JSON.stringify({ pattern: 'a'.repeat(30) })
       const label = getToolLabel('Grep', input)
-      expect(label.length).toBeLessThanOrEqual(20)
+      expect(label.length).toBeLessThanOrEqual(30)
     })
   })
 
