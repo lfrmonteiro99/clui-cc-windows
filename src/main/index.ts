@@ -31,6 +31,7 @@ import { IngestionService } from './context/ingestion-service'
 import { RetrievalService } from './context/retrieval-service'
 import { IPC } from '../shared/types'
 import type { RunOptions, NormalizedEvent, EnrichedError, ExportOptions, SessionExportData, CostRecord, ShellExecRequest } from '../shared/types'
+import { MIN_WINDOW_HEIGHT, SCREEN_EDGE_MARGIN, clampHeight } from '../shared/adaptive-height'
 import { executeShell } from './shell-executor'
 import { IpcEventBatcher } from './ipc-batcher'
 import { cleanOrphanedPromptFiles } from './claude/prompt-file'
@@ -91,8 +92,11 @@ const retrievalService = contextDb ? new RetrievalService(contextDb) : null
 // Keep native width fixed to avoid renderer animation vs setBounds race.
 // The UI itself still launches in compact mode; extra width is transparent/click-through.
 const BAR_WIDTH = 1040
-const PILL_HEIGHT = 720  // Fixed native window height — extra room for expanded UI + shadow buffers
+const DEFAULT_PILL_HEIGHT = 780  // Default native window height — grown to support adaptive panels
 const PILL_BOTTOM_MARGIN = 24
+
+/** Current native window height — updated dynamically by RESIZE_HEIGHT IPC */
+let currentPillHeight = DEFAULT_PILL_HEIGHT
 
 // getProjectSessionKey imported from ./session-path
 
@@ -202,14 +206,20 @@ function createWindow(): void {
   const { width: screenWidth, height: screenHeight } = display.workAreaSize
   const { x: dx, y: dy } = display.workArea
 
+  // Adaptive height: cap native window to available screen height minus margin
+  const maxHeight = Math.max(MIN_WINDOW_HEIGHT, screenHeight - SCREEN_EDGE_MARGIN)
+  currentPillHeight = Math.min(currentPillHeight, maxHeight)
+
   const x = dx + Math.round((screenWidth - BAR_WIDTH) / 2)
-  const y = dy + screenHeight - PILL_HEIGHT - PILL_BOTTOM_MARGIN
+  const y = dy + screenHeight - currentPillHeight - PILL_BOTTOM_MARGIN
 
   const winConfig = getWindowConfig()
 
   mainWindow = new BrowserWindow({
     width: BAR_WIDTH,
-    height: PILL_HEIGHT,
+    height: currentPillHeight,
+    minHeight: MIN_WINDOW_HEIGHT,
+    maxHeight,
     x,
     y,
     ...(winConfig.type ? { type: winConfig.type } : {}),
@@ -285,11 +295,15 @@ function toggleWindow(source = 'unknown'): void {
     const display = screen.getDisplayNearestPoint(cursor)
     const { width: sw, height: sh } = display.workAreaSize
     const { x: dx, y: dy } = display.workArea
+    // Adaptive: clamp height to current display
+    const displayMax = Math.max(MIN_WINDOW_HEIGHT, sh - SCREEN_EDGE_MARGIN)
+    currentPillHeight = Math.min(currentPillHeight, displayMax)
+
     mainWindow.setBounds({
       x: dx + Math.round((sw - BAR_WIDTH) / 2),
-      y: dy + sh - PILL_HEIGHT - PILL_BOTTOM_MARGIN,
+      y: dy + sh - currentPillHeight - PILL_BOTTOM_MARGIN,
       width: BAR_WIDTH,
-      height: PILL_HEIGHT,
+      height: currentPillHeight,
     })
     if (SPACES_DEBUG) {
       log(`[spaces] toggle#${toggleId} move-to-display id=${display.id}`)
@@ -308,8 +322,27 @@ function toggleWindow(source = 'unknown'): void {
 // Fixed-height mode: ignore renderer resize events to prevent jank.
 // The native window stays at PILL_HEIGHT; all expand/collapse happens inside the renderer.
 
-ipcMain.on(IPC.RESIZE_HEIGHT, () => {
-  // No-op — fixed height window, no dynamic resize
+ipcMain.on(IPC.RESIZE_HEIGHT, (_event, height: number) => {
+  if (!mainWindow || mainWindow.isDestroyed()) return
+  if (typeof height !== 'number' || height <= 0) return
+
+  const cursor = screen.getCursorScreenPoint()
+  const display = screen.getDisplayNearestPoint(cursor)
+  const { height: sh } = display.workAreaSize
+  const { x: dx, y: dy } = display.workArea
+
+  const clamped = clampHeight(height, sh)
+  currentPillHeight = clamped
+
+  const bounds = mainWindow.getBounds()
+  // Keep window anchored to bottom — adjust y when height changes
+  const newY = dy + sh - clamped - PILL_BOTTOM_MARGIN
+  mainWindow.setBounds({
+    x: bounds.x,
+    y: newY,
+    width: bounds.width,
+    height: clamped,
+  })
 })
 
 ipcMain.on(IPC.SET_WINDOW_WIDTH, () => {

@@ -45,6 +45,16 @@ import { SandboxRunSummary } from './components/SandboxRunSummary'
 import { FileTreePanel } from './components/FileTreePanel'
 import { StashBrowser } from './components/StashBrowser'
 import { useColors, useThemeStore, spacing } from './theme'
+import {
+  DEFAULT_BODY_MAX_HEIGHT,
+  PANEL_BODY_MAX_HEIGHT,
+  CARD_COLLAPSED_WIDTH,
+  CARD_EXPANDED_WIDTH,
+  CONTENT_WIDTH,
+  HEIGHT_STORAGE_KEY,
+  PANEL_HEIGHT_BOOST,
+  clampHeight,
+} from '../shared/adaptive-height'
 import { useFilePeekStore } from './stores/filePeekStore'
 import { useContextStore } from './stores/contextStore'
 import { useContextMenuStore } from './stores/contextMenuStore'
@@ -306,11 +316,37 @@ export default function App() {
   // Layout dimensions — expandedUI widens and heightens the panel; terminal/comparison mode widens further
   const isComparing = !!activeComparison
   const effectiveExpanded = isExpanded || terminalMode // terminal forces expanded
-  const contentWidth = isComparing ? 900 : terminalMode ? 700 : expandedUI ? 700 : spacing.contentWidth
-  const cardExpandedWidth = isComparing ? 900 : terminalMode ? 700 : expandedUI ? 700 : 460
-  const cardCollapsedWidth = expandedUI ? 670 : 430
+  const contentWidth = isComparing ? 960 : terminalMode ? CARD_EXPANDED_WIDTH : expandedUI ? CARD_EXPANDED_WIDTH : CONTENT_WIDTH
+  const cardExpandedWidth = isComparing ? 960 : terminalMode ? CARD_EXPANDED_WIDTH : expandedUI ? CARD_EXPANDED_WIDTH : CONTENT_WIDTH
+  const cardCollapsedWidth = expandedUI ? 720 : CARD_COLLAPSED_WIDTH
   const cardCollapsedMargin = expandedUI ? 15 : 15
-  const bodyMaxHeight = isComparing ? 520 : terminalMode ? 520 : expandedUI ? 520 : 400
+
+  // Detect if any overlay panel is open — drives height expansion
+  const anyPanelOpen = marketplaceOpen || costDashboardOpen || snippetManagerOpen
+    || shortcutSettingsOpen || exportDialogOpen || workflowManagerOpen
+    || workflowEditorOpen || filePeekOpen || contextPanelOpen
+
+  const bodyMaxHeight = isComparing ? PANEL_BODY_MAX_HEIGHT : terminalMode ? PANEL_BODY_MAX_HEIGHT
+    : expandedUI ? PANEL_BODY_MAX_HEIGHT : anyPanelOpen ? PANEL_BODY_MAX_HEIGHT : DEFAULT_BODY_MAX_HEIGHT
+
+  // ─── Adaptive height: resize native window when panels open/close ───
+  useEffect(() => {
+    if (!window.clui?.resizeHeight) return
+    const DEFAULT_NATIVE = 780
+    const screenH = window.screen?.availHeight || 1080
+
+    if (anyPanelOpen) {
+      const targetHeight = clampHeight(DEFAULT_NATIVE + PANEL_HEIGHT_BOOST, screenH)
+      window.clui.resizeHeight(targetHeight)
+    } else {
+      window.clui.resizeHeight(DEFAULT_NATIVE)
+    }
+  }, [anyPanelOpen])
+
+  // ─── Height persistence: save bodyMaxHeight to localStorage ───
+  useEffect(() => {
+    localStorage.setItem(HEIGHT_STORAGE_KEY, String(bodyMaxHeight))
+  }, [bodyMaxHeight])
 
   const handleScreenshot = useCallback(async () => {
     const result = await window.clui.takeScreenshot()
