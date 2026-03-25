@@ -70,11 +70,13 @@ input::placeholder {
   margin: 0.5em 0;
 }
 .prose-cloud pre {
-  background: var(--clui-code-bg);
+  background: var(--clui-code-block-bg);
   border: 1px solid var(--clui-container-border);
   border-radius: 10px;
   padding: 0.75em 1em;
   font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+  color: var(--clui-code-block-text);
   overflow-x: auto;
 }
 .prose-cloud code {
@@ -131,6 +133,17 @@ input::placeholder {
 .prose-cloud th {
   background: var(--clui-surface-primary);
   font-weight: 600;
+}
+
+/* ─── Streaming cursor — blinking caret at end of streaming text ─── */
+@keyframes blink {
+  50% { opacity: 0; }
+}
+.streaming-cursor::after {
+  content: '|';
+  animation: blink 1s step-end infinite;
+  color: var(--clui-accent);
+  font-weight: bold;
 }
 
 /* ─── Pulsing dot animation ─── */
