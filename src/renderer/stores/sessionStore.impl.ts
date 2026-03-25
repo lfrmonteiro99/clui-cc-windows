@@ -125,6 +125,7 @@ export interface State {
   retryTab: (tabId: string) => void
   stopRetrying: (tabId: string) => void
   forkTabCreated: (newTabId: string, sourceTabId: string, parentTitle: string, workingDirectory: string, parentSessionId: string) => void
+  prTabCreated: (newTabId: string, prNumber: number, workingDirectory: string) => void
   handleNormalizedEvent: (tabId: string, event: NormalizedEvent) => void
   handleStatusChange: (tabId: string, newStatus: string, oldStatus: string) => void
   handleError: (tabId: string, error: EnrichedError) => void
@@ -385,6 +386,23 @@ export const useSessionStore = create<State>((set, get) => ({
       workingDirectory,
       hasChosenDirectory: true,
       parentSessionId,
+    }
+    set((s) => ({
+      tabs: orderTabsByTabOrder([...s.tabs, tab], [...s.tabOrder, tab.id]),
+      tabOrder: reconcileTabOrder([...s.tabOrder, tab.id], [...s.tabs, tab]),
+      activeTabId: tab.id,
+    }))
+    saveStoredTabOrder(get().tabOrder)
+  },
+
+  prTabCreated: (newTabId, prNumber, workingDirectory) => {
+    const tab: TabState = {
+      ...makeLocalTab(),
+      id: newTabId,
+      title: `PR #${prNumber}`,
+      workingDirectory,
+      hasChosenDirectory: true,
+      prNumber,
     }
     set((s) => ({
       tabs: orderTabsByTabOrder([...s.tabs, tab], [...s.tabOrder, tab.id]),

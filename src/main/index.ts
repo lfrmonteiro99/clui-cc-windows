@@ -380,6 +380,11 @@ ipcMain.handle(IPC.FORK_SESSION, async (_event, { tabId, projectPath }: { tabId:
   return controlPlane.forkSession(tabId, projectPath)
 })
 
+ipcMain.handle(IPC.OPEN_PR_REVIEW, async (_event, { prNumber, projectPath }: { prNumber: number; projectPath: string }) => {
+  log(`IPC OPEN_PR_REVIEW: pr=${prNumber} project=${projectPath}`)
+  return controlPlane.openPrReview(prNumber, projectPath)
+})
+
 ipcMain.on(IPC.INIT_SESSION, (_event, tabId: string) => {
   log(`IPC INIT_SESSION: ${tabId}`)
   controlPlane.initSession(tabId)

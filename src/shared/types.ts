@@ -246,6 +246,8 @@ export interface TabState {
   contextNotificationShown: boolean
   /** Session ID of the parent session this tab was forked from */
   parentSessionId?: string
+  /** PR number when this tab is a PR review (opened via /pr or openPrReview) */
+  prNumber?: number
 }
 
 export interface Message {
@@ -368,6 +370,8 @@ export interface RunOptions {
   forkSession?: boolean
   /** Session ID to fork from (used with forkSession) */
   forkFromSessionId?: string
+  /** PR number or URL for --from-pr flag */
+  fromPr?: string
 }
 
 // ─── Control Plane Types ───
@@ -581,6 +585,7 @@ export const IPC = {
   PIN_SESSION: 'clui:pin-session',
   UNPIN_SESSION: 'clui:unpin-session',
   FORK_SESSION: 'clui:fork-session',
+  OPEN_PR_REVIEW: 'clui:open-pr-review',
   SHELL_EXEC: 'clui:shell-exec',
 
   // One-way events (main → renderer)

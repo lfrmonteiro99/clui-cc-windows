@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { motion } from 'framer-motion'
 import {
-  Trash, Cpu, CurrencyDollar, Question, HardDrives, Sparkle, Export, Columns, ListChecks, Gauge, GitFork,
+  Trash, Cpu, CurrencyDollar, Question, HardDrives, Sparkle, Export, Columns, ListChecks, Gauge, GitFork, GitPullRequest,
 } from '@phosphor-icons/react'
 import { usePopoverLayer } from './PopoverLayer'
 import { useColors } from '../theme'
@@ -32,6 +32,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   { command: '/workflow', description: 'Open workflow manager', icon: <ListChecks size={13} /> },
   { command: '/effort', description: 'Set effort level: low|medium|high|max|auto', icon: <Gauge size={13} /> },
   { command: '/fork', description: 'Fork this session into a new tab', icon: <GitFork size={13} /> },
+  { command: '/pr', description: 'Open a PR review tab by number', icon: <GitPullRequest size={13} />, insertOnly: true },
   { command: '/help', description: 'Show available commands', icon: <Question size={13} /> },
 ]
 

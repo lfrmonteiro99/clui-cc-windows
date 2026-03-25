@@ -954,6 +954,29 @@ export class ControlPlane extends EventEmitter {
     return { newTabId }
   }
 
+  // ─── PR Review ───
+
+  /**
+   * Open a PR review tab. Spawns Claude with `--from-pr <number>`.
+   * Validates that prNumber is a positive integer.
+   */
+  async openPrReview(prNumber: number, projectPath: string): Promise<{ tabId: string; prNumber: number }> {
+    if (!Number.isInteger(prNumber) || prNumber <= 0) {
+      throw new Error('Invalid PR number — must be a positive integer')
+    }
+
+    const tabId = this.createTab()
+    const requestId = `pr-review-${tabId}`
+
+    await this.submitPrompt(tabId, requestId, {
+      prompt: `Review PR #${prNumber}`,
+      projectPath,
+      fromPr: String(prNumber),
+    })
+
+    return { tabId, prNumber }
+  }
+
   // ─── Permission Response ───
 
   respondToPermission(tabId: string, questionId: string, optionId: string): boolean {
