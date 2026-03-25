@@ -58,6 +58,8 @@ export interface CluiAPI {
   respondPermission(tabId: string, questionId: string, optionId: string): Promise<boolean>
   forkSession(tabId: string, projectPath: string): Promise<{ newTabId: string }>
   openPrReview(prNumber: number, projectPath: string): Promise<{ tabId: string; prNumber: number }>
+  createAgentTab(parentTabId: string, agentName: string, projectPath: string, prompt: string, agentConfig?: Record<string, import('../shared/types').AgentConfig>): Promise<{ tabId: string }>
+  listAgents(): Promise<import('../shared/types').AgentConfig[]>
   initSession(tabId: string): void
   resetTabSession(tabId: string): void
   listSessions(projectPath?: string): Promise<SessionMeta[]>
@@ -184,6 +186,9 @@ const api: CluiAPI = {
     ipcRenderer.invoke(IPC.RESPOND_PERMISSION, { tabId, questionId, optionId }),
   forkSession: (tabId, projectPath) => ipcRenderer.invoke(IPC.FORK_SESSION, { tabId, projectPath }),
   openPrReview: (prNumber, projectPath) => ipcRenderer.invoke(IPC.OPEN_PR_REVIEW, { prNumber, projectPath }),
+  createAgentTab: (parentTabId, agentName, projectPath, prompt, agentConfig) =>
+    ipcRenderer.invoke(IPC.CREATE_AGENT_TAB, { parentTabId, agentName, projectPath, prompt, agentConfig }),
+  listAgents: () => ipcRenderer.invoke(IPC.LIST_AGENTS),
   initSession: (tabId) => ipcRenderer.send(IPC.INIT_SESSION, tabId),
   resetTabSession: (tabId) => ipcRenderer.send(IPC.RESET_TAB_SESSION, tabId),
   listSessions: (projectPath?: string) => ipcRenderer.invoke(IPC.LIST_SESSIONS, projectPath),

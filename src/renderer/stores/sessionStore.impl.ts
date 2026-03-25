@@ -126,6 +126,7 @@ export interface State {
   stopRetrying: (tabId: string) => void
   forkTabCreated: (newTabId: string, sourceTabId: string, parentTitle: string, workingDirectory: string, parentSessionId: string) => void
   prTabCreated: (newTabId: string, prNumber: number, workingDirectory: string) => void
+  agentTabCreated: (newTabId: string, parentTabId: string, agentName: string, workingDirectory: string) => void
   handleNormalizedEvent: (tabId: string, event: NormalizedEvent) => void
   handleStatusChange: (tabId: string, newStatus: string, oldStatus: string) => void
   handleError: (tabId: string, error: EnrichedError) => void
@@ -403,6 +404,29 @@ export const useSessionStore = create<State>((set, get) => ({
       workingDirectory,
       hasChosenDirectory: true,
       prNumber,
+    }
+    set((s) => ({
+      tabs: orderTabsByTabOrder([...s.tabs, tab], [...s.tabOrder, tab.id]),
+      tabOrder: reconcileTabOrder([...s.tabOrder, tab.id], [...s.tabs, tab]),
+      activeTabId: tab.id,
+    }))
+    saveStoredTabOrder(get().tabOrder)
+  },
+
+  agentTabCreated: (newTabId, parentTabId, agentName, workingDirectory) => {
+    const tab: TabState = {
+      ...makeLocalTab(),
+      id: newTabId,
+      title: `Agent: ${agentName}`,
+      workingDirectory,
+      hasChosenDirectory: true,
+      agentName,
+      parentTabId,
+    }
+    // Find parent tab's group and assign agent tab to same group
+    const parentTab = get().tabs.find((t) => t.id === parentTabId)
+    if (parentTab?.groupId) {
+      tab.groupId = parentTab.groupId
     }
     set((s) => ({
       tabs: orderTabsByTabOrder([...s.tabs, tab], [...s.tabOrder, tab.id]),

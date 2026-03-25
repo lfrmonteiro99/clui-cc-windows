@@ -977,6 +977,71 @@ export class ControlPlane extends EventEmitter {
     return { tabId, prNumber }
   }
 
+  // ─── Agent Tab ───
+
+  /**
+   * Create a new tab configured as an agent tab.
+   * The tab will spawn a CLI process with --agent or --agents flags.
+   */
+  async createAgentTab(
+    parentTabId: string,
+    agentName: string,
+    projectPath: string,
+    prompt: string,
+    agentConfig?: Record<string, import('../../shared/types').AgentConfig>,
+  ): Promise<{ tabId: string }> {
+    const parentTab = this.tabs.get(parentTabId)
+    if (!parentTab) throw new Error('Parent tab not found')
+
+    // Enforce max agent tabs per group
+    const { MAX_AGENT_TABS_PER_GROUP } = await import('./agent-args')
+    let agentCount = 0
+    for (const [, tab] of this.tabs) {
+      // Count tabs that share the same parentTabId (or are parented by parentTabId)
+      if ((tab as unknown as { parentTabId?: string }).parentTabId === parentTabId) {
+        agentCount++
+      }
+    }
+    if (agentCount >= MAX_AGENT_TABS_PER_GROUP) {
+      throw new Error(`Maximum ${MAX_AGENT_TABS_PER_GROUP} agent tabs per group`)
+    }
+
+    const tabId = this.createTab()
+    log(`Agent tab created: ${tabId} (agent=${agentName}, parent=${parentTabId})`)
+
+    const requestId = `agent-${tabId}`
+    const runOptions: import('../../shared/types').RunOptions = {
+      prompt,
+      projectPath,
+      ...(agentConfig ? { agentConfig } : { agent: agentName }),
+    }
+
+    await this.submitPrompt(tabId, requestId, runOptions)
+    return { tabId }
+  }
+
+  /**
+   * List available agents by running `claude agents --json`.
+   * Returns parsed AgentConfig array (may be empty if no agents configured).
+   */
+  async listAvailableAgents(): Promise<import('../../shared/types').AgentConfig[]> {
+    const { execSync } = await import('child_process')
+    const { parseAgentListOutput } = await import('./agent-args')
+    const { resolveClaudeEntryPoint } = await import('../platform')
+    const entry = resolveClaudeEntryPoint()
+
+    try {
+      const cmd = entry.prefixArgs.length > 0
+        ? `${entry.binary} ${entry.prefixArgs.join(' ')} agents --json`
+        : `${entry.binary} agents --json`
+      const stdout = execSync(cmd, { encoding: 'utf-8', timeout: 10000 }).trim()
+      return parseAgentListOutput(stdout)
+    } catch (err) {
+      log(`Failed to list agents: ${(err as Error).message}`)
+      return []
+    }
+  }
+
   // ─── Permission Response ───
 
   respondToPermission(tabId: string, questionId: string, optionId: string): boolean {

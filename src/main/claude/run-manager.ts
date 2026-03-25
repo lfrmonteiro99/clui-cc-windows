@@ -8,6 +8,7 @@ import { resolveClaudeEntryPoint, getLoginShellPath, ensureBinDirInPath } from '
 import { spawnInWsl } from '../wsl/wsl-spawner'
 import { CircularBuffer } from '../circular-buffer'
 import { buildPromptArgs, cleanupPromptFile } from './prompt-file'
+import { buildAgentArgs } from './agent-args'
 import type { ClaudeEntryPoint } from '../platform'
 import type { ClaudeEvent, NormalizedEvent, RunOptions, EnrichedError } from '../../shared/types'
 
@@ -140,6 +141,12 @@ export class RunManager extends EventEmitter {
 
     if (options.fromPr) {
       args.push('--from-pr', options.fromPr)
+    }
+
+    // Agent mode: --agent <name> or --agents '<json>'
+    const agentArgs = buildAgentArgs(options)
+    if (agentArgs.length > 0) {
+      args.push(...agentArgs)
     }
 
     if (options.hookSettingsPath) {
