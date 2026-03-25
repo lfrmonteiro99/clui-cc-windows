@@ -210,3 +210,23 @@ input::placeholder {
 .no-drag {
   -webkit-app-region: no-drag;
 }
+
+/* ─── Global microinteractions ─── */
+.clui-pressable {
+  transition: transform 0.1s ease;
+}
+.clui-pressable:active {
+  transform: scale(0.96);
+}
+
+.clui-interactive {
+  transition: background-color 0.15s ease;
+}
+.clui-interactive:hover {
+  background-color: var(--clui-surface-hover);
+}
+
+.clui-focus-ring:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--clui-accent-glow, rgba(217,119,87,0.25));
+}
