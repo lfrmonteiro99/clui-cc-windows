@@ -444,6 +444,7 @@ export function InputBar() {
           '/skills — Show available skills',
           '/workflow — Open workflow manager',
           '/fork — Fork this session into a new tab',
+          '/pr — Open a PR review tab (e.g. /pr 447)',
           '/agent — Create a new agent tab',
           '/agents — List available CLI agents',
           '/help — Show this list',
@@ -653,6 +654,34 @@ export function InputBar() {
         clearComposer()
         addSystemMessage(`Unknown effort level "${effortMatch[1]}". Valid: low, medium, high, max, auto`)
       }
+      return
+    }
+    const prMatch = prompt.match(/^\/pr\s+(\S+)/i)
+    if (prMatch) {
+      const prArg = prMatch[1]
+      const prNum = Number(prArg)
+      if (!Number.isInteger(prNum) || prNum <= 0) {
+        clearComposer()
+        addSystemMessage(`Invalid PR number "${prArg}". Usage: /pr <number>`)
+        return
+      }
+      const projectPath = tab?.hasChosenDirectory
+        ? tab.workingDirectory
+        : (staticInfo?.homePath || tab?.workingDirectory || '~')
+      clearComposer()
+      addSystemMessage(`Opening PR #${prNum} review...`)
+      window.clui.openPrReview(prNum, projectPath)
+        .then(({ tabId: newTabId, prNumber }) => {
+          useSessionStore.getState().prTabCreated(newTabId, prNumber, projectPath)
+        })
+        .catch((err: Error) => {
+          addSystemMessage(`PR review failed: ${err.message}`)
+        })
+      return
+    }
+    if (prompt === '/pr') {
+      clearComposer()
+      addSystemMessage('Usage: /pr <number>\nExample: /pr 447')
       return
     }
 

@@ -256,6 +256,8 @@ export interface TabState {
   contextNotificationShown: boolean
   /** Session ID of the parent session this tab was forked from */
   parentSessionId?: string
+  /** PR number when this tab is a PR review (opened via /pr or openPrReview) */
+  prNumber?: number
   /** Agent name when this tab is an agent tab */
   agentName?: string
   /** Parent tab ID for agent tab grouping */
@@ -382,6 +384,8 @@ export interface RunOptions {
   forkSession?: boolean
   /** Session ID to fork from (used with forkSession) */
   forkFromSessionId?: string
+  /** PR number or URL for --from-pr flag */
+  fromPr?: string
   /** Pre-configured agent name (passed as --agent <name>) */
   agent?: string
   /** Custom inline agent definitions (passed as --agents '<json>') */
@@ -599,6 +603,7 @@ export const IPC = {
   PIN_SESSION: 'clui:pin-session',
   UNPIN_SESSION: 'clui:unpin-session',
   FORK_SESSION: 'clui:fork-session',
+  OPEN_PR_REVIEW: 'clui:open-pr-review',
   CREATE_AGENT_TAB: 'clui:create-agent-tab',
   LIST_AGENTS: 'clui:list-agents',
   SHELL_EXEC: 'clui:shell-exec',

@@ -380,6 +380,11 @@ ipcMain.handle(IPC.FORK_SESSION, async (_event, { tabId, projectPath }: { tabId:
   return controlPlane.forkSession(tabId, projectPath)
 })
 
+ipcMain.handle(IPC.OPEN_PR_REVIEW, async (_event, { prNumber, projectPath }: { prNumber: number; projectPath: string }) => {
+  log(`IPC OPEN_PR_REVIEW: pr=${prNumber} project=${projectPath}`)
+  return controlPlane.openPrReview(prNumber, projectPath)
+})
+
 ipcMain.handle(IPC.CREATE_AGENT_TAB, async (_event, { parentTabId, agentName, projectPath, prompt, agentConfig }: {
   parentTabId: string; agentName: string; projectPath: string; prompt: string;
   agentConfig?: Record<string, import('../shared/types').AgentConfig>

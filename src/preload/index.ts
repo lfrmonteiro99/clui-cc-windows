@@ -57,6 +57,7 @@ export interface CluiAPI {
   getDiagnostics(): Promise<any>
   respondPermission(tabId: string, questionId: string, optionId: string): Promise<boolean>
   forkSession(tabId: string, projectPath: string): Promise<{ newTabId: string }>
+  openPrReview(prNumber: number, projectPath: string): Promise<{ tabId: string; prNumber: number }>
   createAgentTab(parentTabId: string, agentName: string, projectPath: string, prompt: string, agentConfig?: Record<string, import('../shared/types').AgentConfig>): Promise<{ tabId: string }>
   listAgents(): Promise<import('../shared/types').AgentConfig[]>
   initSession(tabId: string): void
@@ -184,6 +185,7 @@ const api: CluiAPI = {
   respondPermission: (tabId, questionId, optionId) =>
     ipcRenderer.invoke(IPC.RESPOND_PERMISSION, { tabId, questionId, optionId }),
   forkSession: (tabId, projectPath) => ipcRenderer.invoke(IPC.FORK_SESSION, { tabId, projectPath }),
+  openPrReview: (prNumber, projectPath) => ipcRenderer.invoke(IPC.OPEN_PR_REVIEW, { prNumber, projectPath }),
   createAgentTab: (parentTabId, agentName, projectPath, prompt, agentConfig) =>
     ipcRenderer.invoke(IPC.CREATE_AGENT_TAB, { parentTabId, agentName, projectPath, prompt, agentConfig }),
   listAgents: () => ipcRenderer.invoke(IPC.LIST_AGENTS),

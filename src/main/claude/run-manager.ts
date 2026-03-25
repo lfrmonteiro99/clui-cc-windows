@@ -139,6 +139,10 @@ export class RunManager extends EventEmitter {
       args.push('--effort', options.effort)
     }
 
+    if (options.fromPr) {
+      args.push('--from-pr', options.fromPr)
+    }
+
     // Agent mode: --agent <name> or --agents '<json>'
     const agentArgs = buildAgentArgs(options)
     if (agentArgs.length > 0) {
