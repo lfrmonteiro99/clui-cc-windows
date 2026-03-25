@@ -24,7 +24,10 @@ const mockColors: Record<string, string> = {
   statusComplete: '#7aac8c',
   statusCompleteBg: 'rgba(122, 172, 140, 0.1)',
   statusRunning: '#d97757',
-  messageBgAssistant: 'rgba(217, 119, 87, 0.04)',
+  messageBgAssistant: 'rgba(217, 119, 87, 0.08)',
+  messageBgUser: 'rgba(255, 255, 255, 0.03)',
+  cardShadowMd: '0 2px 8px rgba(0,0,0,0.15)',
+  accentGlow: '0 0 12px rgba(217,119,87,0.15)',
   messageAccentBorder: '#d97757',
 }
 
@@ -105,12 +108,12 @@ function makeMsg(overrides: Partial<Message> & { role: Message['role'] }): Messa
 
 describe('Message visual distinction', () => {
   describe('AssistantMessage', () => {
-    it('has a 3px left accent border', () => {
+    it('has a 4px left accent border', () => {
       const msg = makeMsg({ role: 'assistant', content: 'Hello world' })
       render(<AssistantMessage message={msg} skipMotion />)
       const el = screen.getByTestId('message-assistant')
-      // jsdom normalizes hex to rgb(), so check for 3px solid + rgb values of #d97757
-      expect(el.style.borderLeft).toContain('3px solid')
+      // jsdom normalizes hex to rgb(), so check for 4px solid + rgb values of #d97757
+      expect(el.style.borderLeft).toContain('4px solid')
       expect(el.style.borderLeft).toContain('rgb(217, 119, 87)')
     })
 
@@ -123,14 +126,13 @@ describe('Message visual distinction', () => {
   })
 
   describe('UserMessage', () => {
-    it('has user bubble background distinct from assistant', () => {
+    it('has user message background distinct from assistant', () => {
       const msg = makeMsg({ role: 'user', content: 'Hi there' })
       render(<UserMessage message={msg} skipMotion />)
       const el = screen.getByTestId('message-user')
-      // jsdom normalizes #353530 to rgb(53, 53, 48)
-      expect(el.style.background).toBe('rgb(53, 53, 48)')
+      expect(el.style.background).toBe(mockColors.messageBgUser)
       // Token values must differ between user and assistant
-      expect(mockColors.userBubble).not.toBe(mockColors.messageBgAssistant)
+      expect(mockColors.messageBgUser).not.toBe(mockColors.messageBgAssistant)
     })
   })
 

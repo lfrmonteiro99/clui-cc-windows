@@ -28,7 +28,7 @@ const PAGE_SIZE = 100
 const REMARK_PLUGINS = [remarkGfm] // Hoisted — prevents re-parse on every render
 
 /** Tailwind class for vertical spacing between grouped messages. Exported for testing. */
-export const MESSAGE_GAP_CLASS = 'space-y-5'
+export const MESSAGE_GAP_CLASS = 'space-y-8'
 
 // ─── Types ───
 
@@ -506,12 +506,14 @@ export const UserMessage = React.memo(function UserMessage({ message, skipMotion
   const content = (
     <div
       data-testid="message-user"
-      className="text-[13px] leading-[1.5] px-3 py-1.5 max-w-[85%]"
+      className="text-[13px] leading-[1.5] max-w-[85%]"
       style={{
-        background: colors.userBubble,
+        background: colors.messageBgUser,
         color: colors.userBubbleText,
         border: `1px solid ${colors.userBubbleBorder}`,
-        borderRadius: '14px 14px 4px 14px',
+        borderRadius: '12px',
+        padding: '12px 16px',
+        boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
       }}
     >
       {message.content}
@@ -526,7 +528,7 @@ export const UserMessage = React.memo(function UserMessage({ message, skipMotion
     <motion.div
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.15 }}
+      transition={{ duration: 0.2 }}
       className="flex justify-end py-1.5"
     >
       {content}
@@ -717,10 +719,12 @@ export const AssistantMessage = React.memo(function AssistantMessage({
   const inner = (
     <div
       data-testid="message-assistant"
-      className="group/msg relative rounded-lg px-3 py-2"
+      className="group/msg relative px-4 py-3 transition-shadow duration-150"
       style={{
         background: colors.messageBgAssistant,
-        borderLeft: `3px solid ${colors.messageAccentBorder}`,
+        borderLeft: `4px solid ${colors.messageAccentBorder}`,
+        borderRadius: '12px',
+        boxShadow: colors.cardShadowMd,
       }}
     >
       <div className="text-[13px] leading-[1.6] prose-cloud min-w-0 max-w-[92%]">
@@ -731,7 +735,7 @@ export const AssistantMessage = React.memo(function AssistantMessage({
       {/* Copy button — always in DOM, shown via CSS :hover (no React state needed).
           Absolute positioning so it never shifts the text layout. */}
       {message.content.trim() && (
-        <div className="absolute bottom-0 right-0 opacity-0 group-hover/msg:opacity-100 transition-opacity duration-100">
+        <div className="absolute bottom-0 right-0 opacity-40 group-hover/msg:opacity-100 transition-opacity duration-100">
           <CopyButton text={message.content} />
         </div>
       )}
@@ -744,9 +748,9 @@ export const AssistantMessage = React.memo(function AssistantMessage({
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 6 }}
+      initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.15 }}
+      transition={{ duration: 0.2 }}
       className="py-1"
     >
       {inner}

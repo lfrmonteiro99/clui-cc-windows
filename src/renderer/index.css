@@ -67,7 +67,7 @@ input::placeholder {
   word-break: break-word;
 }
 .prose-cloud p {
-  margin: 0.25em 0;
+  margin: 0.5em 0;
 }
 .prose-cloud pre {
   background: var(--clui-code-bg);
@@ -80,8 +80,8 @@ input::placeholder {
 .prose-cloud code {
   background: var(--clui-accent-light);
   color: var(--clui-accent);
-  padding: 0.15em 0.35em;
-  border-radius: 4px;
+  padding: 0.2em 0.5em;
+  border-radius: 6px;
   font-size: 0.9em;
 }
 .prose-cloud pre code {
@@ -98,13 +98,13 @@ input::placeholder {
 }
 .prose-cloud ul, .prose-cloud ol {
   padding-left: 1.2em;
-  margin: 0.25em 0;
+  margin: 0.5em 0;
 }
 .prose-cloud li {
   margin: 0.1em 0;
 }
 .prose-cloud h1, .prose-cloud h2, .prose-cloud h3, .prose-cloud h4 {
-  margin: 0.5em 0 0.25em;
+  margin: 0.75em 0 0.35em;
   font-weight: 600;
   color: var(--clui-text-primary);
 }
