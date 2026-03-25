@@ -1,5 +1,7 @@
 import { create } from 'zustand'
 import type { TerminalTab, TerminalCreateOptions } from '../../shared/types'
+import type { PersistedSession } from '../utils/terminal-persistence'
+import { loadTerminalSessions, deleteTerminalSession } from '../utils/terminal-persistence'
 
 const STORAGE_KEY = 'clui-terminal-mode'
 const SETTINGS_KEY = 'clui-terminal-settings'
@@ -95,6 +97,13 @@ interface TerminalState {
   // TERM-002: Split panes
   splitPane: (termTabId: string, direction: 'horizontal' | 'vertical') => Promise<void>
   closeSplitPane: (termTabId: string, paneId: string) => void
+
+  // TERM-007: Session persistence
+  persistedSessions: PersistedSession[]
+  loadPersistedSessions: () => Promise<void>
+  restoreSession: (sessionId: string) => Promise<void>
+  dismissPersistedSession: (sessionId: string) => void
+  dismissAllPersistedSessions: () => void
 }
 
 // TERM-002: Split pane types
@@ -136,6 +145,7 @@ export const useTerminalStore = create<TerminalState>((set, get) => {
 
     overviewOpen: false,
     paneLayouts: {},
+    persistedSessions: [],
 
     checkAvailability: async () => {
       try {
@@ -354,6 +364,69 @@ export const useTerminalStore = create<TerminalState>((set, get) => {
 
       // Close the PTY for the removed pane
       window.clui.terminalClose(paneId).catch(() => {})
+    },
+
+    // TERM-007: Session persistence
+    loadPersistedSessions: async () => {
+      try {
+        const sessions = await loadTerminalSessions()
+        set({ persistedSessions: sessions })
+      } catch (err) {
+        console.warn('[terminalStore] Failed to load persisted sessions:', err)
+      }
+    },
+
+    restoreSession: async (sessionId: string) => {
+      const { persistedSessions } = get()
+      const session = persistedSessions.find((s) => s.id === sessionId)
+      if (!session) return
+
+      try {
+        const result = await window.clui.terminalCreate({ shell: session.shell, cwd: session.cwd })
+        if (!result.termTabId) return
+
+        const tab: TerminalTab = {
+          id: result.termTabId,
+          title: session.shell.split(/[\\/]/).pop() || session.shell,
+          shell: session.shell,
+          cwd: session.cwd,
+          status: 'active',
+          exitCode: null,
+          bellCount: 0,
+        }
+
+        set((s) => ({
+          termTabs: [...s.termTabs, tab],
+          activeTermTabId: result.termTabId,
+          persistedSessions: s.persistedSessions.filter((p) => p.id !== sessionId),
+        }))
+
+        // Write persisted buffer to terminal for visual replay
+        if (session.serializedBuffer) {
+          window.dispatchEvent(new CustomEvent('clui-terminal-restore', {
+            detail: { termTabId: result.termTabId, buffer: session.serializedBuffer },
+          }))
+        }
+
+        await deleteTerminalSession(sessionId)
+      } catch (err) {
+        console.warn('[terminalStore] Failed to restore session:', err)
+      }
+    },
+
+    dismissPersistedSession: (sessionId: string) => {
+      set((s) => ({
+        persistedSessions: s.persistedSessions.filter((p) => p.id !== sessionId),
+      }))
+      deleteTerminalSession(sessionId).catch(() => {})
+    },
+
+    dismissAllPersistedSessions: () => {
+      const { persistedSessions } = get()
+      set({ persistedSessions: [] })
+      for (const session of persistedSessions) {
+        deleteTerminalSession(session.id).catch(() => {})
+      }
     },
   }
 })

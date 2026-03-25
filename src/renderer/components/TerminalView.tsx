@@ -3,6 +3,7 @@ import { AnimatePresence } from 'framer-motion'
 import { useColors } from '../theme'
 import { useTerminalStore } from '../stores/terminalStore'
 import { TerminalSearch } from './TerminalSearch'
+import { saveTerminalSession } from '../utils/terminal-persistence'
 
 interface TerminalViewProps {
   termTabId: string
@@ -91,7 +92,7 @@ export function TerminalView({ termTabId, isActive }: TerminalViewProps) {
           return false
         }
         if (mod && e.shiftKey && e.key === 'W' && e.type === 'keydown') {
-          window.dispatchEvent(new CustomEvent('clui-terminal-shortcut', { detail: { action: 'close-tab' } }))
+          window.dispatchEvent(new CustomEvent('clui-terminal-shortcut', { detail: { action: 'close-pane-or-tab', termTabId } }))
           return false
         }
         if (e.ctrlKey && e.key === 'Tab' && e.type === 'keydown') {
@@ -239,6 +240,15 @@ export function TerminalView({ termTabId, isActive }: TerminalViewProps) {
       }
       window.addEventListener('clui-terminal-shortcut', shortcutHandler)
 
+      // TERM-007: Listen for buffer restore events
+      const restoreHandler = (e: Event) => {
+        const detail = (e as CustomEvent).detail
+        if (detail?.termTabId === termTabId && detail?.buffer && terminalRef.current) {
+          terminalRef.current.write(detail.buffer)
+        }
+      }
+      window.addEventListener('clui-terminal-restore', restoreHandler)
+
       // Apply background blur if set
       if (backgroundBlur > 0 && containerRef.current) {
         containerRef.current.style.backdropFilter = `blur(${backgroundBlur}px)`
@@ -249,6 +259,7 @@ export function TerminalView({ termTabId, isActive }: TerminalViewProps) {
       // Store unsub for cleanup
       ;(terminal as any)._cluiUnsub = unsub
       ;(terminal as any)._cluiShortcutHandler = shortcutHandler
+      ;(terminal as any)._cluiRestoreHandler = restoreHandler
     }
 
     init()
@@ -256,10 +267,32 @@ export function TerminalView({ termTabId, isActive }: TerminalViewProps) {
     return () => {
       disposed = true
       if (terminalRef.current) {
+        // TERM-007: Save terminal buffer before disposing
+        try {
+          const buffer = serializeTerminalBuffer(terminalRef.current)
+          if (buffer.length > 0) {
+            const tab = useTerminalStore.getState().termTabs.find((t) => t.id === termTabId)
+            if (tab) {
+              saveTerminalSession({
+                id: termTabId,
+                serializedBuffer: buffer,
+                shell: tab.shell,
+                cwd: tab.cwd,
+                exitCode: tab.exitCode,
+                savedAt: Date.now(),
+              }).catch(() => {})
+            }
+          }
+        } catch (err) {
+          console.warn('[TerminalView] Failed to save session:', err)
+        }
+
         const unsub = (terminalRef.current as any)._cluiUnsub
         if (unsub) unsub()
         const shortcutHandler = (terminalRef.current as any)._cluiShortcutHandler
         if (shortcutHandler) window.removeEventListener('clui-terminal-shortcut', shortcutHandler)
+        const restoreHandler = (terminalRef.current as any)._cluiRestoreHandler
+        if (restoreHandler) window.removeEventListener('clui-terminal-restore', restoreHandler)
         terminalRef.current.dispose()
         terminalRef.current = null
       }
@@ -478,6 +511,28 @@ function countMatches(
     return Math.max(count, 0)
   } catch {
     return 1
+  }
+}
+
+// TERM-007: Serialize terminal buffer content for persistence
+function serializeTerminalBuffer(terminal: any): string {
+  try {
+    const buffer = terminal.buffer?.active
+    if (!buffer) return ''
+    const lines: string[] = []
+    const totalLines = buffer.length
+    for (let i = 0; i < totalLines; i++) {
+      const line = buffer.getLine(i)
+      if (!line) continue
+      lines.push(line.translateToString(false))
+    }
+    // Trim trailing empty lines
+    while (lines.length > 0 && lines[lines.length - 1].trim() === '') {
+      lines.pop()
+    }
+    return lines.join('\r\n')
+  } catch {
+    return ''
   }
 }
 
