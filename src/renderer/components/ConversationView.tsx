@@ -15,6 +15,7 @@ import { DirectoryPicker } from './DirectoryPicker'
 import { ToolTimeline } from './ToolTimeline'
 import { ShellOutput } from './ShellOutput'
 import { ResumeBrief } from './ResumeBrief'
+import { CodeBlock } from './CodeBlock'
 import { useColors, useThemeStore } from '../theme'
 import { generateResumeBrief, RESUME_INACTIVITY_MS, CATCH_ME_UP_PROMPT } from '../../shared/session-resume'
 import type { ResumeBrief as ResumeBriefData } from '../../shared/session-resume'
@@ -636,11 +637,22 @@ const AssistantMessage = React.memo(function AssistantMessage({
 
   const markdownComponents = useMemo(() => ({
     table: ({ children }: any) => <TableScrollWrapper>{children}</TableScrollWrapper>,
-    code: ({ children, className }: any) => {
-      if (className) return <code className={className}>{children}</code>
+    // Strip default <pre> styling when CodeBlock handles its own wrapper
+    pre: ({ children }: any) => <>{children}</>,
+    code: ({ children, className, ...props }: any) => {
+      const match = /language-(\w+)/.exec(className || '')
+      const isBlock = match || props.node?.position?.start?.line !== props.node?.position?.end?.line
+
+      if (match || isBlock) {
+        const language = match ? match[1] : ''
+        const code = String(children).replace(/\n$/, '')
+        return <CodeBlock code={code} language={language} />
+      }
+
+      // Inline code — detect file paths
       const text = typeof children === 'string' ? children : String(children ?? '')
       if (isLikelyFilePath(text)) return <FilePath path={text} displayName={text} />
-      return <code>{children}</code>
+      return <code className={className}>{children}</code>
     },
     a: ({ href, children }: any) => (
       <button
