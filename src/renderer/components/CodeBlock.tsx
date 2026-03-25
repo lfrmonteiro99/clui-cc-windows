@@ -72,7 +72,7 @@ export function CodeBlock({ code, language }: { code: string; language: string }
     <div
       className="relative group/code rounded-lg overflow-hidden my-2"
       style={{
-        background: colors.codeBg,
+        background: colors.codeBlockBg,
         border: `1px solid ${colors.containerBorder}`,
       }}
     >
@@ -89,7 +89,7 @@ export function CodeBlock({ code, language }: { code: string; language: string }
       </div>
 
       {/* Code content */}
-      <div className="overflow-x-auto px-3 py-2 text-[12px] leading-[1.5]">
+      <div className="overflow-x-auto px-3 py-2 text-[12px] leading-[1.5] font-mono">
         {html ? (
           <div
             data-testid="codeblock-highlighted"
@@ -98,7 +98,7 @@ export function CodeBlock({ code, language }: { code: string; language: string }
           />
         ) : (
           <pre className="m-0 p-0 bg-transparent">
-            <code className="bg-transparent p-0" style={{ color: colors.textPrimary }}>
+            <code className="bg-transparent p-0" style={{ color: colors.codeBlockText }}>
               {code}
             </code>
           </pre>

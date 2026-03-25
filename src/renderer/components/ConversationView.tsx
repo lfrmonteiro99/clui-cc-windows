@@ -506,7 +506,7 @@ export const UserMessage = React.memo(function UserMessage({ message, skipMotion
   const content = (
     <div
       data-testid="message-user"
-      className="text-[13px] leading-[1.5] px-3 py-1.5 max-w-[85%]"
+      className="text-[13px] leading-[1.6] px-3 py-1.5 max-w-[85%]"
       style={{
         background: colors.userBubble,
         color: colors.userBubbleText,
@@ -548,7 +548,7 @@ const QueuedMessage = React.memo(function QueuedMessage({ content }: { content: 
       className="flex justify-end py-1.5"
     >
       <div
-        className="text-[13px] leading-[1.5] px-3 py-1.5 max-w-[85%]"
+        className="text-[13px] leading-[1.6] px-3 py-1.5 max-w-[85%]"
         style={{
           background: colors.userBubble,
           color: colors.userBubbleText,

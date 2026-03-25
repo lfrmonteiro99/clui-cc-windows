@@ -70,11 +70,13 @@ input::placeholder {
   margin: 0.25em 0;
 }
 .prose-cloud pre {
-  background: var(--clui-code-bg);
+  background: var(--clui-code-block-bg);
   border: 1px solid var(--clui-container-border);
   border-radius: 10px;
   padding: 0.75em 1em;
   font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+  color: var(--clui-code-block-text);
   overflow-x: auto;
 }
 .prose-cloud code {

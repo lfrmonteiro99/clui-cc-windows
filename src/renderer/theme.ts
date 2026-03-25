@@ -96,6 +96,8 @@ const darkColors = {
 
   // Code block
   codeBg: '#1a1a18',
+  codeBlockBg: '#1a1a18',
+  codeBlockText: '#b8b5aa',
 
   // Mic button
   micBg: '#353530',
@@ -256,6 +258,8 @@ const lightColors = {
 
   // Code block
   codeBg: '#f0eee8',
+  codeBlockBg: '#f0eee8',
+  codeBlockText: '#3c3929',
 
   // Mic button
   micBg: '#edeae0',
