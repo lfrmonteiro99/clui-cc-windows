@@ -269,8 +269,12 @@ export function ConversationView({ overrideTabId }: { overrideTabId?: string } =
       {/* Scrollable messages area */}
       <div
         ref={scrollRef}
-        className="overflow-y-auto overflow-x-hidden px-4 pt-2 conversation-selectable"
-        style={{ maxHeight: expandedUI ? 460 : 336, paddingBottom: 28 }}
+        className="overflow-y-auto overflow-x-hidden px-4 pt-2 conversation-selectable conversation-scroll"
+        style={{
+          maxHeight: expandedUI ? 460 : 336,
+          paddingBottom: 28,
+          background: `linear-gradient(to bottom, ${colors.containerBg}, ${colors.accentGhost})`,
+        }}
         onScroll={handleScroll}
       >
         {/* Load older button */}
@@ -381,6 +385,9 @@ export function ConversationView({ overrideTabId }: { overrideTabId?: string } =
           </motion.button>
         )}
       </AnimatePresence>
+
+      {/* Visual separator between conversation and input */}
+      <div className="conversation-separator" />
 
       {/* Activity row — overlaps bottom of scroll area as a fade strip */}
       <div
