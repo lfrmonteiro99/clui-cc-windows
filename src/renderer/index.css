@@ -243,3 +243,46 @@ input::placeholder {
   outline: none;
   box-shadow: 0 0 0 2px var(--clui-accent-glow, rgba(217,119,87,0.25));
 }
+
+/* ─── Conversation scrollbar — slightly wider, themed ─── */
+.conversation-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+.conversation-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.conversation-scroll::-webkit-scrollbar-thumb {
+  background: var(--clui-scroll-thumb);
+  border-radius: 3px;
+}
+.conversation-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--clui-scroll-thumb-hover);
+}
+
+/* ─── Code block horizontal scrollbar — thin, themed ─── */
+.prose-cloud pre::-webkit-scrollbar {
+  height: 4px;
+}
+.prose-cloud pre::-webkit-scrollbar-track {
+  background: transparent;
+}
+.prose-cloud pre::-webkit-scrollbar-thumb {
+  background: var(--clui-scroll-thumb);
+  border-radius: 2px;
+}
+.prose-cloud pre::-webkit-scrollbar-thumb:hover {
+  background: var(--clui-scroll-thumb-hover);
+}
+
+/* ─── Conversation-input visual separator ─── */
+.conversation-separator {
+  height: 1px;
+  background: linear-gradient(
+    to right,
+    transparent,
+    var(--clui-container-border) 20%,
+    var(--clui-container-border) 80%,
+    transparent
+  );
+  opacity: 0.6;
+}
