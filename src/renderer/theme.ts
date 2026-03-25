@@ -62,8 +62,11 @@ const darkColors = {
   userBubbleText: '#ccc9c0',
 
   // Assistant message
-  messageBgAssistant: 'rgba(217, 119, 87, 0.04)',
+  messageBgAssistant: 'rgba(217, 119, 87, 0.08)',
+  messageBgUser: 'rgba(255, 255, 255, 0.03)',
   messageAccentBorder: '#d97757',
+  cardShadowMd: '0 2px 8px rgba(0,0,0,0.15)',
+  accentGlow: '0 0 12px rgba(217,119,87,0.15)',
 
   // Tool card
   toolBg: '#353530',
@@ -224,8 +227,11 @@ const lightColors = {
   userBubbleText: '#3c3929',
 
   // Assistant message
-  messageBgAssistant: 'rgba(217, 119, 87, 0.05)',
+  messageBgAssistant: 'rgba(217, 119, 87, 0.10)',
+  messageBgUser: 'rgba(0, 0, 0, 0.03)',
   messageAccentBorder: '#d97757',
+  cardShadowMd: '0 2px 8px rgba(0,0,0,0.08)',
+  accentGlow: '0 0 12px rgba(217,119,87,0.15)',
 
   // Tool card
   toolBg: '#edeae0',
