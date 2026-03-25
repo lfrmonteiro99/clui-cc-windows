@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Paperclip, Camera, HeadCircuit } from '@phosphor-icons/react'
 import { TabStrip } from './components/TabStrip'
 import { ConversationView } from './components/ConversationView'
+import { ConversationSearchWrapper } from './components/ConversationSearchWrapper'
 import { ComparisonView } from './components/ComparisonView'
 import { ComparisonLauncher } from './components/ComparisonLauncher'
 import { InputBar } from './components/InputBar'
@@ -728,7 +729,7 @@ export default function App() {
                 ) : (
                   <>
                     {workflowExecution && <WorkflowProgress />}
-                    {isComparing ? <ComparisonView /> : <ConversationView />}
+                    {isComparing ? <ComparisonView /> : <ConversationSearchWrapper />}
                     {!isComparing && <StatusBar />}
                   </>
                 )}
