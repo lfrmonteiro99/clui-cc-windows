@@ -172,6 +172,16 @@ export type AgentMemoryClaimResult =
   | { ok: true; snapshot: AgentMemorySnapshot; assignment: AgentAssignment }
   | { ok: false; snapshot: AgentMemorySnapshot; conflict: AgentAssignment }
 
+// ─── Agent Configuration ───
+
+export interface AgentConfig {
+  name: string
+  description?: string
+  prompt?: string
+  model?: string
+  tools?: string[]
+}
+
 export interface Attachment {
   id: string
   type: 'image' | 'file'
@@ -246,6 +256,10 @@ export interface TabState {
   contextNotificationShown: boolean
   /** Session ID of the parent session this tab was forked from */
   parentSessionId?: string
+  /** Agent name when this tab is an agent tab */
+  agentName?: string
+  /** Parent tab ID for agent tab grouping */
+  parentTabId?: string
 }
 
 export interface Message {
@@ -368,6 +382,10 @@ export interface RunOptions {
   forkSession?: boolean
   /** Session ID to fork from (used with forkSession) */
   forkFromSessionId?: string
+  /** Pre-configured agent name (passed as --agent <name>) */
+  agent?: string
+  /** Custom inline agent definitions (passed as --agents '<json>') */
+  agentConfig?: Record<string, AgentConfig>
 }
 
 // ─── Control Plane Types ───
@@ -581,6 +599,8 @@ export const IPC = {
   PIN_SESSION: 'clui:pin-session',
   UNPIN_SESSION: 'clui:unpin-session',
   FORK_SESSION: 'clui:fork-session',
+  CREATE_AGENT_TAB: 'clui:create-agent-tab',
+  LIST_AGENTS: 'clui:list-agents',
   SHELL_EXEC: 'clui:shell-exec',
 
   // One-way events (main → renderer)

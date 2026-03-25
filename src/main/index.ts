@@ -380,6 +380,19 @@ ipcMain.handle(IPC.FORK_SESSION, async (_event, { tabId, projectPath }: { tabId:
   return controlPlane.forkSession(tabId, projectPath)
 })
 
+ipcMain.handle(IPC.CREATE_AGENT_TAB, async (_event, { parentTabId, agentName, projectPath, prompt, agentConfig }: {
+  parentTabId: string; agentName: string; projectPath: string; prompt: string;
+  agentConfig?: Record<string, import('../shared/types').AgentConfig>
+}) => {
+  log(`IPC CREATE_AGENT_TAB: parent=${parentTabId} agent=${agentName}`)
+  return controlPlane.createAgentTab(parentTabId, agentName, projectPath, prompt, agentConfig)
+})
+
+ipcMain.handle(IPC.LIST_AGENTS, async () => {
+  log('IPC LIST_AGENTS')
+  return controlPlane.listAvailableAgents()
+})
+
 ipcMain.on(IPC.INIT_SESSION, (_event, tabId: string) => {
   log(`IPC INIT_SESSION: ${tabId}`)
   controlPlane.initSession(tabId)
