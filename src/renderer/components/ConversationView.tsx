@@ -21,6 +21,32 @@ import { generateResumeBrief, RESUME_INACTIVITY_MS, CATCH_ME_UP_PROMPT } from '.
 import type { ResumeBrief as ResumeBriefData } from '../../shared/session-resume'
 import type { Message, ShellOutput as ShellOutputType } from '../../shared/types'
 
+// ─── Elapsed Time Hook ───
+
+/** Returns elapsed seconds since `active` became true, updating every 100ms. Resets on false. */
+function useElapsedTime(active: boolean): number {
+  const [elapsed, setElapsed] = useState(0)
+  const startRef = useRef<number | null>(null)
+
+  useEffect(() => {
+    if (!active) {
+      startRef.current = null
+      setElapsed(0)
+      return
+    }
+    startRef.current = Date.now()
+    setElapsed(0)
+    const id = setInterval(() => {
+      if (startRef.current !== null) {
+        setElapsed((Date.now() - startRef.current) / 1000)
+      }
+    }, 100)
+    return () => clearInterval(id)
+  }, [active])
+
+  return elapsed
+}
+
 // ─── Constants ───
 
 const INITIAL_RENDER_CAP = 100
@@ -95,6 +121,10 @@ export function ConversationView({ overrideTabId }: { overrideTabId?: string } =
   const prevTabIdRef = useRef(resolvedTabId)
   const colors = useColors()
   const expandedUI = useThemeStore((s) => s.expandedUI)
+
+  // ─── Elapsed time for streaming indicator ───
+  const tabIsRunning = tab?.status === 'running' || tab?.status === 'connecting'
+  const elapsed = useElapsedTime(tabIsRunning)
 
   // ─── Resume Brief state ───
   const lastViewedAtRef = useRef<Record<string, number>>({})
@@ -212,6 +242,11 @@ export function ConversationView({ overrideTabId }: { overrideTabId?: string } =
   // Messages from before initial render cap are "historical" — no motion
   const historicalThreshold = Math.max(0, totalCount - 20)
 
+  // Find the last assistant message index in grouped items for streaming cursor
+  const lastAssistantGroupIdx = isRunning
+    ? grouped.reduceRight<number>((found, item, idx) => found >= 0 ? found : (item.kind === 'assistant' ? idx : -1), -1)
+    : -1
+
   const handleRetry = () => {
     const lastUserMsg = [...tab.messages].reverse().find((m) => m.role === 'user')
     if (lastUserMsg) {
@@ -271,7 +306,7 @@ export function ConversationView({ overrideTabId }: { overrideTabId?: string } =
               case 'user':
                 return <UserMessage key={item.message.id} message={item.message} skipMotion={isHistorical} />
               case 'assistant':
-                return <AssistantMessage key={item.message.id} message={item.message} skipMotion={isHistorical} />
+                return <AssistantMessage key={item.message.id} message={item.message} skipMotion={isHistorical} isStreaming={idx === lastAssistantGroupIdx} />
               case 'tool-group':
                 return <ToolTimeline key={`tg-${item.messages[0].id}`} tools={item.messages} skipMotion={isHistorical} />
               case 'system':
@@ -367,7 +402,10 @@ export function ConversationView({ overrideTabId }: { overrideTabId?: string } =
                 <span className="w-[4px] h-[4px] rounded-full animate-bounce-dot" style={{ background: colors.statusRunning, animationDelay: '150ms' }} />
                 <span className="w-[4px] h-[4px] rounded-full animate-bounce-dot" style={{ background: colors.statusRunning, animationDelay: '300ms' }} />
               </span>
-              <span style={{ color: colors.textSecondary }}>{tab.currentActivity || 'Working...'}</span>
+              <span style={{ color: colors.textSecondary }}>
+                {tab.currentActivity || 'Working...'}
+                {elapsed > 0 && <span data-testid="elapsed-time" style={{ color: colors.textTertiary, marginLeft: 6 }}>{elapsed.toFixed(1)}s</span>}
+              </span>
             </span>
           )}
 
@@ -674,9 +712,11 @@ function ImageCard({ src, alt, colors }: { src?: string; alt?: string; colors: R
 export const AssistantMessage = React.memo(function AssistantMessage({
   message,
   skipMotion,
+  isStreaming,
 }: {
   message: Message
   skipMotion?: boolean
+  isStreaming?: boolean
 }) {
   const colors = useColors()
 
@@ -723,7 +763,7 @@ export const AssistantMessage = React.memo(function AssistantMessage({
         borderLeft: `3px solid ${colors.messageAccentBorder}`,
       }}
     >
-      <div className="text-[13px] leading-[1.6] prose-cloud min-w-0 max-w-[92%]">
+      <div className={`text-[13px] leading-[1.6] prose-cloud min-w-0 max-w-[92%]${isStreaming ? ' streaming-cursor' : ''}`}>
         <Markdown remarkPlugins={REMARK_PLUGINS} components={markdownComponents}>
           {message.content}
         </Markdown>
@@ -752,7 +792,7 @@ export const AssistantMessage = React.memo(function AssistantMessage({
       {inner}
     </motion.div>
   )
-}, (prev, next) => prev.message.content === next.message.content && prev.skipMotion === next.skipMotion)
+}, (prev, next) => prev.message.content === next.message.content && prev.skipMotion === next.skipMotion && prev.isStreaming === next.isStreaming)
 
 // ─── System Message (memoized) ───
 
