@@ -135,6 +135,17 @@ input::placeholder {
   font-weight: 600;
 }
 
+/* ─── Streaming cursor — blinking caret at end of streaming text ─── */
+@keyframes blink {
+  50% { opacity: 0; }
+}
+.streaming-cursor::after {
+  content: '|';
+  animation: blink 1s step-end infinite;
+  color: var(--clui-accent);
+  font-weight: bold;
+}
+
 /* ─── Pulsing dot animation ─── */
 @keyframes pulse-dot {
   0%, 100% { opacity: 1; transform: scale(1); }
