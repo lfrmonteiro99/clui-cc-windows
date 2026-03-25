@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import {
-  Copy, Check, ArrowCounterClockwise, Square, Globe,
+  Copy, Check, ArrowCounterClockwise, Square, Globe, ArrowDown,
 } from '@phosphor-icons/react'
 import { useSessionStore } from '../stores/sessionStore'
 import { FilePath } from './FilePath'
@@ -91,6 +91,7 @@ export function ConversationView({ overrideTabId }: { overrideTabId?: string } =
   const [hovered, setHovered] = useState(false)
   const [renderOffset, setRenderOffset] = useState(0) // 0 = show from tail
   const isNearBottomRef = useRef(true)
+  const [isNearBottom, setIsNearBottom] = useState(true)
   const prevTabIdRef = useRef(resolvedTabId)
   const colors = useColors()
   const expandedUI = useThemeStore((s) => s.expandedUI)
@@ -140,14 +141,18 @@ export function ConversationView({ overrideTabId }: { overrideTabId?: string } =
       prevTabIdRef.current = resolvedTabId
       setRenderOffset(0)
       isNearBottomRef.current = true
+      setIsNearBottom(true)
     }
   }, [resolvedTabId])
 
   // Track whether user is scrolled near the bottom
+  const NEAR_BOTTOM_THRESHOLD = 100
   const handleScroll = useCallback(() => {
     const el = scrollRef.current
     if (!el) return
-    isNearBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 60
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < NEAR_BOTTOM_THRESHOLD
+    isNearBottomRef.current = nearBottom
+    setIsNearBottom(nearBottom)
   }, [])
 
   // Auto-scroll when content changes and user is near bottom.
@@ -183,9 +188,19 @@ export function ConversationView({ overrideTabId }: { overrideTabId?: string } =
     setRenderOffset((o) => o + 1)
   }, [])
 
+  const handleJumpToBottom = useCallback(() => {
+    const el = scrollRef.current
+    if (!el) return
+    el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
+    isNearBottomRef.current = true
+    setIsNearBottom(true)
+  }, [])
+
   if (!tab) return null
 
   const isRunning = tab.status === 'running' || tab.status === 'connecting'
+  // Show jump button when user scrolled away from bottom AND content is actively streaming
+  const showJumpButton = !isNearBottom && isRunning
   const isDead = tab.status === 'dead'
   const isFailed = tab.status === 'failed'
   const showInterrupt = isRunning && tab.messages.some((m) => m.role === 'user')
@@ -208,6 +223,7 @@ export function ConversationView({ overrideTabId }: { overrideTabId?: string } =
     <div
       data-clui-ui
       data-testid="conversation-view"
+      className="relative"
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
@@ -304,6 +320,32 @@ export function ConversationView({ overrideTabId }: { overrideTabId?: string } =
 
         <div ref={bottomRef} />
       </div>
+
+      {/* Jump to bottom button — shown when scrolled up during streaming */}
+      <AnimatePresence>
+        {showJumpButton && (
+          <motion.button
+            data-testid="jump-to-bottom"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 8 }}
+            transition={{ duration: 0.15 }}
+            onClick={handleJumpToBottom}
+            className="absolute left-1/2 -translate-x-1/2 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] cursor-pointer z-10"
+            style={{
+              bottom: 36,
+              background: colors.surfacePrimary,
+              color: colors.textSecondary,
+              border: `1px solid ${colors.containerBorder}`,
+              boxShadow: colors.cardShadow,
+            }}
+            title="Jump to bottom"
+          >
+            <ArrowDown size={12} weight="bold" />
+            <span>New messages</span>
+          </motion.button>
+        )}
+      </AnimatePresence>
 
       {/* Activity row — overlaps bottom of scroll area as a fade strip */}
       <div
