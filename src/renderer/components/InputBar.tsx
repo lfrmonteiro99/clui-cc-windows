@@ -18,7 +18,7 @@ import { parseTemplate, findNextSlot, findPreviousSlot, resolveVariables, hasSlo
 import type { AgentAssignment, AgentMemorySnapshot, SessionExportData } from '../../shared/types'
 
 const INPUT_MIN_HEIGHT = 20
-const INPUT_MAX_HEIGHT = 140
+export const INPUT_MAX_HEIGHT = 220
 const MULTILINE_ENTER_HEIGHT = 52
 const MULTILINE_EXIT_HEIGHT = 50
 const INLINE_CONTROLS_RESERVED_WIDTH = 104
@@ -81,6 +81,7 @@ export function InputBar() {
   const [lintWarnings, setLintWarnings] = useState<PromptLintWarning[]>([])
   const lintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [slotMode, setSlotMode] = useState(false)
+  const [isFocused, setIsFocused] = useState(false)
 
   const sendMessage = useSessionStore((s) => s.sendMessage)
   const clearTab = useSessionStore((s) => s.clearTab)
@@ -908,8 +909,26 @@ export function InputBar() {
         )}
       </AnimatePresence>
 
+      {/* Hint text — visible when textarea empty and idle */}
+      {!input && !isBusy && !isConnecting && voiceState === 'idle' && (
+        <div
+          data-testid="newline-hint"
+          className="text-[10px] px-1"
+          style={{ color: colors.textMuted, marginBottom: 2 }}
+        >
+          Shift+Enter for newline
+        </div>
+      )}
+
       {/* Single-line: inline controls. Multi-line: controls in bottom row */}
-      <div className="w-full" style={{ minHeight: 50 }}>
+      <div
+        className="w-full rounded-xl transition-shadow"
+        style={{
+          minHeight: 50,
+          boxShadow: isFocused ? `0 0 0 2px rgba(217,119,87,0.2)` : 'none',
+          transition: 'box-shadow 0.15s ease',
+        }}
+      >
         {isMultiLine ? (
           <div className="w-full">
             <textarea
@@ -921,6 +940,8 @@ export function InputBar() {
               onChange={handleInputChange}
               onKeyDown={handleKeyDown}
               onPaste={handlePaste}
+              onFocus={() => setIsFocused(true)}
+              onBlur={() => setIsFocused(false)}
               placeholder={
                 isConnecting
                   ? 'Initializing...'
@@ -961,11 +982,15 @@ export function InputBar() {
                       data-testid="composer-send"
                       onMouseDown={(e) => e.preventDefault()}
                       onClick={handleSend}
-                      className="w-9 h-9 rounded-full flex items-center justify-center transition-colors"
-                      style={{ background: colors.sendBg, color: colors.textOnAccent }}
+                      className="w-10 h-10 rounded-full flex items-center justify-center transition-all clui-pressable"
+                      style={{
+                        background: colors.sendBg,
+                        color: colors.textOnAccent,
+                        boxShadow: '0 1px 4px rgba(0,0,0,0.15)',
+                      }}
                       title={isBusy ? 'Queue message' : 'Send (Enter)'}
                     >
-                      <ArrowUp size={16} weight="bold" />
+                      <ArrowUp size={17} weight="bold" />
                     </button>
                   </motion.div>
                 )}
@@ -983,6 +1008,8 @@ export function InputBar() {
               onChange={handleInputChange}
               onKeyDown={handleKeyDown}
               onPaste={handlePaste}
+              onFocus={() => setIsFocused(true)}
+              onBlur={() => setIsFocused(false)}
               placeholder={
                 isConnecting
                   ? 'Initializing...'
@@ -1023,11 +1050,15 @@ export function InputBar() {
                       data-testid="composer-send"
                       onMouseDown={(e) => e.preventDefault()}
                       onClick={handleSend}
-                      className="w-9 h-9 rounded-full flex items-center justify-center transition-colors"
-                      style={{ background: colors.sendBg, color: colors.textOnAccent }}
+                      className="w-10 h-10 rounded-full flex items-center justify-center transition-all clui-pressable"
+                      style={{
+                        background: colors.sendBg,
+                        color: colors.textOnAccent,
+                        boxShadow: '0 1px 4px rgba(0,0,0,0.15)',
+                      }}
                       title={isBusy ? 'Queue message' : 'Send (Enter)'}
                     >
-                      <ArrowUp size={16} weight="bold" />
+                      <ArrowUp size={17} weight="bold" />
                     </button>
                   </motion.div>
                 )}

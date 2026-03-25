@@ -71,7 +71,7 @@ function ModelPicker() {
       <button
         ref={triggerRef}
         onClick={handleToggle}
-        className="flex items-center gap-0.5 text-[10px] rounded-full px-1.5 py-0.5 transition-colors"
+        className="flex items-center gap-0.5 text-[11px] font-medium rounded-full px-1.5 py-0.5 transition-colors clui-interactive"
         style={{
           color: colors.textTertiary,
           cursor: isBusy ? 'not-allowed' : 'pointer',
@@ -79,7 +79,7 @@ function ModelPicker() {
         title={isBusy ? 'Stop the task to change model' : 'Switch model'}
       >
         {activeLabel}
-        <CaretDown size={10} style={{ opacity: 0.6 }} />
+        <CaretDown size={14} style={{ opacity: 0.6 }} />
       </button>
 
       {popoverLayer && open && createPortal(
@@ -176,16 +176,16 @@ function PermissionModePicker() {
       <button
         ref={triggerRef}
         onClick={handleToggle}
-        className="flex items-center gap-0.5 text-[10px] rounded-full px-1.5 py-0.5 transition-colors"
+        className="flex items-center gap-0.5 text-[11px] rounded-full px-1.5 py-0.5 transition-colors clui-interactive"
         style={{
           color: colors.textTertiary,
           cursor: 'pointer',
         }}
         title="Permission mode (global)"
       >
-        <ShieldCheck size={11} weight={isAuto ? 'fill' : 'regular'} />
+        <ShieldCheck size={14} weight={isAuto ? 'fill' : 'regular'} />
         {isAuto ? 'Auto' : 'Ask'}
-        <CaretDown size={10} style={{ opacity: 0.6 }} />
+        <CaretDown size={14} style={{ opacity: 0.6 }} />
       </button>
 
       {popoverLayer && open && createPortal(
@@ -281,7 +281,7 @@ function TokenIndicator() {
       }}
       title={`Input: ${formatTokenCount(tokenUsage.inputTokens)} | Output: ${formatTokenCount(tokenUsage.outputTokens)} | Cache read: ${formatTokenCount(tokenUsage.cacheReadTokens)} | Cache write: ${formatTokenCount(tokenUsage.cacheWriteTokens)}`}
     >
-      <Lightning size={10} weight={isLarge ? 'fill' : 'regular'} />
+      <Lightning size={14} weight={isLarge ? 'fill' : 'regular'} />
       {formatTokenCount(tokenUsage.totalTokens)}
     </span>
   )
@@ -452,11 +452,12 @@ export function StatusBar() {
 
   return (
     <div
+      data-testid="status-bar"
       className="flex items-center justify-between px-4 py-1.5"
       style={{ minHeight: 28 }}
     >
       {/* Left — directory + model picker */}
-      <div className="flex items-center gap-2 text-[11px] min-w-0" style={{ color: colors.textTertiary }}>
+      <div className="flex items-center gap-3 text-[11px] min-w-0" style={{ color: colors.textTertiary }}>
         {/* Directory button */}
         <button
           ref={dirRef}
@@ -470,7 +471,7 @@ export function StatusBar() {
           title={dirTooltip}
           disabled={isRunning}
         >
-          <FolderOpen size={11} className="flex-shrink-0" />
+          <FolderOpen size={14} className="flex-shrink-0" />
           <span className="truncate">{tab.hasChosenDirectory ? compactPath(tab.workingDirectory) : '—'}</span>
           {hasExtraDirs && (
             <span style={{ color: colors.textTertiary, fontWeight: 600 }}>+{tab.additionalDirs.length}</span>
@@ -615,11 +616,7 @@ export function StatusBar() {
           popoverLayer,
         )}
 
-        <span style={{ color: colors.textMuted, fontSize: 10 }}>|</span>
-
         <ModelPicker />
-
-        <span style={{ color: colors.textMuted, fontSize: 10 }}>|</span>
 
         <PermissionModePicker />
 
@@ -627,7 +624,6 @@ export function StatusBar() {
 
         {tab.agentAssignment && (
           <>
-            <span style={{ color: colors.textMuted, fontSize: 10 }}>|</span>
             <span
               className="max-w-[220px] truncate rounded-full px-1.5 py-0.5 text-[10px]"
               style={{
@@ -654,7 +650,7 @@ export function StatusBar() {
           title="Open this session in Terminal"
         >
           Open in CLI
-          <Terminal size={11} />
+          <Terminal size={14} />
         </button>
       </div>
     </div>
