@@ -169,6 +169,11 @@ const darkColors = {
   warningBg: 'rgba(212, 168, 75, 0.08)',
   warningBorder: 'rgba(212, 168, 75, 0.25)',
   warningText: '#d4a84b',
+
+  // Accent opacity variants
+  accentSolid: '#d97757',
+  accentMuted: 'rgba(217, 119, 87, 0.2)',
+  accentGhost: 'rgba(217, 119, 87, 0.05)',
 } as const
 
 const lightColors = {
@@ -334,6 +339,11 @@ const lightColors = {
   warningBg: 'rgba(196, 154, 60, 0.08)',
   warningBorder: 'rgba(196, 154, 60, 0.25)',
   warningText: '#9a7a2e',
+
+  // Accent opacity variants
+  accentSolid: '#d97757',
+  accentMuted: 'rgba(217, 119, 87, 0.2)',
+  accentGhost: 'rgba(217, 119, 87, 0.05)',
 } as const
 
 export type ColorPalette = { [K in keyof typeof darkColors]: string }
