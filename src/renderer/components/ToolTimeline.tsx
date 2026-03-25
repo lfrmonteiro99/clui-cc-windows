@@ -9,6 +9,7 @@ import {
 import { useColors } from '../theme'
 import { FilePath } from './FilePath'
 import { DiffViewer } from './DiffViewer'
+import { CollapsibleToolOutput } from './ToolBlockSummary'
 import type { Message } from '../../shared/types'
 
 // ─── Icon mapping ───
@@ -466,6 +467,10 @@ function ExpandedPillDetail({
   const toolName = tool.toolName || 'Tool'
   const desc = getToolDescription(toolName, tool.toolInput)
 
+  // Edit/Write tools get the DiffViewer via ToolDetail; all others get collapsible output
+  const showDiffViewer = (toolName === 'Edit' || toolName === 'Write') && tool.toolInput
+  const hasCollapsibleContent = !showDiffViewer && tool.content.trim().length > 0
+
   return (
     <motion.div
       initial={{ opacity: 0, height: 0 }}
@@ -488,7 +493,18 @@ function ExpandedPillDetail({
         >
           <ToolDescriptionWithFilePath desc={desc} toolInput={tool.toolInput} />
         </span>
-        <ToolDetail tool={tool} />
+        {showDiffViewer ? (
+          <ToolDetail tool={tool} />
+        ) : hasCollapsibleContent ? (
+          <CollapsibleToolOutput
+            toolName={toolName}
+            toolInput={tool.toolInput}
+            content={tool.content}
+            toolStatus={tool.toolStatus}
+          />
+        ) : (
+          <ToolDetail tool={tool} />
+        )}
       </div>
     </motion.div>
   )
