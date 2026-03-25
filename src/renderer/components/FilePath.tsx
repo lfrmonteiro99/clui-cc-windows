@@ -46,7 +46,7 @@ export function FilePath({ path, displayName, className, style }: FilePathProps)
       }
 
       // Plain click → copy path to clipboard
-      navigator.clipboard.writeText(path).then(
+      navigator.clipboard?.writeText(path).then(
         () => {
           setCopied(true)
           if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current)
