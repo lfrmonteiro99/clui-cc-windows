@@ -52,6 +52,21 @@ input::placeholder {
   color: var(--clui-placeholder);
 }
 
+/* ─── InputBar textarea scrollbar — thin, themed (UX-010) ─── */
+#clui-main-input::-webkit-scrollbar {
+  width: 4px;
+}
+#clui-main-input::-webkit-scrollbar-track {
+  background: transparent;
+}
+#clui-main-input::-webkit-scrollbar-thumb {
+  background: var(--clui-scrollbar-thumb, rgba(255,255,255,0.15));
+  border-radius: 2px;
+}
+#clui-main-input::-webkit-scrollbar-thumb:hover {
+  background: var(--clui-scrollbar-hover, rgba(255,255,255,0.25));
+}
+
 /* ─── Allow text selection in conversation content ─── */
 .prose-cloud,
 .conversation-selectable {

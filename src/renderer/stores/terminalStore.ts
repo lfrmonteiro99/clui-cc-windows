@@ -28,7 +28,9 @@ function loadSettings(): TerminalSettings {
   try {
     const stored = localStorage.getItem(SETTINGS_KEY)
     if (stored) return { ...DEFAULT_SETTINGS, ...JSON.parse(stored) }
-  } catch {}
+  } catch (err) {
+    console.warn('[terminalStore] Failed to load settings:', err)
+  }
   return { ...DEFAULT_SETTINGS }
 }
 
@@ -36,7 +38,9 @@ function saveSettings(settings: Partial<TerminalSettings>): void {
   try {
     const current = loadSettings()
     localStorage.setItem(SETTINGS_KEY, JSON.stringify({ ...current, ...settings }))
-  } catch {}
+  } catch (err) {
+    console.warn('[terminalStore] Failed to save settings:', err)
+  }
 }
 
 interface TerminalState {
@@ -164,7 +168,7 @@ export const useTerminalStore = create<TerminalState>((set, get) => {
       if (!ptyAvailable) return
       set((s) => {
         const next = !s.terminalMode
-        try { localStorage.setItem(STORAGE_KEY, String(next)) } catch {}
+        try { localStorage.setItem(STORAGE_KEY, String(next)) } catch (err) { console.warn('[terminalStore] persist mode failed:', err) }
         return { terminalMode: next }
       })
     },
@@ -302,7 +306,7 @@ export const useTerminalStore = create<TerminalState>((set, get) => {
         backgroundBlur: DEFAULT_SETTINGS.backgroundBlur,
         imageProtocolEnabled: DEFAULT_SETTINGS.imageProtocolEnabled,
       })
-      try { localStorage.removeItem(SETTINGS_KEY) } catch {}
+      try { localStorage.removeItem(SETTINGS_KEY) } catch (err) { console.warn('[terminalStore] reset settings failed:', err) }
     },
 
     // TERM-006: Tab overview

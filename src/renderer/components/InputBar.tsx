@@ -19,6 +19,8 @@ import type { AgentAssignment, AgentMemorySnapshot, SessionExportData } from '..
 
 const INPUT_MIN_HEIGHT = 20
 export const INPUT_MAX_HEIGHT = 220
+const INPUT_MAX_HEIGHT_RATIO = 0.4 // 40% of conversation area (UX-010)
+const CHAR_COUNT_THRESHOLD = 500
 const MULTILINE_ENTER_HEIGHT = 52
 const MULTILINE_EXIT_HEIGHT = 50
 const INLINE_CONTROLS_RESERVED_WIDTH = 104
@@ -82,6 +84,7 @@ export function InputBar() {
   const lintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [slotMode, setSlotMode] = useState(false)
   const [isFocused, setIsFocused] = useState(false)
+  const [responsiveMaxHeight, setResponsiveMaxHeight] = useState(INPUT_MAX_HEIGHT)
 
   const sendMessage = useSessionStore((s) => s.sendMessage)
   const clearTab = useSessionStore((s) => s.clearTab)
@@ -144,6 +147,21 @@ export function InputBar() {
     }
     window.addEventListener('clui-focus-input', onFocusInput as EventListener)
     return () => window.removeEventListener('clui-focus-input', onFocusInput as EventListener)
+  }, [])
+
+  // UX-010: Responsive max-height — 40% of conversation area
+  useEffect(() => {
+    const conversationEl = document.querySelector('[data-testid="conversation-area"]') || document.querySelector('.conversation-scroll')?.parentElement
+    if (!conversationEl) return
+    const observer = new ResizeObserver((entries) => {
+      const height = entries[0]?.contentRect.height
+      if (height) {
+        const computed = Math.max(INPUT_MAX_HEIGHT, Math.floor(height * INPUT_MAX_HEIGHT_RATIO))
+        setResponsiveMaxHeight(computed)
+      }
+    })
+    observer.observe(conversationEl)
+    return () => observer.disconnect()
   }, [])
 
   // Close compose editor on tab switch
@@ -259,12 +277,13 @@ export function InputBar() {
   const autoResize = useCallback(() => {
     const el = textareaRef.current
     if (!el) return
+    const maxH = responsiveMaxHeight
     el.style.height = `${INPUT_MIN_HEIGHT}px`
     const naturalHeight = el.scrollHeight
-    const clampedHeight = Math.min(naturalHeight, INPUT_MAX_HEIGHT)
+    const clampedHeight = Math.min(naturalHeight, maxH)
     el.style.height = `${clampedHeight}px`
-    el.style.overflowY = naturalHeight > INPUT_MAX_HEIGHT ? 'auto' : 'hidden'
-    if (naturalHeight <= INPUT_MAX_HEIGHT) {
+    el.style.overflowY = naturalHeight > maxH ? 'auto' : 'hidden'
+    if (naturalHeight <= maxH) {
       el.scrollTop = 0
     }
     // Decide multiline mode against fixed inline-width measurement to avoid
@@ -274,9 +293,9 @@ export function InputBar() {
       if (!prev) return inlineHeight > MULTILINE_ENTER_HEIGHT
       return inlineHeight > MULTILINE_EXIT_HEIGHT
     })
-  }, [input, measureInlineHeight])
+  }, [input, responsiveMaxHeight, measureInlineHeight])
 
-  useLayoutEffect(() => { autoResize() }, [input, isMultiLine, autoResize])
+  useLayoutEffect(() => { autoResize() }, [input, isMultiLine, responsiveMaxHeight, autoResize])
 
   useEffect(() => {
     return () => {
@@ -909,16 +928,41 @@ export function InputBar() {
         )}
       </AnimatePresence>
 
-      {/* Hint text — visible when textarea empty and idle */}
-      {!input && !isBusy && !isConnecting && voiceState === 'idle' && (
-        <div
-          data-testid="newline-hint"
-          className="text-[10px] px-1"
-          style={{ color: colors.textMuted, marginBottom: 2 }}
-        >
-          Shift+Enter for newline
-        </div>
-      )}
+      {/* UX-010: Model indicator + hint row */}
+      <div className="flex items-center gap-2 px-1" style={{ marginBottom: 2 }}>
+        {/* Active model name — always visible */}
+        {preferredModel && (
+          <span
+            data-testid="model-indicator"
+            className="text-[10px] font-mono"
+            style={{ color: colors.textMuted, opacity: 0.7 }}
+          >
+            {AVAILABLE_MODELS.find((m) => m.id === preferredModel)?.label?.toLowerCase() || preferredModel.split('-').pop()}
+          </span>
+        )}
+
+        {/* Hint text — visible when textarea empty and idle */}
+        {!input && !isBusy && !isConnecting && voiceState === 'idle' && (
+          <span
+            data-testid="newline-hint"
+            className="text-[10px]"
+            style={{ color: colors.textMuted }}
+          >
+            Shift+Enter for newline
+          </span>
+        )}
+
+        {/* UX-010: Character count for long prompts */}
+        {input.length > CHAR_COUNT_THRESHOLD && (
+          <span
+            data-testid="char-count"
+            className="text-[10px] font-mono ml-auto"
+            style={{ color: input.length > 10000 ? colors.statusError : colors.textMuted, opacity: 0.7 }}
+          >
+            {input.length.toLocaleString()}
+          </span>
+        )}
+      </div>
 
       {/* Single-line: inline controls. Multi-line: controls in bottom row */}
       <div
@@ -960,7 +1004,7 @@ export function InputBar() {
                 lineHeight: '20px',
                 color: colors.textPrimary,
                 minHeight: 20,
-                maxHeight: INPUT_MAX_HEIGHT,
+                maxHeight: responsiveMaxHeight,
                 paddingTop: 11,
                 paddingBottom: 2,
               }}
@@ -1028,7 +1072,7 @@ export function InputBar() {
                 lineHeight: '20px',
                 color: colors.textPrimary,
                 minHeight: 20,
-                maxHeight: INPUT_MAX_HEIGHT,
+                maxHeight: responsiveMaxHeight,
                 paddingTop: 15,
                 paddingBottom: 15,
               }}
