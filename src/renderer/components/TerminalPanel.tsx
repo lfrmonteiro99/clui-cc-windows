@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
+import { ClockCounterClockwise, X } from '@phosphor-icons/react'
 import { TerminalTabStrip } from './TerminalTabStrip'
 import { TerminalView } from './TerminalView'
 import { TerminalStatusBar } from './TerminalStatusBar'
@@ -16,8 +17,19 @@ export function TerminalPanel() {
   const handleTerminalExit = useTerminalStore((s) => s.handleTerminalExit)
   const ptyAvailable = useTerminalStore((s) => s.ptyAvailable)
   const paneLayouts = useTerminalStore((s) => s.paneLayouts)
+  const persistedSessions = useTerminalStore((s) => s.persistedSessions)
+  const loadPersistedSessions = useTerminalStore((s) => s.loadPersistedSessions)
+  const restoreSession = useTerminalStore((s) => s.restoreSession)
+  const dismissAllPersistedSessions = useTerminalStore((s) => s.dismissAllPersistedSessions)
   const colors = useColors()
   const [error, setError] = useState<string | null>(null)
+
+  // TERM-007: Load persisted sessions on mount
+  useEffect(() => {
+    if (ptyAvailable) {
+      loadPersistedSessions()
+    }
+  }, [ptyAvailable])
 
   // Auto-create first terminal tab using chat's working directory
   useEffect(() => {
@@ -58,6 +70,28 @@ export function TerminalPanel() {
         case 'close-tab':
           if (store.activeTermTabId) store.closeTermTab(store.activeTermTabId)
           break
+        // TERM-002: Close split pane or close tab if no split
+        case 'close-pane-or-tab': {
+          const paneTermTabId = detail.termTabId
+          if (!paneTermTabId) break
+          // Find the parent tab that owns this pane
+          const parentTabId = Object.keys(store.paneLayouts).find((tabId) => {
+            const layout = store.paneLayouts[tabId]
+            if (!layout || layout.type === 'leaf') return false
+            // Check if this termTabId is a leaf in this layout
+            const findLeaf = (node: any): boolean => {
+              if (node.type === 'leaf') return node.termTabId === paneTermTabId
+              return findLeaf(node.first) || findLeaf(node.second)
+            }
+            return findLeaf(layout)
+          })
+          if (parentTabId) {
+            store.closeSplitPane(parentTabId, paneTermTabId)
+          } else if (store.activeTermTabId) {
+            store.closeTermTab(store.activeTermTabId)
+          }
+          break
+        }
         case 'next-tab': {
           const tabs = store.termTabs
           const idx = tabs.findIndex((t) => t.id === store.activeTermTabId)
@@ -164,6 +198,49 @@ export function TerminalPanel() {
       {error && (
         <div style={{ padding: '8px 12px', fontSize: 12, color: colors.statusError, background: colors.statusErrorBg }}>
           {error}
+        </div>
+      )}
+
+      {/* TERM-007: Restore persisted sessions banner */}
+      {persistedSessions.length > 0 && (
+        <div
+          data-clui-ui
+          className="flex items-center gap-2"
+          style={{
+            padding: '6px 12px',
+            fontSize: 11,
+            color: colors.textSecondary,
+            background: colors.surfaceHover,
+            borderBottom: `1px solid ${colors.containerBorder}`,
+          }}
+        >
+          <ClockCounterClockwise size={14} style={{ color: colors.accent, flexShrink: 0 }} />
+          <span>{persistedSessions.length} previous session{persistedSessions.length > 1 ? 's' : ''} available</span>
+          <div style={{ flex: 1 }} />
+          {persistedSessions.slice(0, 3).map((s) => (
+            <button
+              key={s.id}
+              onClick={() => restoreSession(s.id)}
+              className="border-0 cursor-pointer rounded px-2 py-0.5"
+              style={{
+                fontSize: 10,
+                background: colors.accentSoft,
+                color: colors.accent,
+              }}
+              title={`Restore: ${s.shell} (${s.cwd})`}
+            >
+              {s.cwd.split(/[\\/]/).pop() || s.cwd}
+            </button>
+          ))}
+          <button
+            onClick={dismissAllPersistedSessions}
+            className="flex items-center justify-center border-0 cursor-pointer rounded-full"
+            style={{ width: 18, height: 18, background: 'transparent', color: colors.textMuted }}
+            title="Dismiss all"
+            aria-label="Dismiss persisted sessions"
+          >
+            <X size={11} />
+          </button>
         </div>
       )}
 

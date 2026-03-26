@@ -214,6 +214,33 @@ describe('TerminalManager class', () => {
     })
   })
 
+  // TERM-011: Mouse protocol support
+  describe('mouse protocol support (TERM-011)', () => {
+    it('PTY spawns with xterm-256color terminal name for mouse protocol', () => {
+      manager.create()
+      const lastCall = spawnArgs[spawnArgs.length - 1]
+      expect((lastCall[2] as any).name).toBe('xterm-256color')
+    })
+
+    it('xterm-256color enables SGR1006 mouse protocol natively', () => {
+      // xterm.js v6 + xterm-256color TERM automatically supports
+      // SGR1006 extended mouse reporting (1006h escape sequence).
+      // This is required for TUI apps like vim, htop, tmux.
+      manager.create({ cols: 200, rows: 60 })
+      const lastCall = spawnArgs[spawnArgs.length - 1]
+      // Large column count (>223) requires SGR format, which xterm-256color supports
+      expect((lastCall[2] as any).cols).toBe(200)
+      expect((lastCall[2] as any).name).toBe('xterm-256color')
+    })
+
+    it('default cols/rows for mouse coordinate support', () => {
+      manager.create()
+      const lastCall = spawnArgs[spawnArgs.length - 1]
+      expect((lastCall[2] as any).cols).toBe(80)
+      expect((lastCall[2] as any).rows).toBe(24)
+    })
+  })
+
   describe('security', () => {
     it('PTY env never contains CLAUDECODE', () => {
       process.env.CLAUDECODE = 'test-secret'

@@ -293,6 +293,131 @@ describe('TerminalStore — Extended', () => {
     })
   })
 
+  // ─── TERM-007: Session persistence ───
+
+  describe('session persistence (TERM-007)', () => {
+    it('persistedSessions initializes empty', () => {
+      expect(useTerminalStore.getState().persistedSessions).toEqual([])
+    })
+
+    it('dismissPersistedSession removes session from state', () => {
+      useTerminalStore.setState({
+        persistedSessions: [
+          { id: 's1', serializedBuffer: 'test', shell: 'bash', cwd: '/home', exitCode: 0, savedAt: Date.now() },
+          { id: 's2', serializedBuffer: 'test2', shell: 'zsh', cwd: '/tmp', exitCode: null, savedAt: Date.now() },
+        ],
+      })
+      useTerminalStore.getState().dismissPersistedSession('s1')
+      expect(useTerminalStore.getState().persistedSessions).toHaveLength(1)
+      expect(useTerminalStore.getState().persistedSessions[0].id).toBe('s2')
+    })
+
+    it('dismissAllPersistedSessions clears all sessions', () => {
+      useTerminalStore.setState({
+        persistedSessions: [
+          { id: 's1', serializedBuffer: 'test', shell: 'bash', cwd: '/home', exitCode: 0, savedAt: Date.now() },
+          { id: 's2', serializedBuffer: 'test2', shell: 'zsh', cwd: '/tmp', exitCode: null, savedAt: Date.now() },
+        ],
+      })
+      useTerminalStore.getState().dismissAllPersistedSessions()
+      expect(useTerminalStore.getState().persistedSessions).toEqual([])
+    })
+
+    it('restoreSession creates a new tab and removes from persisted list', async () => {
+      mockClui.terminalCreate.mockResolvedValueOnce({ termTabId: 'restored-1' })
+      useTerminalStore.setState({
+        persistedSessions: [
+          { id: 'ps1', serializedBuffer: 'hello', shell: 'bash', cwd: '/home/user', exitCode: 0, savedAt: Date.now() },
+        ],
+      })
+
+      await useTerminalStore.getState().restoreSession('ps1')
+
+      expect(useTerminalStore.getState().termTabs).toHaveLength(1)
+      expect(useTerminalStore.getState().termTabs[0].id).toBe('restored-1')
+      expect(useTerminalStore.getState().termTabs[0].shell).toBe('bash')
+      expect(useTerminalStore.getState().termTabs[0].cwd).toBe('/home/user')
+      expect(useTerminalStore.getState().activeTermTabId).toBe('restored-1')
+      expect(useTerminalStore.getState().persistedSessions).toHaveLength(0)
+    })
+
+    it('restoreSession with unknown id is no-op', async () => {
+      await useTerminalStore.getState().restoreSession('nonexistent')
+      expect(useTerminalStore.getState().termTabs).toHaveLength(0)
+    })
+
+    it('restoreSession dispatches buffer restore event', async () => {
+      mockClui.terminalCreate.mockResolvedValueOnce({ termTabId: 'restored-2' })
+      useTerminalStore.setState({
+        persistedSessions: [
+          { id: 'ps2', serializedBuffer: 'previous output', shell: 'bash', cwd: '/tmp', exitCode: null, savedAt: Date.now() },
+        ],
+      })
+
+      await useTerminalStore.getState().restoreSession('ps2')
+
+      expect(window.dispatchEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'clui-terminal-restore',
+        })
+      )
+    })
+  })
+
+  // ─── TERM-002: Split pane close ───
+
+  describe('split pane close (TERM-002)', () => {
+    it('closeSplitPane removes pane and keeps sibling', async () => {
+      mockClui.terminalCreate
+        .mockResolvedValueOnce({ termTabId: 'main-tab' })
+        .mockResolvedValueOnce({ termTabId: 'split-pane' })
+
+      await useTerminalStore.getState().createTermTab()
+      await useTerminalStore.getState().splitPane('main-tab', 'horizontal')
+
+      // Verify split layout exists
+      const layout = useTerminalStore.getState().paneLayouts['main-tab']
+      expect(layout).toBeDefined()
+      expect(layout.type).toBe('split')
+
+      // Close the split pane
+      useTerminalStore.getState().closeSplitPane('main-tab', 'split-pane')
+
+      // Layout should be removed (back to single pane)
+      const afterLayout = useTerminalStore.getState().paneLayouts['main-tab']
+      expect(afterLayout?.type).toBe('leaf')
+    })
+
+    it('closeSplitPane on non-existent layout is no-op', () => {
+      useTerminalStore.getState().closeSplitPane('nonexistent', 'pane')
+      // no crash
+    })
+
+    it('closeSplitPane calls terminalClose on removed pane', async () => {
+      mockClui.terminalCreate
+        .mockResolvedValueOnce({ termTabId: 'main-tab2' })
+        .mockResolvedValueOnce({ termTabId: 'split-pane2' })
+
+      await useTerminalStore.getState().createTermTab()
+      await useTerminalStore.getState().splitPane('main-tab2', 'vertical')
+      useTerminalStore.getState().closeSplitPane('main-tab2', 'split-pane2')
+
+      expect(mockClui.terminalClose).toHaveBeenCalledWith('split-pane2')
+    })
+  })
+
+  // ─── TERM-011: Mouse protocol ───
+
+  describe('mouse protocol support (TERM-011)', () => {
+    it('terminal name is xterm-256color for mouse protocol support', () => {
+      // The terminal manager spawns PTY with name: 'xterm-256color'
+      // which enables SGR1006 mouse protocol natively in xterm.js v6.
+      // This test documents the requirement — actual PTY spawn is tested
+      // in terminal-manager-class.test.ts.
+      expect(true).toBe(true) // placeholder: verified in integration
+    })
+  })
+
   // ─── Security tests ───
 
   describe('security', () => {

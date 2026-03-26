@@ -12,7 +12,7 @@ const MAX_SESSION_SIZE = 100 * 1024 // 100KB per session
 const MAX_SESSIONS = 20
 const STALE_DAYS = 7
 
-interface PersistedSession {
+export interface PersistedSession {
   id: string
   serializedBuffer: string
   shell: string
