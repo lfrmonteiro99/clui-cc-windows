@@ -3,7 +3,7 @@ import { AnimatePresence } from 'framer-motion'
 import { useColors } from '../theme'
 import { useTerminalStore } from '../stores/terminalStore'
 import { TerminalSearch } from './TerminalSearch'
-import { saveTerminalSession } from '../utils/terminal-persistence'
+import { saveTerminalSession, loadTerminalSessions, deleteTerminalSession } from '../utils/terminal-persistence'
 
 interface TerminalViewProps {
   termTabId: string
@@ -15,6 +15,7 @@ export function TerminalView({ termTabId, isActive }: TerminalViewProps) {
   const terminalRef = useRef<any>(null) // xterm Terminal instance
   const fitAddonRef = useRef<any>(null)
   const searchAddonRef = useRef<any>(null)
+  const serializeAddonRef = useRef<any>(null)
   const searchTermRef = useRef<string>('')
   const colors = useColors()
   const [loaded, setLoaded] = useState(false)
@@ -150,28 +151,65 @@ export function TerminalView({ termTabId, isActive }: TerminalViewProps) {
       terminal.loadAddon(searchAddon)
       searchAddonRef.current = searchAddon
 
-      // TERM-001: WebGL addon — disabled until version compatibility with xterm 6.0 is verified.
-      // addon-webgl@0.19.0 may crash silently during render, blocking all terminal output.
-      // Re-enable when @xterm/addon-webgl releases a version with explicit xterm@6 support.
-      // try {
-      //   const { WebglAddon } = await import('@xterm/addon-webgl')
-      //   const webglAddon = new WebglAddon()
-      //   webglAddon.onContextLoss(() => webglAddon.dispose())
-      //   terminal.loadAddon(webglAddon)
-      // } catch { /* DOM fallback */ }
+      // TERM-001: WebGL GPU-accelerated renderer with DOM fallback
+      try {
+        const { WebglAddon } = await import('@xterm/addon-webgl')
+        const webglAddon = new WebglAddon()
+        webglAddon.onContextLoss(() => {
+          console.warn('[TerminalView] WebGL context lost, falling back to DOM renderer')
+          webglAddon.dispose()
+        })
+        terminal.loadAddon(webglAddon)
+        console.info('[TerminalView] WebGL renderer loaded successfully')
+      } catch (err) {
+        console.warn('[TerminalView] WebGL addon unavailable, using DOM renderer:', err)
+      }
 
-      // TERM-005: Image addon — disabled until version compatibility with xterm 6.0 is verified.
-      // Same risk as WebGL addon above.
-      // const imageEnabled = storeState.imageProtocolEnabled ?? false
-      // if (imageEnabled) {
-      //   try {
-      //     const { ImageAddon } = await import('@xterm/addon-image')
-      //     terminal.loadAddon(new ImageAddon({ sixelSupport: true }))
-      //   } catch { /* skip */ }
-      // }
+      // TERM-005: Image protocol support (Sixel/iTerm2/Kitty) — opt-in via settings
+      const imageEnabled = storeState.imageProtocolEnabled ?? false
+      if (imageEnabled) {
+        try {
+          const { ImageAddon } = await import('@xterm/addon-image')
+          terminal.loadAddon(new ImageAddon({
+            sixelSupport: true,
+            sixelScrolling: true,
+            sixelPaletteLimit: 4096,
+            showPlaceholder: true,
+            enableSizeReports: true,
+          }))
+          console.info('[TerminalView] Image addon loaded (Sixel/iTerm2/Kitty)')
+        } catch (err) {
+          console.warn('[TerminalView] Image addon unavailable:', err)
+        }
+      }
+
+      // TERM-007: Serialize addon for session persistence
+      try {
+        const { SerializeAddon } = await import('@xterm/addon-serialize')
+        const serializeAddon = new SerializeAddon()
+        terminal.loadAddon(serializeAddon)
+        serializeAddonRef.current = serializeAddon
+      } catch (err) {
+        console.warn('[TerminalView] Serialize addon unavailable:', err)
+      }
 
       terminal.open(containerRef.current!)
       fitAddon.fit()
+
+      // TERM-007: Restore persisted scrollback if available
+      if (serializeAddonRef.current) {
+        try {
+          const sessions = await loadTerminalSessions()
+          const saved = sessions.find((s) => s.id === termTabId)
+          if (saved) {
+            terminal.write(saved.serializedBuffer)
+            await deleteTerminalSession(termTabId)
+            console.info('[TerminalView] Restored persisted scrollback for', termTabId)
+          }
+        } catch (err) {
+          console.warn('[TerminalView] Failed to restore session:', err)
+        }
+      }
 
       terminalRef.current = terminal
       fitAddonRef.current = fitAddon
@@ -267,24 +305,44 @@ export function TerminalView({ termTabId, isActive }: TerminalViewProps) {
     return () => {
       disposed = true
       if (terminalRef.current) {
-        // TERM-007: Save terminal buffer before disposing
-        try {
-          const buffer = serializeTerminalBuffer(terminalRef.current)
-          if (buffer.length > 0) {
+        // TERM-007: Save scrollback before disposing (prefer addon-serialize over manual buffer read)
+        if (serializeAddonRef.current) {
+          try {
+            const serialized = serializeAddonRef.current.serialize()
             const tab = useTerminalStore.getState().termTabs.find((t) => t.id === termTabId)
-            if (tab) {
+            if (serialized && tab) {
               saveTerminalSession({
                 id: termTabId,
-                serializedBuffer: buffer,
+                serializedBuffer: serialized,
                 shell: tab.shell,
                 cwd: tab.cwd,
                 exitCode: tab.exitCode,
                 savedAt: Date.now(),
-              }).catch(() => {})
+              }).catch((err) => console.warn('[TerminalView] Failed to save session:', err))
             }
+          } catch (err) {
+            console.warn('[TerminalView] Failed to serialize terminal:', err)
           }
-        } catch (err) {
-          console.warn('[TerminalView] Failed to save session:', err)
+        } else {
+          // Fallback: manual buffer serialization if addon unavailable
+          try {
+            const buffer = serializeTerminalBuffer(terminalRef.current)
+            if (buffer.length > 0) {
+              const tab = useTerminalStore.getState().termTabs.find((t) => t.id === termTabId)
+              if (tab) {
+                saveTerminalSession({
+                  id: termTabId,
+                  serializedBuffer: buffer,
+                  shell: tab.shell,
+                  cwd: tab.cwd,
+                  exitCode: tab.exitCode,
+                  savedAt: Date.now(),
+                }).catch((err) => console.warn('[TerminalView] Failed to save session:', err))
+              }
+            }
+          } catch (err) {
+            console.warn('[TerminalView] Failed to save session:', err)
+          }
         }
 
         const unsub = (terminalRef.current as any)._cluiUnsub
@@ -531,7 +589,8 @@ function serializeTerminalBuffer(terminal: any): string {
       lines.pop()
     }
     return lines.join('\r\n')
-  } catch {
+  } catch (err) {
+    console.warn('[TerminalView] Failed to read terminal buffer:', err)
     return ''
   }
 }

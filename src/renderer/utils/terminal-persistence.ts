@@ -55,8 +55,8 @@ export async function saveTerminalSession(session: PersistedSession): Promise<vo
 
     db.close()
     await purgeOldSessions()
-  } catch {
-    // Graceful degradation — skip persistence silently
+  } catch (err) {
+    console.warn('[terminal-persistence] Failed to save session:', err)
   }
 }
 
@@ -74,7 +74,8 @@ export async function loadTerminalSessions(): Promise<PersistedSession[]> {
 
     db.close()
     return sessions.filter((s) => !isStale(s.savedAt))
-  } catch {
+  } catch (err) {
+    console.warn('[terminal-persistence] Failed to load sessions:', err)
     return []
   }
 }
@@ -89,8 +90,8 @@ export async function deleteTerminalSession(id: string): Promise<void> {
       tx.onerror = () => reject(tx.error)
     })
     db.close()
-  } catch {
-    // silent
+  } catch (err) {
+    console.warn('[terminal-persistence] Failed to delete session:', err)
   }
 }
 
@@ -124,8 +125,8 @@ async function purgeOldSessions(): Promise<void> {
       tx.onerror = () => reject(tx.error)
     })
     db.close()
-  } catch {
-    // silent
+  } catch (err) {
+    console.warn('[terminal-persistence] Failed to purge old sessions:', err)
   }
 }
 
