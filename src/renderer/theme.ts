@@ -31,7 +31,7 @@ const darkColors = {
   textPrimary: '#ccc9c0',
   textSecondary: '#c0bdb2',
   textTertiary: '#76766e',
-  textMuted: '#353530',
+  textMuted: '#7a7a72',
 
   // Accent — orange
   accent: '#d97757',
@@ -203,8 +203,8 @@ const lightColors = {
   textTertiary: '#8a8a80',
   textMuted: '#dddad2',
 
-  // Accent — orange (same)
-  accent: '#d97757',
+  // Accent — orange (darkened for text contrast on light bg)
+  accent: '#c4613d',
   accentLight: 'rgba(217, 119, 87, 0.1)',
   accentSoft: 'rgba(217, 119, 87, 0.12)',
 

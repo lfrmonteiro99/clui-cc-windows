@@ -4,6 +4,7 @@ import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import {
   Copy, Check, ArrowCounterClockwise, Square, Globe, ArrowDown,
+  Sparkle, FolderOpen, Warning, Plus, ArrowClockwise,
 } from '@phosphor-icons/react'
 import { useSessionStore } from '../stores/sessionStore'
 import { FilePath } from './FilePath'
@@ -417,7 +418,7 @@ export function ConversationView({ overrideTabId }: { overrideTabId?: string } =
           )}
 
           {isDead && (
-            <span style={{ color: colors.statusError, fontSize: 11 }}>Session ended unexpectedly</span>
+            <DeadRecoveryCard tabId={tab.id} sessionId={tab.claudeSessionId} />
           )}
 
           {isFailed && (
@@ -448,15 +449,26 @@ export function ConversationView({ overrideTabId }: { overrideTabId?: string } =
   )
 }
 
-// ─── Empty State (directory picker before first message) ───
+// ─── Empty State — Welcome Card (UX-012) ───
+
+const EXAMPLE_PROMPTS = [
+  'Explain this codebase',
+  'Fix the failing tests',
+  'Refactor for readability',
+  'Add unit tests',
+]
 
 function EmptyState() {
   const setBaseDirectory = useSessionStore((s) => s.setBaseDirectory)
+  const sendMessage = useSessionStore((s) => s.sendMessage)
+  const hasChosenDirectory = useSessionStore(
+    (s) => s.tabs.find((t) => t.id === s.activeTabId)?.hasChosenDirectory ?? false,
+  )
+  const colors = useColors()
 
   const handleDirectorySelect = useCallback(
     (dir: string, runtime: import('./DirectoryPicker').RuntimeType, distro: string | null) => {
       setBaseDirectory(dir)
-      // Update tab runtime/distro via direct store mutation (setBaseDirectory only sets directory)
       const { activeTabId } = useSessionStore.getState()
       useSessionStore.setState((s) => ({
         tabs: s.tabs.map((t) =>
@@ -467,13 +479,115 @@ function EmptyState() {
     [setBaseDirectory],
   )
 
+  const handleChipClick = useCallback((prompt: string) => {
+    sendMessage(prompt)
+  }, [sendMessage])
+
   return (
-    <div
-      className="flex flex-col items-center justify-center py-4"
-      style={{ minHeight: 80 }}
+    <motion.div
+      data-testid="welcome-card"
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.25 }}
+      className="flex flex-col items-center justify-center py-6 px-4"
+      style={{ minHeight: 120 }}
     >
-      <DirectoryPicker onSelect={handleDirectorySelect} />
-    </div>
+      {/* Tagline */}
+      <div className="flex items-center gap-2 mb-3">
+        <Sparkle size={18} weight="fill" style={{ color: colors.accent }} />
+        <span className="text-[13px] font-medium" style={{ color: colors.textPrimary }}>
+          What can I help you with?
+        </span>
+      </div>
+
+      {/* Example prompt chips */}
+      <div className="flex flex-wrap justify-center gap-2 mb-4 max-w-[360px]">
+        {EXAMPLE_PROMPTS.map((prompt) => (
+          <motion.button
+            key={prompt}
+            data-testid="prompt-chip"
+            whileHover={{ scale: 1.03 }}
+            whileTap={{ scale: 0.97 }}
+            onClick={() => handleChipClick(prompt)}
+            className="text-[11px] rounded-full px-3 py-1.5 transition-colors cursor-pointer"
+            style={{
+              background: colors.accentLight,
+              color: colors.accent,
+              border: `1px solid ${colors.accentBorder}`,
+            }}
+          >
+            {prompt}
+          </motion.button>
+        ))}
+      </div>
+
+      {/* Labeled directory picker */}
+      <div className="flex flex-col items-center gap-1.5">
+        <span className="flex items-center gap-1 text-[10px]" style={{ color: colors.textTertiary }}>
+          <FolderOpen size={12} />
+          {hasChosenDirectory ? 'Working directory' : 'Choose a working directory'}
+        </span>
+        <DirectoryPicker onSelect={handleDirectorySelect} />
+      </div>
+    </motion.div>
+  )
+}
+
+// ─── Dead Session Recovery Card (UX-016) ───
+
+function DeadRecoveryCard({ tabId, sessionId }: { tabId: string; sessionId: string | null }) {
+  const resumeSession = useSessionStore((s) => s.resumeSession)
+  const colors = useColors()
+
+  const handleResume = useCallback(() => {
+    if (sessionId) {
+      void resumeSession(sessionId)
+    }
+  }, [sessionId, resumeSession])
+
+  const handleNewTab = useCallback(() => {
+    void window.clui.createTab()
+  }, [])
+
+  return (
+    <motion.div
+      data-testid="dead-recovery-card"
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.2 }}
+      className="flex items-center gap-2"
+    >
+      <Warning size={14} weight="fill" style={{ color: colors.statusError }} />
+      <span style={{ color: colors.statusError, fontSize: 11 }}>
+        Session ended unexpectedly
+      </span>
+      {sessionId && (
+        <button
+          data-testid="dead-resume-btn"
+          onClick={handleResume}
+          className="flex items-center gap-1 rounded-full px-2.5 py-0.5 transition-colors text-[11px] font-medium cursor-pointer"
+          style={{
+            background: colors.accentLight,
+            color: colors.accent,
+            border: `1px solid ${colors.accentBorder}`,
+          }}
+        >
+          <ArrowClockwise size={10} />
+          Resume
+        </button>
+      )}
+      <button
+        data-testid="dead-new-tab-btn"
+        onClick={handleNewTab}
+        className="flex items-center gap-1 rounded-full px-2.5 py-0.5 transition-colors text-[11px] cursor-pointer"
+        style={{
+          color: colors.textTertiary,
+        }}
+      >
+        <Plus size={10} />
+        New Tab
+      </button>
+    </motion.div>
   )
 }
 

@@ -986,6 +986,13 @@ export const useSessionStore = create<State>((set, get) => ({
         if (isBusy) {
           // Enforce queue backpressure — drop if too many queued
           if (withEffectiveBase.queuedPrompts.length >= MAX_QUEUED_PROMPTS) {
+            // UX-017: Show toast when queue is full and prompt is dropped
+            useNotificationStore.getState().addToast({
+              type: 'warning',
+              title: 'Queue full',
+              message: `Maximum of ${MAX_QUEUED_PROMPTS} queued prompts reached. Message was not queued.`,
+              duration: 5000,
+            })
             return withEffectiveBase
           }
           return {
