@@ -33,6 +33,7 @@ import { IPC } from '../shared/types'
 import type { RunOptions, NormalizedEvent, EnrichedError, ExportOptions, SessionExportData, CostRecord, ShellExecRequest } from '../shared/types'
 import { MIN_WINDOW_HEIGHT, SCREEN_EDGE_MARGIN, clampHeight } from '../shared/adaptive-height'
 import { executeShell } from './shell-executor'
+import { isWaylandSession, registerGlobalShortcutSafe, applyLinuxWorkspaceVisibility } from './linux-support'
 import { IpcEventBatcher } from './ipc-batcher'
 import { cleanOrphanedPromptFiles } from './claude/prompt-file'
 
@@ -246,6 +247,7 @@ function createWindow(): void {
   if (process.platform === 'darwin') {
     mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
   }
+  applyLinuxWorkspaceVisibility(mainWindow)
   mainWindow.setAlwaysOnTop(true, 'screen-saver')
 
   mainWindow.once('ready-to-show', () => {
@@ -253,7 +255,9 @@ function createWindow(): void {
     // Enable OS-level click-through for transparent regions.
     // { forward: true } ensures mousemove events still reach the renderer
     // so it can toggle click-through off when cursor enters interactive UI.
-    if (!E2E_MODE) {
+    // LINUX-011: Disabled on Wayland — { forward: true } doesn't work,
+    // causing the app to be permanently unclickable.
+    if (!E2E_MODE && !isWaylandSession()) {
       mainWindow?.setIgnoreMouseEvents(true, { forward: true })
     }
     if (process.env.ELECTRON_RENDERER_URL) {
@@ -364,7 +368,7 @@ ipcMain.handle(IPC.IS_VISIBLE, () => {
 // OS-level click-through toggle — renderer calls this on mousemove
 // to enable clicks on interactive UI while passing through transparent areas
 ipcMain.on(IPC.SET_IGNORE_MOUSE_EVENTS, (event, ignore: boolean, options?: { forward?: boolean }) => {
-  if (E2E_MODE) {
+  if (E2E_MODE || isWaylandSession()) {
     return
   }
   const win = BrowserWindow.fromWebContents(event.sender)
@@ -1477,13 +1481,16 @@ app.whenReady().then(() => {
     // Register user-configured shortcut with automatic fallback on conflict
     const shortcutConfig = loadShortcutConfig()
     let primaryShortcut = shortcutConfig.primary
-    let registered = globalShortcut.register(primaryShortcut, () => toggleWindow(`shortcut ${primaryShortcut}`))
+    const registerShortcut = (accel: string, cb: () => void): boolean =>
+      registerGlobalShortcutSafe(accel, cb, globalShortcut.register.bind(globalShortcut), log)
+
+    let registered = registerShortcut(primaryShortcut, () => toggleWindow(`shortcut ${primaryShortcut}`))
 
     if (!registered) {
       log(`${primaryShortcut} shortcut registration failed — trying alternatives`)
       // Try safe alternatives until one works
       for (const alt of getSafeAlternatives()) {
-        registered = globalShortcut.register(alt, () => toggleWindow(`shortcut ${alt}`))
+        registered = registerShortcut(alt, () => toggleWindow(`shortcut ${alt}`))
         if (registered) {
           primaryShortcut = alt
           saveShortcutConfig({ primary: alt })
@@ -1496,7 +1503,7 @@ app.whenReady().then(() => {
       }
     }
     // Secondary shortcut always registered
-    globalShortcut.register('CommandOrControl+Shift+K', () => toggleWindow('shortcut Cmd/Ctrl+Shift+K'))
+    registerShortcut('CommandOrControl+Shift+K', () => toggleWindow('shortcut Cmd/Ctrl+Shift+K'))
 
     // Notify renderer of the active shortcut for first-launch hint toast
     mainWindow?.webContents.once('did-finish-load', () => {
@@ -1508,15 +1515,28 @@ app.whenReady().then(() => {
     if (process.platform === 'darwin') {
       trayIcon.setTemplateImage(true)
     }
-    tray = new Tray(trayIcon)
-    tray.setToolTip('Clui CC — Claude Code UI')
-    tray.on('click', () => toggleWindow('tray click'))
-    tray.setContextMenu(
-      Menu.buildFromTemplate([
-        { label: 'Show Clui CC', click: () => toggleWindow('tray menu Show Clui CC') },
-        { label: 'Quit', click: () => { app.quit() } },
-      ])
-    )
+
+    if (process.platform === 'linux') {
+      const de = (process.env.XDG_CURRENT_DESKTOP || '').toLowerCase()
+      if (de.includes('gnome') && !de.includes('kde')) {
+        console.info('[tray] GNOME detected — tray may require AppIndicator extension')
+      }
+    }
+
+    try {
+      tray = new Tray(trayIcon)
+      tray.setToolTip('Clui CC — Claude Code UI')
+      tray.on('click', () => toggleWindow('tray click'))
+      tray.setContextMenu(
+        Menu.buildFromTemplate([
+          { label: 'Show Clui CC', click: () => toggleWindow('tray menu Show Clui CC') },
+          { label: 'Quit', click: () => { app.quit() } },
+        ])
+      )
+    } catch (err) {
+      console.warn('[tray] Failed to create tray icon:', err)
+      // App continues without tray — not critical
+    }
 
     app.on('activate', () => toggleWindow('app activate'))
   }
