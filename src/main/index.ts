@@ -33,7 +33,7 @@ import { IPC } from '../shared/types'
 import type { RunOptions, NormalizedEvent, EnrichedError, ExportOptions, SessionExportData, CostRecord, ShellExecRequest } from '../shared/types'
 import { MIN_WINDOW_HEIGHT, SCREEN_EDGE_MARGIN, clampHeight } from '../shared/adaptive-height'
 import { executeShell } from './shell-executor'
-import { registerGlobalShortcutSafe, applyLinuxWorkspaceVisibility } from './linux-support'
+import { isWaylandSession, registerGlobalShortcutSafe, applyLinuxWorkspaceVisibility } from './linux-support'
 import { IpcEventBatcher } from './ipc-batcher'
 import { cleanOrphanedPromptFiles } from './claude/prompt-file'
 
@@ -255,7 +255,9 @@ function createWindow(): void {
     // Enable OS-level click-through for transparent regions.
     // { forward: true } ensures mousemove events still reach the renderer
     // so it can toggle click-through off when cursor enters interactive UI.
-    if (!E2E_MODE) {
+    // LINUX-011: Disabled on Wayland — { forward: true } doesn't work,
+    // causing the app to be permanently unclickable.
+    if (!E2E_MODE && !isWaylandSession()) {
       mainWindow?.setIgnoreMouseEvents(true, { forward: true })
     }
     if (process.env.ELECTRON_RENDERER_URL) {
@@ -366,7 +368,7 @@ ipcMain.handle(IPC.IS_VISIBLE, () => {
 // OS-level click-through toggle — renderer calls this on mousemove
 // to enable clicks on interactive UI while passing through transparent areas
 ipcMain.on(IPC.SET_IGNORE_MOUSE_EVENTS, (event, ignore: boolean, options?: { forward?: boolean }) => {
-  if (E2E_MODE) {
+  if (E2E_MODE || isWaylandSession()) {
     return
   }
   const win = BrowserWindow.fromWebContents(event.sender)

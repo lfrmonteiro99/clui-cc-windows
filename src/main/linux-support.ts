@@ -4,9 +4,16 @@
  * LINUX-004: Wayland global shortcut fallback + multi-workspace visibility.
  */
 
-/** Detect if the current session is running under Wayland. */
+/**
+ * Returns true when the current session is running under a Wayland compositor.
+ * Checks both `XDG_SESSION_TYPE` and `WAYLAND_DISPLAY` environment variables.
+ * LINUX-011: Wayland breaks setIgnoreMouseEvents({ forward: true }), making the app unclickable.
+ */
 export function isWaylandSession(): boolean {
-  return process.platform === 'linux' && process.env.XDG_SESSION_TYPE === 'wayland'
+  if (process.platform !== 'linux') return false
+  if (process.env.XDG_SESSION_TYPE === 'wayland') return true
+  if (process.env.WAYLAND_DISPLAY) return true
+  return false
 }
 
 /**
