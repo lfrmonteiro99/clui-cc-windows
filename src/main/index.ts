@@ -1508,15 +1508,28 @@ app.whenReady().then(() => {
     if (process.platform === 'darwin') {
       trayIcon.setTemplateImage(true)
     }
-    tray = new Tray(trayIcon)
-    tray.setToolTip('Clui CC — Claude Code UI')
-    tray.on('click', () => toggleWindow('tray click'))
-    tray.setContextMenu(
-      Menu.buildFromTemplate([
-        { label: 'Show Clui CC', click: () => toggleWindow('tray menu Show Clui CC') },
-        { label: 'Quit', click: () => { app.quit() } },
-      ])
-    )
+
+    if (process.platform === 'linux') {
+      const de = (process.env.XDG_CURRENT_DESKTOP || '').toLowerCase()
+      if (de.includes('gnome') && !de.includes('kde')) {
+        console.info('[tray] GNOME detected — tray may require AppIndicator extension')
+      }
+    }
+
+    try {
+      tray = new Tray(trayIcon)
+      tray.setToolTip('Clui CC — Claude Code UI')
+      tray.on('click', () => toggleWindow('tray click'))
+      tray.setContextMenu(
+        Menu.buildFromTemplate([
+          { label: 'Show Clui CC', click: () => toggleWindow('tray menu Show Clui CC') },
+          { label: 'Quit', click: () => { app.quit() } },
+        ])
+      )
+    } catch (err) {
+      console.warn('[tray] Failed to create tray icon:', err)
+      // App continues without tray — not critical
+    }
 
     app.on('activate', () => toggleWindow('app activate'))
   }
