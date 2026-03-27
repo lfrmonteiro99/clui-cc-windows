@@ -51,12 +51,23 @@ export async function ensureWhisper(onStatus: StatusCallback): Promise<void> {
     return
   }
 
+  // Linux: no pre-built binaries available — use system package manager
+  if (process.platform === 'linux') {
+    if (existsSync(WHISPER_BIN_PATH)) {
+      onStatus({ stage: 'ready' })
+    } else {
+      onStatus({ stage: 'skipped' })
+      log('Linux — install whisper-cpp via package manager')
+    }
+    return
+  }
+
   onStatus({ stage: 'checking' })
 
   try {
     mkdirSync(WHISPER_DIR, { recursive: true })
-  } catch {
-    // directory may already exist
+  } catch (err) {
+    console.warn('[WhisperProvisioner] mkdirSync failed:', err)
   }
 
   const hasBinary = existsSync(WHISPER_BIN_PATH)
@@ -191,7 +202,7 @@ async function extractWhisperBinary(zipPath: string, destDir: string): Promise<v
       execSync(`rmdir /s /q "${extractDir}"`, { timeout: 10000, stdio: 'ignore', shell: 'cmd.exe' })
     } catch (err) {
       // Clean up on failure
-      try { execSync(`rmdir /s /q "${extractDir}"`, { timeout: 5000, stdio: 'ignore', shell: 'cmd.exe' }) } catch { /* ignore */ }
+      try { execSync(`rmdir /s /q "${extractDir}"`, { timeout: 5000, stdio: 'ignore', shell: 'cmd.exe' }) } catch (err) { console.warn('[WhisperProvisioner] cleanup failed:', err) }
       throw err
     }
     return
@@ -213,6 +224,6 @@ function findFileRecursive(dir: string, fileName: string): string | null {
         if (found) return found
       }
     }
-  } catch { /* ignore */ }
+  } catch (err) { console.warn('[WhisperProvisioner] findFileRecursive failed:', err) }
   return null
 }

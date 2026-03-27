@@ -11,6 +11,14 @@ function isWin(): boolean {
   return process.platform === 'win32'
 }
 
+function isMac(): boolean {
+  return process.platform === 'darwin'
+}
+
+function isLinux(): boolean {
+  return process.platform === 'linux'
+}
+
 /**
  * Return platform-appropriate candidate paths for the Whisper binary.
  */
@@ -34,6 +42,19 @@ export function getWhisperBinaryCandidates(): string[] {
     ]
   }
 
+  if (isLinux()) {
+    return [
+      cluiWhisper,
+      '/usr/bin/whisper-cli',
+      '/usr/local/bin/whisper-cli',
+      '/usr/bin/whisper',
+      '/usr/local/bin/whisper',
+      join(home, '.local/bin/whisper'),
+      '/snap/bin/whisper',
+    ]
+  }
+
+  // macOS
   return [
     cluiWhisper,
     '/opt/homebrew/bin/whisper-cli',
@@ -64,6 +85,16 @@ export function getWhisperModelCandidates(): string[] {
     return dirs.flatMap(dir => models.map(m => join(dir, m)))
   }
 
+  if (isLinux()) {
+    const dirs = [
+      cluiDir,
+      join(home, '.local/share/whisper'),
+      '/usr/share/whisper-cpp/models',
+    ]
+    return dirs.flatMap(dir => models.map(m => join(dir, m)))
+  }
+
+  // macOS
   const dirs = [
     cluiDir,
     join(home, '.local/share/whisper'),
@@ -79,6 +110,9 @@ export function getWhisperNotFoundMessage(): string {
   if (isWin()) {
     return 'Whisper not found. Install via scoop (scoop install whisper-cpp) or download from https://github.com/ggerganov/whisper.cpp/releases'
   }
+  if (isLinux()) {
+    return 'Whisper not found. Install via your package manager (e.g. apt install whisper-cpp) or build from https://github.com/ggerganov/whisper.cpp'
+  }
   return 'Whisper not found. Install with: brew install whisper-cpp'
 }
 
@@ -93,5 +127,6 @@ export function getModelDownloadMessage(): string {
     return `Whisper model not found. Download with PowerShell:\nNew-Item -ItemType Directory -Force -Path "${modelDir}"\nInvoke-WebRequest -Uri ${url} -OutFile "${join(modelDir, 'ggml-tiny.bin')}"`
   }
 
+  // Linux and macOS both use the same download command
   return `Whisper model not found. Download with:\nmkdir -p ~/.local/share/whisper && curl -L -o ~/.local/share/whisper/ggml-tiny.bin ${url}`
 }
