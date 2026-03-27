@@ -1,9 +1,13 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react'
-import { AnimatePresence } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
+import { X } from '@phosphor-icons/react'
 import { useColors } from '../theme'
 import { useTerminalStore } from '../stores/terminalStore'
 import { TerminalSearch } from './TerminalSearch'
 import { saveTerminalSession, loadTerminalSessions, deleteTerminalSession } from '../utils/terminal-persistence'
+
+/** TERM-005: Maximum image storage size in bytes (2 MB) */
+const MAX_IMAGE_SIZE = 2 * 1024 * 1024
 
 interface TerminalViewProps {
   termTabId: string
@@ -23,6 +27,7 @@ export function TerminalView({ termTabId, isActive }: TerminalViewProps) {
   const [searchResultIndex, setSearchResultIndex] = useState(-1)
   const [searchResultCount, setSearchResultCount] = useState(0)
   const [bellFlash, setBellFlash] = useState(false)
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null)
 
   // Lazy-load xterm.js and initialize
   useEffect(() => {
@@ -47,6 +52,15 @@ export function TerminalView({ termTabId, isActive }: TerminalViewProps) {
       const backgroundOpacity = storeState.backgroundOpacity ?? 1
       const backgroundBlur = storeState.backgroundBlur ?? 0
 
+      // TERM-011: Mouse protocol support for TUI apps (vim, less, htop)
+      // xterm.js v6 handles SGR1006 mouse protocol automatically. Key behaviors:
+      //   - Mouse clicks/scroll forwarded to apps in alternate screen mode
+      //   - Mouse drag selection works in normal mode
+      //   - Right-click context menu accessible via Shift+Right-click bypass
+      //   - Mouse events only sent when terminal is focused (xterm.js default)
+      //   - No interference with copy/paste shortcuts (handled by attachCustomKeyEventHandler)
+      // No explicit mouse options needed — xterm.js v6 enables them by default.
+      // Do NOT set disableStdin or any mouse-blocking options here.
       const terminal = new Terminal({
         fontFamily: '"JetBrains Mono", "Cascadia Code", "Fira Code", Consolas, "Courier New", monospace',
         fontSize: 13,
@@ -56,6 +70,7 @@ export function TerminalView({ termTabId, isActive }: TerminalViewProps) {
         scrollback: scrollbackSize,
         theme: buildXtermTheme(colors, backgroundOpacity),
         allowTransparency: true,
+        allowProposedApi: true, // TERM-011: required for advanced mouse reporting features
       })
 
       // xterm 6.0: customKeyEventHandler is set via attachCustomKeyEventHandler, not constructor options
@@ -176,8 +191,9 @@ export function TerminalView({ termTabId, isActive }: TerminalViewProps) {
             sixelPaletteLimit: 4096,
             showPlaceholder: true,
             enableSizeReports: true,
+            storageLimit: MAX_IMAGE_SIZE,
           }))
-          console.info('[TerminalView] Image addon loaded (Sixel/iTerm2/Kitty)')
+          console.info('[TerminalView] Image addon loaded (Sixel/iTerm2/Kitty) with %d byte storage limit', MAX_IMAGE_SIZE)
         } catch (err) {
           console.warn('[TerminalView] Image addon unavailable:', err)
         }
@@ -242,6 +258,17 @@ export function TerminalView({ termTabId, isActive }: TerminalViewProps) {
       // Send keystrokes to main process
       terminal.onData((data: string) => {
         window.clui.terminalWrite(termTabId, data)
+      })
+
+      // TERM-011: Forward binary mouse events (X10/normal mouse protocol sends raw bytes)
+      // SGR1006 uses text-based encoding (handled by onData above), but legacy mouse
+      // protocols (X10, normal, urxvt) may send binary data that onData cannot represent.
+      terminal.onBinary((data: string) => {
+        const buffer = new Uint8Array(data.length)
+        for (let i = 0; i < data.length; i++) {
+          buffer[i] = data.charCodeAt(i) & 0xFF
+        }
+        window.clui.terminalWrite(termTabId, new TextDecoder().decode(buffer))
       })
 
       // Receive output from main process
@@ -478,6 +505,29 @@ export function TerminalView({ termTabId, isActive }: TerminalViewProps) {
     terminalRef.current?.focus()
   }, [])
 
+  // TERM-005: Click-to-expand lightbox for inline terminal images
+  const handleTerminalClick = useCallback((e: React.MouseEvent) => {
+    const target = e.target as HTMLElement
+    if (target instanceof HTMLImageElement && target.src) {
+      e.stopPropagation()
+      setLightboxSrc(target.src)
+      return
+    }
+    if (target instanceof HTMLCanvasElement) {
+      try {
+        const dataUrl = target.toDataURL('image/png')
+        if (dataUrl && dataUrl !== 'data:,') {
+          e.stopPropagation()
+          setLightboxSrc(dataUrl)
+          return
+        }
+      } catch (err) {
+        console.warn('[TerminalView] Failed to extract canvas image for lightbox:', err)
+      }
+    }
+    terminalRef.current?.focus()
+  }, [])
+
   const backgroundOpacity = useTerminalStore((s) => s.backgroundOpacity) ?? 1
 
   return (
@@ -515,10 +565,16 @@ export function TerminalView({ termTabId, isActive }: TerminalViewProps) {
           />
         )}
       </AnimatePresence>
+      {/* TERM-005: Image lightbox overlay */}
+      <AnimatePresence>
+        {lightboxSrc && (
+          <ImageLightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} />
+        )}
+      </AnimatePresence>
       <div
         ref={containerRef}
         data-clui-ui
-        onClick={() => terminalRef.current?.focus()}
+        onClick={handleTerminalClick}
         onMouseDown={() => terminalRef.current?.focus()}
         style={{
           flex: 1,
@@ -530,6 +586,85 @@ export function TerminalView({ termTabId, isActive }: TerminalViewProps) {
         }}
       />
     </div>
+  )
+}
+
+/** TERM-005: Click-to-expand lightbox for inline terminal images */
+function ImageLightbox({ src, onClose }: { src: string; onClose: () => void }) {
+  const colors = useColors()
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [onClose])
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.2 }}
+      onClick={onClose}
+      style={{
+        position: 'absolute',
+        inset: 0,
+        zIndex: 50,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'rgba(0, 0, 0, 0.75)',
+        backdropFilter: 'blur(4px)',
+        cursor: 'zoom-out',
+      }}
+    >
+      <motion.button
+        initial={{ opacity: 0, scale: 0.8 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.8 }}
+        transition={{ duration: 0.15, delay: 0.05 }}
+        onClick={(e) => { e.stopPropagation(); onClose() }}
+        style={{
+          position: 'absolute',
+          top: 12,
+          right: 12,
+          width: 32,
+          height: 32,
+          borderRadius: '50%',
+          border: 'none',
+          background: colors.surfacePrimary,
+          color: colors.textPrimary,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          cursor: 'pointer',
+          zIndex: 51,
+        }}
+        aria-label="Close lightbox"
+      >
+        <X size={18} weight="bold" />
+      </motion.button>
+      <motion.img
+        initial={{ opacity: 0, scale: 0.85 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.85 }}
+        transition={{ duration: 0.2 }}
+        src={src}
+        alt="Terminal image (expanded)"
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          maxWidth: '90%',
+          maxHeight: '90%',
+          objectFit: 'contain',
+          borderRadius: 8,
+          border: `1px solid ${colors.containerBorder}`,
+          boxShadow: colors.containerShadow,
+          cursor: 'default',
+        }}
+      />
+    </motion.div>
   )
 }
 
