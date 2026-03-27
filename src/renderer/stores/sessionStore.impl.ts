@@ -210,6 +210,14 @@ function getAgentLabel(tabId: string, tabs: TabState[]): string {
   return index === -1 ? `Tab ${tabId.slice(0, 8)}` : `Tab ${index + 1}`
 }
 
+/** Find the last index in an array matching a predicate (like Array.findIndex but from the end). */
+function findLastIndex<T>(arr: T[], predicate: (item: T) => boolean): number {
+  for (let i = arr.length - 1; i >= 0; i--) {
+    if (predicate(arr[i])) return i
+  }
+  return -1
+}
+
 function inferFocusSummary(prompt: string): string {
   const normalized = prompt.replace(/\s+/g, ' ').trim()
   if (normalized.length <= 120) {
@@ -1162,9 +1170,10 @@ export const useSessionStore = create<State>((set, get) => ({
 
         case 'tool_call_update': {
           const msgs = [...updated.messages]
-          const lastTool = [...msgs].reverse().find((m) => m.role === 'tool' && m.toolStatus === 'running')
-          if (lastTool) {
-            lastTool.toolInput = (lastTool.toolInput || '') + event.partialInput
+          const lastToolIdx = findLastIndex(msgs, (m) => m.role === 'tool' && m.toolStatus === 'running')
+          if (lastToolIdx >= 0) {
+            const lastTool = msgs[lastToolIdx]
+            msgs[lastToolIdx] = { ...lastTool, toolInput: (lastTool.toolInput || '') + event.partialInput }
           }
           updated.messages = msgs
           break
@@ -1172,9 +1181,9 @@ export const useSessionStore = create<State>((set, get) => ({
 
         case 'tool_call_complete': {
           const msgs2 = [...updated.messages]
-          const runningTool = [...msgs2].reverse().find((m) => m.role === 'tool' && m.toolStatus === 'running')
-          if (runningTool) {
-            runningTool.toolStatus = 'completed'
+          const runningToolIdx = findLastIndex(msgs2, (m) => m.role === 'tool' && m.toolStatus === 'running')
+          if (runningToolIdx >= 0) {
+            msgs2[runningToolIdx] = { ...msgs2[runningToolIdx], toolStatus: 'completed' }
           }
           updated.messages = msgs2
           break

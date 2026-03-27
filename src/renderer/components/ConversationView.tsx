@@ -104,10 +104,14 @@ export function ConversationView({ overrideTabId }: { overrideTabId?: string } =
     (a, b) => {
       if (a === b) return true
       if (!a || !b) return a === b
+      const aLastMsg = a.messages[a.messages.length - 1]
+      const bLastMsg = b.messages[b.messages.length - 1]
       return (
         a.id === b.id &&
         a.messages.length === b.messages.length &&
-        a.status === b.status
+        a.status === b.status &&
+        (aLastMsg?._textChunks?.length ?? 0) === (bLastMsg?._textChunks?.length ?? 0) &&
+        aLastMsg?.toolStatus === bLastMsg?.toolStatus
       )
     },
   )

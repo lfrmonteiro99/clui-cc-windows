@@ -372,11 +372,11 @@ export class RunManager extends EventEmitter {
     // Fallback: SIGKILL if process hasn't exited after 5s.
     // Only check exitCode — process.killed is set true by the SIGINT call above,
     // so checking !killed would prevent the fallback from ever firing.
+    // Guard against the process reference being cleaned up before the timeout fires.
     setTimeout(() => {
-      if (handle.process.exitCode === null) {
-        log(`Force killing run ${requestId} (SIGINT did not terminate)`)
-        handle.process.kill('SIGKILL')
-      }
+      if (!handle.process || handle.process.exitCode !== null) return
+      log(`Force killing run ${requestId} (SIGINT did not terminate)`)
+      handle.process.kill('SIGKILL')
     }, 5000)
 
     return true

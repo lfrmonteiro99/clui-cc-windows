@@ -1181,4 +1181,107 @@ describe('handleNormalizedEvent', () => {
       expect(tab.retryState!.attempt).toBe(2)
     })
   })
+
+  // ─── BUG-003: tool_call_update / tool_call_complete must not mutate in-place ───
+
+  describe('BUG-003: immutable tool call message updates', () => {
+    it('tool_call_update creates a new message object instead of mutating', () => {
+      const originalMsg: Message = {
+        id: 'msg-orig',
+        role: 'tool',
+        content: '',
+        toolName: 'Bash',
+        toolInput: '',
+        toolStatus: 'running',
+        timestamp: Date.now(),
+      }
+      const tabId = seedTab({ messages: [originalMsg] })
+
+      // Capture reference to the original message object
+      const beforeMessages = getTab(tabId)!.messages
+      const beforeMsg = beforeMessages[0]
+
+      dispatchEvent(tabId, { type: 'tool_call_update', toolId: 'tool-1', partialInput: '{"cmd":"ls"}' })
+
+      const afterTab = getTab(tabId)!
+      const afterMsg = afterTab.messages[0]
+
+      // The updated message should have the new toolInput
+      expect(afterMsg.toolInput).toBe('{"cmd":"ls"}')
+      // But the original message object must NOT have been mutated
+      expect(beforeMsg.toolInput).toBe('')
+      // The message object should be a new reference
+      expect(afterMsg).not.toBe(beforeMsg)
+    })
+
+    it('tool_call_complete creates a new message object instead of mutating', () => {
+      const originalMsg: Message = {
+        id: 'msg-orig',
+        role: 'tool',
+        content: '',
+        toolName: 'Read',
+        toolInput: '{"path":"/foo"}',
+        toolStatus: 'running',
+        timestamp: Date.now(),
+      }
+      const tabId = seedTab({ messages: [originalMsg] })
+
+      const beforeMsg = getTab(tabId)!.messages[0]
+
+      dispatchEvent(tabId, { type: 'tool_call_complete', index: 0 })
+
+      const afterMsg = getTab(tabId)!.messages[0]
+
+      // The updated message should have completed status
+      expect(afterMsg.toolStatus).toBe('completed')
+      // But the original message object must NOT have been mutated
+      expect(beforeMsg.toolStatus).toBe('running')
+      // The message object should be a new reference
+      expect(afterMsg).not.toBe(beforeMsg)
+    })
+  })
+
+  // ─── BUG-006: IPC rejection must clear activeRequestId ───
+
+  describe('BUG-006: handleError clears activeRequestId on IPC rejection', () => {
+    it('clears activeRequestId and sets failed status on error', () => {
+      const tabId = seedTab({
+        status: 'connecting',
+        activeRequestId: 'req-123',
+      })
+
+      useSessionStore.getState().handleError(tabId, {
+        message: 'IPC call rejected',
+        stderrTail: [],
+        exitCode: null,
+        elapsedMs: 0,
+        toolCallCount: 0,
+      })
+
+      const tab = getTab(tabId)!
+      expect(tab.activeRequestId).toBeNull()
+      expect(tab.status).toBe('failed')
+    })
+
+    it('restores status from connecting to failed on sendMessage IPC rejection', () => {
+      const tabId = seedTab({
+        status: 'connecting',
+        activeRequestId: 'req-456',
+      })
+
+      // handleError is what the .catch() handlers call
+      useSessionStore.getState().handleError(tabId, {
+        message: 'Connection refused',
+        stderrTail: [],
+        exitCode: null,
+        elapsedMs: 0,
+        toolCallCount: 0,
+      })
+
+      const tab = getTab(tabId)!
+      expect(tab.status).toBe('failed')
+      expect(tab.activeRequestId).toBeNull()
+      expect(tab.currentActivity).toBe('')
+    })
+  })
 })
