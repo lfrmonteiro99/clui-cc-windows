@@ -4,9 +4,15 @@
 
 import { join } from 'path'
 import { tmpdir } from 'os'
+import { execSync } from 'child_process'
 
 export interface ScreenshotCommand {
   program: string
+  args: string[]
+}
+
+interface LinuxToolCandidate {
+  bin: string
   args: string[]
 }
 
@@ -20,11 +26,48 @@ export function getScreenshotTempPath(): string {
 }
 
 /**
+ * Detect and return the first available Linux screenshot tool.
+ *
+ * Tries Wayland-capable tools first (spectacle, gnome-screenshot, flameshot),
+ * then X11-only tools (scrot) or Wayland-native tools (grim) depending on
+ * the session type detected via XDG_SESSION_TYPE.
+ *
+ * Exported for testability.
+ */
+export function getLinuxScreenshotTool(outputPath: string): ScreenshotCommand | null {
+  const isWayland = process.env.XDG_SESSION_TYPE === 'wayland'
+
+  const tools: LinuxToolCandidate[] = [
+    // KDE (X11 + Wayland)
+    { bin: 'spectacle', args: ['-r', '-b', '-n', '-o', outputPath] },
+    // GNOME
+    { bin: 'gnome-screenshot', args: ['-a', '-f', outputPath] },
+    // Universal
+    { bin: 'flameshot', args: ['gui', '--raw', '-p', outputPath] },
+    // X11 only (skip on Wayland)
+    ...(!isWayland ? [{ bin: 'scrot', args: ['-s', outputPath] }] : []),
+    // Wayland native (skip on X11)
+    ...(isWayland ? [{ bin: 'grim', args: ['-g', '$(slurp)', outputPath] }] : []),
+  ]
+
+  for (const tool of tools) {
+    try {
+      execSync(`which ${tool.bin}`, { stdio: 'ignore' })
+      return { program: tool.bin, args: tool.args }
+    } catch (err) {
+      console.warn(`[screenshot] ${tool.bin} not found, trying next:`, err)
+    }
+  }
+
+  return null
+}
+
+/**
  * Build the platform-appropriate screenshot capture command.
  *
  * - macOS: uses `/usr/sbin/screencapture -i` (interactive region select)
  * - Windows: uses SnippingTool.exe /clip (interactive region select → clipboard → file)
- * - Linux: returns null (not supported)
+ * - Linux: probes for available screenshot tools (spectacle, gnome-screenshot, flameshot, scrot, grim)
  */
 export function buildScreenshotCommand(outputPath: string): ScreenshotCommand | null {
   if (process.platform === 'darwin') {
@@ -62,6 +105,10 @@ export function buildScreenshotCommand(outputPath: string): ScreenshotCommand | 
       program: 'powershell',
       args: ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', psScript],
     }
+  }
+
+  if (process.platform === 'linux') {
+    return getLinuxScreenshotTool(outputPath)
   }
 
   return null
