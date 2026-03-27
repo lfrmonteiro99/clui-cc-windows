@@ -214,6 +214,17 @@ input::placeholder {
 .stack-btn:hover:not(:disabled) { color: var(--clui-btn-hover-color); background: var(--clui-btn-hover-bg); }
 .stack-btn:disabled { color: var(--clui-btn-disabled); cursor: default; }
 
+/* ─── Consistent focus ring for keyboard navigation ─── */
+.clui-focus-ring:focus-visible {
+  outline: 2px solid var(--clui-accent);
+  outline-offset: 2px;
+  border-radius: inherit;
+}
+.stack-btn:focus-visible {
+  outline: 2px solid var(--clui-accent);
+  outline-offset: 2px;
+}
+
 /* Collapsed: stacked on the right, overlapping */
 .stack-btn-0 { right: 84px; z-index: 4; }
 .stack-btn-1 { right: 0;    z-index: 3; }

@@ -67,7 +67,7 @@ function ErrorFallback({ error, componentStack }: ErrorFallbackProps) {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center px-5 py-8">
+    <div className="flex min-h-full items-center justify-center px-5 py-8">
       <motion.div
         data-testid="error-boundary-card"
         initial={{ opacity: 0 }}

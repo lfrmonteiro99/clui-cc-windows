@@ -162,6 +162,12 @@ function TabItem({
         fontWeight: isActive ? 500 : 400,
         cursor: isDragging ? 'grabbing' : 'grab',
       }}
+      onMouseEnter={(e) => {
+        if (!isActive) (e.currentTarget as HTMLElement).style.background = colors.surfaceHover
+      }}
+      onMouseLeave={(e) => {
+        if (!isActive) (e.currentTarget as HTMLElement).style.background = 'transparent'
+      }}
     >
       <StatusDot
         status={tab.status}
@@ -216,7 +222,8 @@ function TabItem({
             onClose(tab.id)
           }}
           onPointerDown={(e) => e.stopPropagation()}
-          className="flex-shrink-0 rounded-full w-4 h-4 flex items-center justify-center transition-opacity"
+          aria-label="Close tab"
+          className="flex-shrink-0 rounded-full w-5 h-5 flex items-center justify-center transition-opacity clui-focus-ring group-hover:opacity-50 focus-visible:opacity-100"
           style={{
             opacity: isActive ? 0.5 : 0,
             color: colors.textSecondary,
@@ -224,7 +231,7 @@ function TabItem({
           onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.opacity = '1' }}
           onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.opacity = isActive ? '0.5' : '0' }}
         >
-          <X size={10} />
+          <X size={11} />
         </button>
       )}
     </Reorder.Item>

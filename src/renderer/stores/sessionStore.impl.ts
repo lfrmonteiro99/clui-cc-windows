@@ -31,6 +31,7 @@ import {
   moveTabOrderItem,
   orderTabsByTabOrder,
   reconcileTabOrder,
+  replaceTabOrderId,
   saveStoredTabOrder,
 } from './tabOrder'
 import notificationSrc from '../../../resources/notification.mp3'
@@ -600,6 +601,27 @@ export const useSessionStore = create<State>((set, get) => ({
           activeTabId: newTab.id,
         })
         saveStoredTabOrder(get().tabOrder)
+        // BUG-010: Register the fallback tab with the main process ControlPlane
+        // so it has a real backend entry (prevents orphaned renderer-only tab).
+        window.clui.createTab().then(({ tabId: realId }) => {
+          if (realId !== newTab.id) {
+            set((prev) => {
+              const nextTabs = prev.tabs.map((t) => (t.id === newTab.id ? { ...t, id: realId } : t))
+              const updatedOrder = reconcileTabOrder(
+                replaceTabOrderId(prev.tabOrder, newTab.id, realId),
+                nextTabs,
+              )
+              return {
+                tabs: orderTabsByTabOrder(nextTabs, updatedOrder),
+                tabOrder: updatedOrder,
+                activeTabId: realId,
+              }
+            })
+            saveStoredTabOrder(get().tabOrder)
+          }
+        }).catch((err) => {
+          console.warn('[sessionStore] Failed to register fallback tab:', err)
+        })
         void get().refreshAgentMemory(getResolvedProjectPath(newTab, get().staticInfo))
         return
       }
