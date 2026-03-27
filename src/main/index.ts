@@ -33,6 +33,7 @@ import { IPC } from '../shared/types'
 import type { RunOptions, NormalizedEvent, EnrichedError, ExportOptions, SessionExportData, CostRecord, ShellExecRequest } from '../shared/types'
 import { MIN_WINDOW_HEIGHT, SCREEN_EDGE_MARGIN, clampHeight } from '../shared/adaptive-height'
 import { executeShell } from './shell-executor'
+import { registerGlobalShortcutSafe, applyLinuxWorkspaceVisibility } from './linux-support'
 import { IpcEventBatcher } from './ipc-batcher'
 import { cleanOrphanedPromptFiles } from './claude/prompt-file'
 
@@ -246,6 +247,7 @@ function createWindow(): void {
   if (process.platform === 'darwin') {
     mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
   }
+  applyLinuxWorkspaceVisibility(mainWindow)
   mainWindow.setAlwaysOnTop(true, 'screen-saver')
 
   mainWindow.once('ready-to-show', () => {
@@ -1477,13 +1479,16 @@ app.whenReady().then(() => {
     // Register user-configured shortcut with automatic fallback on conflict
     const shortcutConfig = loadShortcutConfig()
     let primaryShortcut = shortcutConfig.primary
-    let registered = globalShortcut.register(primaryShortcut, () => toggleWindow(`shortcut ${primaryShortcut}`))
+    const registerShortcut = (accel: string, cb: () => void): boolean =>
+      registerGlobalShortcutSafe(accel, cb, globalShortcut.register.bind(globalShortcut), log)
+
+    let registered = registerShortcut(primaryShortcut, () => toggleWindow(`shortcut ${primaryShortcut}`))
 
     if (!registered) {
       log(`${primaryShortcut} shortcut registration failed — trying alternatives`)
       // Try safe alternatives until one works
       for (const alt of getSafeAlternatives()) {
-        registered = globalShortcut.register(alt, () => toggleWindow(`shortcut ${alt}`))
+        registered = registerShortcut(alt, () => toggleWindow(`shortcut ${alt}`))
         if (registered) {
           primaryShortcut = alt
           saveShortcutConfig({ primary: alt })
@@ -1496,7 +1501,7 @@ app.whenReady().then(() => {
       }
     }
     // Secondary shortcut always registered
-    globalShortcut.register('CommandOrControl+Shift+K', () => toggleWindow('shortcut Cmd/Ctrl+Shift+K'))
+    registerShortcut('CommandOrControl+Shift+K', () => toggleWindow('shortcut Cmd/Ctrl+Shift+K'))
 
     // Notify renderer of the active shortcut for first-launch hint toast
     mainWindow?.webContents.once('did-finish-load', () => {
