@@ -61,6 +61,8 @@ export interface State {
   isExpanded: boolean
   /** Global info fetched on startup (not per-session) */
   staticInfo: StaticInfo | null
+  /** Error message if initStaticInfo failed (null = no error) */
+  startupError: string | null
   agentMemorySnapshot: AgentMemorySnapshot | null
   /** User's preferred model override (null = use default) */
   preferredModel: string | null
@@ -248,9 +250,11 @@ async function playNotificationIfHidden(): Promise<void> {
     const visible = await window.clui.isVisible()
     if (!visible) {
       notificationAudio.currentTime = 0
-      notificationAudio.play().catch(() => {})
+      notificationAudio.play().catch((err) => { console.warn('[sessionStore] notification playback failed:', err) })
     }
-  } catch {}
+  } catch (err) {
+    console.warn('[sessionStore] playNotificationIfHidden failed:', err)
+  }
 }
 
 function makeLocalTab(): TabState {
@@ -298,6 +302,7 @@ export const useSessionStore = create<State>((set, get) => ({
   activeTabId: initialTab.id,
   isExpanded: false,
   staticInfo: null,
+  startupError: null,
   agentMemorySnapshot: null,
   preferredModel: null,
   permissionMode: 'ask',
@@ -331,7 +336,15 @@ export const useSessionStore = create<State>((set, get) => ({
         },
       })
       void get().refreshAgentMemory(result.projectPath || result.homePath || '~')
-    } catch {}
+    } catch (err) {
+      console.warn('[sessionStore] initStaticInfo failed:', err)
+      set({ startupError: err instanceof Error ? err.message : String(err) })
+      useNotificationStore.getState().addToast({
+        type: 'error',
+        title: 'Startup failed',
+        message: 'Could not connect to Claude CLI. Check that it is installed and on your PATH.',
+      })
+    }
   },
 
   setPreferredModel: (model) => {

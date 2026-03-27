@@ -293,7 +293,7 @@ export class PermissionServer extends EventEmitter {
 
     // Clean up all remaining settings files (best-effort)
     for (const [, filePath] of this.settingsFiles) {
-      try { unlinkSync(filePath) } catch {}
+      try { unlinkSync(filePath) } catch (err) { console.warn('[permission-server] cleanup unlink failed:', err) }
     }
     this.settingsFiles.clear()
 
@@ -344,7 +344,7 @@ export class PermissionServer extends EventEmitter {
     // Clean up settings file for this run
     const filePath = this.settingsFiles.get(runToken)
     if (filePath) {
-      try { unlinkSync(filePath) } catch {}
+      try { unlinkSync(filePath) } catch (err) { console.warn('[permission-server] unlink settings failed:', err) }
       this.settingsFiles.delete(runToken)
     }
 
@@ -465,7 +465,7 @@ export class PermissionServer extends EventEmitter {
     }
 
     const dir = join(tmpdir(), 'clui-hook-config')
-    try { mkdirSync(dir, { recursive: true, mode: 0o700 }) } catch {}
+    try { mkdirSync(dir, { recursive: true, mode: 0o700 }) } catch (err) { console.warn('[permission-server] mkdirSync failed:', err) }
 
     const filePath = join(dir, `clui-hook-${runToken}.json`)
     writeFileSync(filePath, JSON.stringify(settings, null, 2), { mode: 0o600 })

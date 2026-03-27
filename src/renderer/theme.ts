@@ -405,12 +405,14 @@ function loadSettings(): { themeMode: ThemeMode; soundEnabled: boolean; expanded
         autoResumeMaxRetries: typeof parsed.autoResumeMaxRetries === 'number' ? parsed.autoResumeMaxRetries : 3,
       }
     }
-  } catch {}
+  } catch (err) {
+    console.warn('[theme] loadSettings failed:', err)
+  }
   return { themeMode: 'dark', soundEnabled: true, expandedUI: false, autoResumeEnabled: true, autoResumeMaxRetries: 3 }
 }
 
 function saveSettings(s: { themeMode: ThemeMode; soundEnabled: boolean; expandedUI: boolean; autoResumeEnabled: boolean; autoResumeMaxRetries: number }): void {
-  try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)) } catch {}
+  try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)) } catch (err) { console.warn('[theme] saveSettings failed:', err) }
 }
 
 // Always start in compact UI mode on launch.

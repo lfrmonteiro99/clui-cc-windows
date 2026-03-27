@@ -385,19 +385,25 @@ ipcMain.handle(IPC.START, async () => {
   let version = 'unknown'
   try {
     version = execSync('claude -v', { encoding: 'utf-8', timeout: 5000 }).trim()
-  } catch {}
+  } catch (err) {
+    console.warn('[main] claude -v failed:', err)
+  }
 
   let auth: { email?: string; subscriptionType?: string; authMethod?: string } = {}
   try {
     const raw = execSync('claude auth status', { encoding: 'utf-8', timeout: 5000 }).trim()
     auth = JSON.parse(raw)
-  } catch {}
+  } catch (err) {
+    console.warn('[main] claude auth status failed:', err)
+  }
 
   let mcpServers: string[] = []
   try {
     const raw = execSync('claude mcp list', { encoding: 'utf-8', timeout: 5000 }).trim()
     if (raw) mcpServers = raw.split('\n').filter(Boolean)
-  } catch {}
+  } catch (err) {
+    console.warn('[main] claude mcp list failed:', err)
+  }
 
   return { version, auth, mcpServers, projectPath: process.cwd(), homePath: require('os').homedir() }
 })
@@ -576,7 +582,9 @@ ipcMain.handle(IPC.LIST_SESSIONS, async (_e, projectPath?: string) => {
                 meta.firstMessage = textPart?.text?.substring(0, 100) || null
               }
             }
-          } catch {}
+          } catch (err) {
+            console.warn('[main] session line parse failed:', err)
+          }
           // Read all lines to get the last timestamp
         })
         rl.on('close', () => resolve())
@@ -669,7 +677,9 @@ ipcMain.handle(IPC.LOAD_SESSION, async (_e, arg: { sessionId: string; projectPat
               }
             }
           }
-        } catch {}
+        } catch (err) {
+          console.warn('[main] loadSession line parse failed:', err)
+        }
       })
       rl.on('close', () => resolve())
     })
@@ -793,7 +803,9 @@ ipcMain.handle(IPC.ATTACH_FILES, async () => {
       try {
         const buf = readFileSync(fp)
         dataUrl = `data:${mime};base64,${buf.toString('base64')}`
-      } catch {}
+      } catch (err) {
+        console.warn('[main] image preview generation failed:', err)
+      }
     }
 
     return {
@@ -998,7 +1010,7 @@ ipcMain.handle(IPC.TRANSCRIBE_AUDIO, async (_event, audioBase64: string) => {
       const txtPath = tmpWav.replace('.wav', '.txt')
       if (existsSync(txtPath)) {
         const transcript = readFileSync(txtPath, 'utf-8').trim()
-        try { unlinkSync(txtPath) } catch {}
+        try { unlinkSync(txtPath) } catch (err) { console.warn('[main] unlink transcript file failed:', err) }
         return { error: null, transcript }
       }
     }
@@ -1017,7 +1029,7 @@ ipcMain.handle(IPC.TRANSCRIBE_AUDIO, async (_event, audioBase64: string) => {
       transcript: null,
     }
   } finally {
-    try { unlinkSync(tmpWav) } catch {}
+    try { unlinkSync(tmpWav) } catch (err) { console.warn('[main] unlink tmpWav failed:', err) }
   }
 })
 
@@ -1031,7 +1043,9 @@ ipcMain.handle(IPC.GET_DIAGNOSTICS, () => {
       const content = readFileSync(LOG_FILE, 'utf-8')
       const lines = content.split('\n')
       recentLogs = lines.slice(-100).join('\n')
-    } catch {}
+    } catch (err) {
+      console.warn('[main] reading debug log failed:', err)
+    }
   }
 
   return {
