@@ -62,8 +62,8 @@ const SAFE_BASH_COMMANDS = new Set([
   // macOS
   'sw_vers', 'system_profiler', 'defaults', 'mdls', 'mdfind',
   // Diff / compare
-  'diff', 'cmp', 'comm', 'sort', 'uniq', 'cut', 'awk', 'sed',
-  'jq', 'yq', 'xargs', 'tr',
+  'diff', 'cmp', 'comm', 'sort', 'uniq', 'cut',
+  'jq', 'yq', 'tr',
 ])
 
 // Git subcommands that mutate state (not safe to auto-approve)
@@ -80,10 +80,14 @@ const CLAUDE_MUTATING_SUBCOMMANDS = new Set([
 ])
 
 /** Check if a Bash command string is safe (read-only) */
-function isSafeBashCommand(command: unknown): boolean {
+export function isSafeBashCommand(command: unknown): boolean {
   if (typeof command !== 'string') return false
   const trimmed = command.trim()
   if (!trimmed) return false
+
+  // SEC-002: Reject commands containing subshell or process substitution injection.
+  // These allow arbitrary command execution inside otherwise-safe commands.
+  if (/\$\(|`|<\(/.test(trimmed)) return false
 
   // Extract the first command (before any chaining operators)
   // Split on ;, &&, ||, | and check each segment
