@@ -568,6 +568,8 @@ export class ControlPlane extends EventEmitter {
     const tab = this.tabs.get(tabId)
     if (!tab) return
 
+    const wasWsl = tab.runtime === 'wsl'
+
     // Cancel active run if any
     if (tab.activeRequestId) {
       this.cancel(tab.activeRequestId)
@@ -600,6 +602,17 @@ export class ControlPlane extends EventEmitter {
     this.tabs.delete(tabId)
     this.agentMemory?.pruneStaleTabs(this.tabs.keys())
     log(`Tab closed: ${tabId}`)
+
+    // BUG-009: If this was a WSL tab and no WSL tabs remain, rebind permission
+    // server back to 127.0.0.1 to restore the default security posture.
+    if (wasWsl) {
+      const hasRemainingWslTabs = Array.from(this.tabs.values()).some((t) => t.runtime === 'wsl')
+      if (!hasRemainingWslTabs) {
+        this.permissionServer.disableWslAccess().catch((err) => {
+          log(`Failed to disable WSL access after last WSL tab closed: ${(err as Error).message}`)
+        })
+      }
+    }
   }
 
   getAgentMemorySnapshot(projectPath: string): AgentMemorySnapshot {

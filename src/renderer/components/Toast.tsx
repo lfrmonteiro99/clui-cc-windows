@@ -120,8 +120,17 @@ export function Toast({ toast }: ToastProps) {
         </div>
         <button
           onClick={() => removeToast(toast.id)}
-          className="flex-shrink-0 w-5 h-5 flex items-center justify-center rounded transition-colors"
+          className="flex-shrink-0 w-5 h-5 flex items-center justify-center rounded transition-colors clui-focus-ring"
           style={{ color: colors.textTertiary }}
+          onMouseEnter={(e) => {
+            (e.currentTarget as HTMLElement).style.color = colors.textPrimary
+            ;(e.currentTarget as HTMLElement).style.background = colors.surfaceHover
+          }}
+          onMouseLeave={(e) => {
+            (e.currentTarget as HTMLElement).style.color = colors.textTertiary
+            ;(e.currentTarget as HTMLElement).style.background = 'transparent'
+          }}
+          aria-label="Dismiss notification"
         >
           <X size={12} />
         </button>

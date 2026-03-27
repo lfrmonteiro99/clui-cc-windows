@@ -79,6 +79,7 @@ export function InputBar() {
   const wrapperRef = useRef<HTMLDivElement>(null)
   const measureRef = useRef<HTMLTextAreaElement | null>(null)
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const mediaStreamRef = useRef<MediaStream | null>(null)
   const chunksRef = useRef<Blob[]>([])
   const [lintWarnings, setLintWarnings] = useState<PromptLintWarning[]>([])
   const lintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -301,6 +302,11 @@ export function InputBar() {
     return () => {
       if (mediaRecorderRef.current?.state === 'recording') {
         mediaRecorderRef.current.stop()
+      }
+      // Release microphone stream tracks on unmount to prevent dangling mic access
+      if (mediaStreamRef.current) {
+        mediaStreamRef.current.getTracks().forEach((t) => t.stop())
+        mediaStreamRef.current = null
       }
       if (measureRef.current) {
         measureRef.current.remove()
@@ -852,11 +858,13 @@ export function InputBar() {
       setVoiceError('Microphone permission denied.')
       return
     }
+    mediaStreamRef.current = stream
     const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' : 'audio/webm'
     const recorder = new MediaRecorder(stream, { mimeType })
     recorder.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data) }
     recorder.onstop = async () => {
       stream.getTracks().forEach((t) => t.stop())
+      mediaStreamRef.current = null
       if (cancelledRef.current) { cancelledRef.current = false; setVoiceState('idle'); return }
       if (chunksRef.current.length === 0) { setVoiceState('idle'); return }
       setVoiceState('transcribing')
@@ -869,7 +877,7 @@ export function InputBar() {
       } catch (err: any) { setVoiceError(`Voice failed: ${err.message}`) }
       finally { setVoiceState('idle') }
     }
-    recorder.onerror = () => { stream.getTracks().forEach((t) => t.stop()); setVoiceError('Recording failed.'); setVoiceState('idle') }
+    recorder.onerror = () => { stream.getTracks().forEach((t) => t.stop()); mediaStreamRef.current = null; setVoiceError('Recording failed.'); setVoiceState('idle') }
     mediaRecorderRef.current = recorder
     setVoiceState('recording')
     recorder.start()

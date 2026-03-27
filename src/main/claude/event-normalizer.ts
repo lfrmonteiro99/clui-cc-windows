@@ -11,11 +11,21 @@ import type {
 } from '../../shared/types'
 
 /**
+ * Tracks which content block indices correspond to tool_use blocks.
+ * Populated by content_block_start events, consumed by content_block_stop
+ * to decide whether to emit tool_call_complete.
+ *
+ * The set is message-scoped: it resets on each message_start event.
+ */
+const toolBlockIndices = new Set<number>()
+
+/**
  * Maps raw Claude stream-json events to canonical CLUI events.
  *
- * The normalizer is stateless — it takes one raw event and returns
- * zero or more normalized events. The caller (RunManager) is responsible
- * for sequencing and routing.
+ * The normalizer tracks content block types by index so that
+ * content_block_stop only emits tool_call_complete for tool_use blocks,
+ * not text blocks. The caller (RunManager) is responsible for sequencing
+ * and routing.
  */
 export function normalize(raw: ClaudeEvent): NormalizedEvent[] {
   switch (raw.type) {
@@ -64,6 +74,7 @@ function normalizeStreamEvent(event: StreamEvent): NormalizedEvent[] {
   switch (sub.type) {
     case 'content_block_start': {
       if (sub.content_block.type === 'tool_use') {
+        toolBlockIndices.add(sub.index)
         return [{
           type: 'tool_call',
           toolName: sub.content_block.name || 'unknown',
@@ -91,6 +102,10 @@ function normalizeStreamEvent(event: StreamEvent): NormalizedEvent[] {
     }
 
     case 'content_block_stop': {
+      // Only emit tool_call_complete for blocks that started as tool_use.
+      // Text block stops should not produce this event.
+      if (!toolBlockIndices.has(sub.index)) return []
+      toolBlockIndices.delete(sub.index)
       return [{
         type: 'tool_call_complete',
         index: sub.index,
@@ -98,6 +113,8 @@ function normalizeStreamEvent(event: StreamEvent): NormalizedEvent[] {
     }
 
     case 'message_start':
+      toolBlockIndices.clear()
+      return []
     case 'message_stop':
       return []
 

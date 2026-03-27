@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { motion } from 'framer-motion'
-import { DotsThree, Bell, BellRinging, ChatText, ArrowsOutSimple, Moon, ShieldCheck, NotePencil, Keyboard, ChartBar } from '@phosphor-icons/react'
+import { DotsThree, Bell, BellRinging, ChatText, ArrowsOutSimple, Moon, Sun, Monitor, ShieldCheck, NotePencil, Keyboard, ChartBar } from '@phosphor-icons/react'
 import { useThemeStore } from '../theme'
 import { useSessionStore } from '../stores/sessionStore'
 import { useShortcutStore } from '../stores/shortcutStore'
@@ -124,17 +124,14 @@ export function SettingsPopover() {
 
   // Keep panel tracking the trigger continuously while open so it follows
   // width/position animations of the top bar without feeling "stuck in space."
+  // Uses ResizeObserver on document.body instead of RAF loop to reduce CPU usage.
   useEffect(() => {
-    if (!open) return
-    let raf = 0
-    const tick = () => {
-      updatePos()
-      raf = requestAnimationFrame(tick)
-    }
-    raf = requestAnimationFrame(tick)
-    return () => {
-      if (raf) cancelAnimationFrame(raf)
-    }
+    if (!open || !triggerRef.current) return
+    const ro = new ResizeObserver(() => updatePos())
+    ro.observe(document.body)
+    // Also track the trigger element itself for position changes
+    ro.observe(triggerRef.current)
+    return () => ro.disconnect()
   }, [open, expandedUI, isExpanded, updatePos])
 
   const handleToggle = () => {
@@ -293,17 +290,33 @@ export function SettingsPopover() {
             <div>
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2 min-w-0">
-                  <Moon size={14} style={{ color: colors.textTertiary }} />
+                  {themeMode === 'dark' ? (
+                    <Moon size={14} style={{ color: colors.textTertiary }} />
+                  ) : themeMode === 'light' ? (
+                    <Sun size={14} style={{ color: colors.textTertiary }} />
+                  ) : (
+                    <Monitor size={14} style={{ color: colors.textTertiary }} />
+                  )}
                   <div className="text-[12px] font-medium" style={{ color: colors.textPrimary }}>
-                    Dark theme
+                    Theme
                   </div>
                 </div>
-                <RowToggle
-                  checked={themeMode === 'dark'}
-                  onChange={(next) => setThemeMode(next ? 'dark' : 'light')}
-                  colors={colors}
-                  label="Toggle dark theme"
-                />
+                <div className="flex items-center gap-1">
+                  {(['system', 'light', 'dark'] as const).map((mode) => (
+                    <button
+                      key={mode}
+                      onClick={() => setThemeMode(mode)}
+                      className="clui-focus-ring text-[10px] font-medium px-2 py-0.5 rounded-full transition-colors capitalize"
+                      style={{
+                        background: themeMode === mode ? colors.accentLight : 'transparent',
+                        color: themeMode === mode ? colors.accent : colors.textTertiary,
+                        border: `1px solid ${themeMode === mode ? colors.accentSoft : 'transparent'}`,
+                      }}
+                    >
+                      {mode}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
 

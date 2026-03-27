@@ -299,6 +299,119 @@ describe('EventNormalizer', () => {
     })
   })
 
+  describe('BUG-005: content_block_stop should only emit tool_call_complete for tool blocks', () => {
+    it('does NOT emit tool_call_complete for text block stop', () => {
+      // First: content_block_start for a text block (index 0)
+      const startRaw = {
+        type: 'stream_event' as const,
+        session_id: 's1',
+        parent_tool_use_id: null,
+        uuid: 'u1',
+        event: {
+          type: 'content_block_start' as const,
+          index: 0,
+          content_block: { type: 'text' as const, text: '' },
+        },
+      }
+      // Notify normalizer of the text block start
+      normalize(startRaw)
+
+      // Then: content_block_stop for index 0 (text block)
+      const stopRaw = {
+        type: 'stream_event' as const,
+        session_id: 's1',
+        parent_tool_use_id: null,
+        uuid: 'u2',
+        event: {
+          type: 'content_block_stop' as const,
+          index: 0,
+        },
+      }
+
+      const result = normalize(stopRaw)
+      // Should NOT produce tool_call_complete for a text block
+      expect(result.every((e) => e.type !== 'tool_call_complete')).toBe(true)
+    })
+
+    it('emits tool_call_complete only for tool_use block stop', () => {
+      // content_block_start for a tool_use block (index 1)
+      const startRaw = {
+        type: 'stream_event' as const,
+        session_id: 's1',
+        parent_tool_use_id: null,
+        uuid: 'u3',
+        event: {
+          type: 'content_block_start' as const,
+          index: 1,
+          content_block: { type: 'tool_use' as const, id: 'tool-1', name: 'Read' },
+        },
+      }
+      normalize(startRaw)
+
+      // content_block_stop for index 1 (tool_use block)
+      const stopRaw = {
+        type: 'stream_event' as const,
+        session_id: 's1',
+        parent_tool_use_id: null,
+        uuid: 'u4',
+        event: {
+          type: 'content_block_stop' as const,
+          index: 1,
+        },
+      }
+
+      const result = normalize(stopRaw)
+      expect(result).toEqual([{ type: 'tool_call_complete', index: 1 }])
+    })
+
+    it('handles interleaved text and tool blocks correctly', () => {
+      // text block at index 0
+      normalize({
+        type: 'stream_event' as const,
+        session_id: 's1',
+        parent_tool_use_id: null,
+        uuid: 'u5',
+        event: {
+          type: 'content_block_start' as const,
+          index: 0,
+          content_block: { type: 'text' as const, text: '' },
+        },
+      })
+      // tool block at index 1
+      normalize({
+        type: 'stream_event' as const,
+        session_id: 's1',
+        parent_tool_use_id: null,
+        uuid: 'u6',
+        event: {
+          type: 'content_block_start' as const,
+          index: 1,
+          content_block: { type: 'tool_use' as const, id: 'tool-2', name: 'Write' },
+        },
+      })
+
+      // Stop text block — should NOT emit tool_call_complete
+      const textStop = normalize({
+        type: 'stream_event' as const,
+        session_id: 's1',
+        parent_tool_use_id: null,
+        uuid: 'u7',
+        event: { type: 'content_block_stop' as const, index: 0 },
+      })
+      expect(textStop.every((e) => e.type !== 'tool_call_complete')).toBe(true)
+
+      // Stop tool block — SHOULD emit tool_call_complete
+      const toolStop = normalize({
+        type: 'stream_event' as const,
+        session_id: 's1',
+        parent_tool_use_id: null,
+        uuid: 'u8',
+        event: { type: 'content_block_stop' as const, index: 1 },
+      })
+      expect(toolStop).toEqual([{ type: 'tool_call_complete', index: 1 }])
+    })
+  })
+
   describe('unknown events', () => {
     it('returns empty array for unknown event types', () => {
       const raw = { type: 'completely_unknown' } as any

@@ -51,6 +51,7 @@ export function HistoryPicker() {
   const [open, setOpen] = useState(false)
   const [sessions, setSessions] = useState<SessionMeta[]>([])
   const [loading, setLoading] = useState(false)
+  const [loadError, setLoadError] = useState(false)
   const triggerRef = useRef<HTMLButtonElement>(null)
   const popoverRef = useRef<HTMLDivElement>(null)
   const [pos, setPos] = useState<{ right: number; top?: number; bottom?: number; maxHeight?: number }>({ right: 0 })
@@ -75,11 +76,14 @@ export function HistoryPicker() {
 
   const loadSessions = useCallback(async () => {
     setLoading(true)
+    setLoadError(false)
     try {
       const result = await window.clui.listSessions(effectiveProjectPath)
       setSessions(result)
-    } catch {
+    } catch (err) {
+      console.warn('[HistoryPicker] Failed to load sessions:', err)
       setSessions([])
+      setLoadError(true)
     }
     setLoading(false)
   }, [effectiveProjectPath])
@@ -161,7 +165,9 @@ export function HistoryPicker() {
         await window.clui.pinSession(session.sessionId, effectiveProjectPath)
       }
       await loadSessions()
-    } catch {}
+    } catch (err) {
+      console.warn('[HistoryPicker] Pin/unpin failed:', err)
+    }
   }
 
   const pinnedSessions = sessions.filter((session) => session.pinned)
@@ -217,7 +223,26 @@ export function HistoryPicker() {
               </div>
             )}
 
-            {!loading && sessions.length === 0 && (
+            {!loading && loadError && (
+              <div className="px-3 py-4 text-center">
+                <div className="text-[11px] mb-2" style={{ color: colors.statusError }}>
+                  Failed to load sessions
+                </div>
+                <button
+                  onClick={() => void loadSessions()}
+                  className="clui-focus-ring text-[11px] font-medium px-3 py-1 rounded-full transition-colors"
+                  style={{
+                    background: colors.accentLight,
+                    color: colors.accent,
+                    border: `1px solid ${colors.accentSoft}`,
+                  }}
+                >
+                  Retry
+                </button>
+              </div>
+            )}
+
+            {!loading && !loadError && sessions.length === 0 && (
               <div className="px-3 py-4 text-center text-[11px]" style={{ color: colors.textTertiary }}>
                 No previous sessions found
               </div>

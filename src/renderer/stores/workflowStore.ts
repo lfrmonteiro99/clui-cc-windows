@@ -83,7 +83,8 @@ function loadWorkflows(): Workflow[] {
         updatedAt: typeof w.updatedAt === 'number' ? w.updatedAt : Date.now(),
       }]
     })
-  } catch {
+  } catch (err) {
+    console.warn('[workflowStore] loadWorkflows failed:', err)
     return []
   }
 }
@@ -92,7 +93,9 @@ function saveWorkflows(workflows: Workflow[]): void {
   try {
     if (typeof localStorage === 'undefined') return
     localStorage.setItem(STORAGE_KEY, JSON.stringify(workflows))
-  } catch {}
+  } catch (err) {
+    console.warn('[workflowStore] saveWorkflows failed:', err)
+  }
 }
 
 // ─── Execution engine ───

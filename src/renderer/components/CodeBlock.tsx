@@ -35,14 +35,14 @@ function CopyCodeButton({ text }: { text: string }) {
       style={{
         width: 28,
         height: 28,
-        background: copied ? colors.statusCompleteBg : 'transparent',
+        background: copied ? colors.statusCompleteBg : colors.surfaceHover,
         color: copied ? colors.statusComplete : colors.textTertiary,
         border: 'none',
-        opacity: copied ? 1 : 0.5,
+        opacity: copied ? 1 : 0.7,
       }}
       title="Copy code"
-      onMouseEnter={(e) => { e.currentTarget.style.opacity = '1' }}
-      onMouseLeave={(e) => { if (!copied) e.currentTarget.style.opacity = '0.5' }}
+      onMouseEnter={(e) => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.background = copied ? colors.statusCompleteBg : colors.surfaceActive }}
+      onMouseLeave={(e) => { if (!copied) { e.currentTarget.style.opacity = '0.7'; e.currentTarget.style.background = colors.surfaceHover } }}
     >
       {copied ? <Check size={14} /> : <Copy size={14} />}
       {copied && <span className="text-[11px]">Copied!</span>}

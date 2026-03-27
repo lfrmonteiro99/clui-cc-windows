@@ -1,4 +1,9 @@
-// Store tests — no DOM needed
+/**
+ * TERM-013: TerminalStore regression tests (Priority 2)
+ *
+ * Tests the Zustand terminal store for correct state management,
+ * tab lifecycle, font sizing, and IPC integration.
+ */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -102,5 +107,103 @@ describe('TerminalStore', () => {
     useTerminalStore.setState({ ptyAvailable: null })
     await useTerminalStore.getState().checkAvailability()
     expect(useTerminalStore.getState().ptyAvailable).toBe(true)
+  })
+
+  // ─── Priority 2: Regression tests (TERM-013) ───
+
+  describe('createTermTab with null termTabId', () => {
+    it('throws when IPC returns null termTabId (not silent failure)', async () => {
+      mockClui.terminalCreate.mockResolvedValueOnce({ termTabId: null, error: 'spawn failed' })
+      await expect(useTerminalStore.getState().createTermTab()).rejects.toThrow('spawn failed')
+    })
+
+    it('throws with default message when IPC returns null termTabId and no error', async () => {
+      mockClui.terminalCreate.mockResolvedValueOnce({ termTabId: null })
+      await expect(useTerminalStore.getState().createTermTab()).rejects.toThrow('Failed to create terminal')
+    })
+  })
+
+  describe('closeTermTab middle tab activates last remaining tab', () => {
+    it('activates the last remaining tab when closing the active middle tab', async () => {
+      mockClui.terminalCreate
+        .mockResolvedValueOnce({ termTabId: 'term-1' })
+        .mockResolvedValueOnce({ termTabId: 'term-2' })
+        .mockResolvedValueOnce({ termTabId: 'term-3' })
+
+      await useTerminalStore.getState().createTermTab()
+      await useTerminalStore.getState().createTermTab()
+      await useTerminalStore.getState().createTermTab()
+
+      // Active is term-3 (last created). Close term-2 (middle).
+      useTerminalStore.getState().setActiveTermTab('term-2')
+      useTerminalStore.getState().closeTermTab('term-2')
+
+      const state = useTerminalStore.getState()
+      expect(state.termTabs).toHaveLength(2)
+      // When closing the active tab, the last remaining tab becomes active
+      expect(state.activeTermTabId).toBe('term-3')
+    })
+  })
+
+  describe('closeTermTab last tab sets activeTermTabId to null', () => {
+    it('sets activeTermTabId to null when last tab is closed', async () => {
+      await useTerminalStore.getState().createTermTab()
+      useTerminalStore.getState().closeTermTab('mock-term-1')
+
+      const state = useTerminalStore.getState()
+      expect(state.termTabs).toHaveLength(0)
+      expect(state.activeTermTabId).toBeNull()
+    })
+  })
+
+  describe('handleTerminalExit for unknown ID', () => {
+    it('does not mutate state for unknown tab ID', async () => {
+      await useTerminalStore.getState().createTermTab()
+      const stateBefore = useTerminalStore.getState().termTabs.map((t) => ({ ...t }))
+
+      useTerminalStore.getState().handleTerminalExit('nonexistent-id', 1)
+
+      const stateAfter = useTerminalStore.getState().termTabs
+      // Tab data should be unchanged — no mutation to existing tabs
+      expect(stateAfter).toHaveLength(stateBefore.length)
+      expect(stateAfter[0].status).toBe(stateBefore[0].status)
+      expect(stateAfter[0].exitCode).toBe(stateBefore[0].exitCode)
+    })
+  })
+
+  describe('setFontSize dispatches custom event', () => {
+    it('dispatches clui-terminal-shortcut event with correct font size value', () => {
+      const dispatchSpy = vi.fn()
+      ;(window as any).dispatchEvent = dispatchSpy
+
+      useTerminalStore.getState().setFontSize(18)
+
+      expect(dispatchSpy).toHaveBeenCalledTimes(1)
+      const event = dispatchSpy.mock.calls[0][0]
+      expect(event).toBeInstanceOf(CustomEvent)
+      expect(event.type).toBe('clui-terminal-shortcut')
+      expect(event.detail).toEqual({ action: 'font-size-changed', fontSize: 18 })
+    })
+
+    it('dispatches clamped value when size is out of range', () => {
+      const dispatchSpy = vi.fn()
+      ;(window as any).dispatchEvent = dispatchSpy
+
+      useTerminalStore.getState().setFontSize(100)
+
+      const event = dispatchSpy.mock.calls[0][0]
+      expect(event.detail.fontSize).toBe(24) // clamped to max
+    })
+  })
+
+  describe('checkAvailability on IPC rejection', () => {
+    it('sets ptyAvailable to false when IPC rejects', async () => {
+      mockClui.terminalAvailable.mockRejectedValueOnce(new Error('IPC failed'))
+      useTerminalStore.setState({ ptyAvailable: null })
+
+      await useTerminalStore.getState().checkAvailability()
+
+      expect(useTerminalStore.getState().ptyAvailable).toBe(false)
+    })
   })
 })

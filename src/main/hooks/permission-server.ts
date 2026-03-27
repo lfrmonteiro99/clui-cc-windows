@@ -62,8 +62,8 @@ const SAFE_BASH_COMMANDS = new Set([
   // macOS
   'sw_vers', 'system_profiler', 'defaults', 'mdls', 'mdfind',
   // Diff / compare
-  'diff', 'cmp', 'comm', 'sort', 'uniq', 'cut', 'awk', 'sed',
-  'jq', 'yq', 'xargs', 'tr',
+  'diff', 'cmp', 'comm', 'sort', 'uniq', 'cut',
+  'jq', 'yq', 'tr',
 ])
 
 // Git subcommands that mutate state (not safe to auto-approve)
@@ -80,10 +80,14 @@ const CLAUDE_MUTATING_SUBCOMMANDS = new Set([
 ])
 
 /** Check if a Bash command string is safe (read-only) */
-function isSafeBashCommand(command: unknown): boolean {
+export function isSafeBashCommand(command: unknown): boolean {
   if (typeof command !== 'string') return false
   const trimmed = command.trim()
   if (!trimmed) return false
+
+  // SEC-002: Reject commands containing subshell or process substitution injection.
+  // These allow arbitrary command execution inside otherwise-safe commands.
+  if (/\$\(|`|<\(/.test(trimmed)) return false
 
   // Extract the first command (before any chaining operators)
   // Split on ;, &&, ||, | and check each segment
@@ -289,7 +293,7 @@ export class PermissionServer extends EventEmitter {
 
     // Clean up all remaining settings files (best-effort)
     for (const [, filePath] of this.settingsFiles) {
-      try { unlinkSync(filePath) } catch {}
+      try { unlinkSync(filePath) } catch (err) { console.warn('[permission-server] cleanup unlink failed:', err) }
     }
     this.settingsFiles.clear()
 
@@ -340,7 +344,7 @@ export class PermissionServer extends EventEmitter {
     // Clean up settings file for this run
     const filePath = this.settingsFiles.get(runToken)
     if (filePath) {
-      try { unlinkSync(filePath) } catch {}
+      try { unlinkSync(filePath) } catch (err) { console.warn('[permission-server] unlink settings failed:', err) }
       this.settingsFiles.delete(runToken)
     }
 
@@ -461,7 +465,7 @@ export class PermissionServer extends EventEmitter {
     }
 
     const dir = join(tmpdir(), 'clui-hook-config')
-    try { mkdirSync(dir, { recursive: true, mode: 0o700 }) } catch {}
+    try { mkdirSync(dir, { recursive: true, mode: 0o700 }) } catch (err) { console.warn('[permission-server] mkdirSync failed:', err) }
 
     const filePath = join(dir, `clui-hook-${runToken}.json`)
     writeFileSync(filePath, JSON.stringify(settings, null, 2), { mode: 0o600 })
