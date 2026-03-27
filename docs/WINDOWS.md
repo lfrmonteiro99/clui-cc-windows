@@ -54,6 +54,9 @@ Sessions are stored in `~/.claude/projects/<encoded-path>/`. The encoding replac
 ### node-pty
 Required for PTY transport (interactive permissions). If `node-pty` fails to load, the app falls back to stdio-only mode. Rebuild with: `npm rebuild node-pty`.
 
+### WSL Integration
+When running with WSL, the app rebinds the WSL session on last tab close to ensure clean state. Closing the last tab also registers a fallback via IPC so the main process can reset correctly.
+
 ## Known Limitations
 
 - Screenshot captures full screen (no region select)
