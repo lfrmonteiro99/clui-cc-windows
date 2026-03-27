@@ -271,7 +271,7 @@ export function DirectoryPicker({ onSelect }: DirectoryPickerProps) {
     : detectedRuntime === 'wsl'
       ? 'Detected: WSL'
       : detectedRuntime === 'native'
-        ? 'Detected: Windows'
+        ? (navigator.userAgent.includes('Linux') ? 'Detected: Linux' : 'Detected: Windows')
         : null
 
   return (
