@@ -32,6 +32,7 @@ import {
   moveTabOrderItem,
   orderTabsByTabOrder,
   reconcileTabOrder,
+  replaceTabOrderId,
   saveStoredTabOrder,
 } from './tabOrder'
 import notificationSrc from '../../../resources/notification.mp3'
@@ -62,6 +63,8 @@ export interface State {
   isExpanded: boolean
   /** Global info fetched on startup (not per-session) */
   staticInfo: StaticInfo | null
+  /** Error message if initStaticInfo failed (null = no error) */
+  startupError: string | null
   agentMemorySnapshot: AgentMemorySnapshot | null
   /** User's preferred model override (null = use default) */
   preferredModel: string | null
@@ -121,6 +124,7 @@ export interface State {
   claimAgentWork: (workKey: string, summary: string) => Promise<AgentMemoryClaimResult | null>
   markAgentDone: (note?: string) => Promise<boolean>
   releaseAgentWork: () => Promise<boolean>
+  renameTab: (tabId: string, title: string) => void
   setTabGroup: (tabId: string, groupId: string | undefined) => void
   setComposeDraft: (tabId: string, draft: string) => void
   clearComposeDraft: (tabId: string) => void
@@ -210,6 +214,14 @@ function getAgentLabel(tabId: string, tabs: TabState[]): string {
   return index === -1 ? `Tab ${tabId.slice(0, 8)}` : `Tab ${index + 1}`
 }
 
+/** Find the last index in an array matching a predicate (like Array.findIndex but from the end). */
+function findLastIndex<T>(arr: T[], predicate: (item: T) => boolean): number {
+  for (let i = arr.length - 1; i >= 0; i--) {
+    if (predicate(arr[i])) return i
+  }
+  return -1
+}
+
 function inferFocusSummary(prompt: string): string {
   const normalized = prompt.replace(/\s+/g, ' ').trim()
   if (normalized.length <= 120) {
@@ -250,9 +262,11 @@ async function playNotificationIfHidden(): Promise<void> {
     const visible = await window.clui.isVisible()
     if (!visible) {
       notificationAudio.currentTime = 0
-      notificationAudio.play().catch(() => {})
+      notificationAudio.play().catch((err) => { console.warn('[sessionStore] notification playback failed:', err) })
     }
-  } catch {}
+  } catch (err) {
+    console.warn('[sessionStore] playNotificationIfHidden failed:', err)
+  }
 }
 
 function makeLocalTab(): TabState {
@@ -300,6 +314,7 @@ export const useSessionStore = create<State>((set, get) => ({
   activeTabId: initialTab.id,
   isExpanded: false,
   staticInfo: null,
+  startupError: null,
   agentMemorySnapshot: null,
   preferredModel: null,
   permissionMode: 'ask',
@@ -333,7 +348,15 @@ export const useSessionStore = create<State>((set, get) => ({
         },
       })
       void get().refreshAgentMemory(result.projectPath || result.homePath || '~')
-    } catch {}
+    } catch (err) {
+      console.warn('[sessionStore] initStaticInfo failed:', err)
+      set({ startupError: err instanceof Error ? err.message : String(err) })
+      useNotificationStore.getState().addToast({
+        type: 'error',
+        title: 'Startup failed',
+        message: 'Could not connect to Claude CLI. Check that it is installed and on your PATH.',
+      })
+    }
   },
 
   setPreferredModel: (model) => {
@@ -581,6 +604,27 @@ export const useSessionStore = create<State>((set, get) => ({
           activeTabId: newTab.id,
         })
         saveStoredTabOrder(get().tabOrder)
+        // BUG-010: Register the fallback tab with the main process ControlPlane
+        // so it has a real backend entry (prevents orphaned renderer-only tab).
+        window.clui.createTab().then(({ tabId: realId }) => {
+          if (realId !== newTab.id) {
+            set((prev) => {
+              const nextTabs = prev.tabs.map((t) => (t.id === newTab.id ? { ...t, id: realId } : t))
+              const updatedOrder = reconcileTabOrder(
+                replaceTabOrderId(prev.tabOrder, newTab.id, realId),
+                nextTabs,
+              )
+              return {
+                tabs: orderTabsByTabOrder(nextTabs, updatedOrder),
+                tabOrder: updatedOrder,
+                activeTabId: realId,
+              }
+            })
+            saveStoredTabOrder(get().tabOrder)
+          }
+        }).catch((err) => {
+          console.warn('[sessionStore] Failed to register fallback tab:', err)
+        })
         void get().refreshAgentMemory(getResolvedProjectPath(newTab, get().staticInfo))
         return
       }
@@ -864,6 +908,14 @@ export const useSessionStore = create<State>((set, get) => ({
     }
   },
 
+  renameTab: (tabId, title) => {
+    const trimmed = title.trim()
+    if (!trimmed) return
+    set((s) => ({
+      tabs: s.tabs.map((t) => (t.id === tabId ? { ...t, title: trimmed } : t)),
+    }))
+  },
+
   setTabGroup: (tabId, groupId) => {
     set((s) => ({
       tabs: s.tabs.map((t) => (t.id === tabId ? { ...t, groupId } : t)),
@@ -999,6 +1051,13 @@ export const useSessionStore = create<State>((set, get) => ({
         if (isBusy) {
           // Enforce queue backpressure — drop if too many queued
           if (withEffectiveBase.queuedPrompts.length >= MAX_QUEUED_PROMPTS) {
+            // UX-017: Show toast when queue is full and prompt is dropped
+            useNotificationStore.getState().addToast({
+              type: 'warning',
+              title: 'Queue full',
+              message: `Maximum of ${MAX_QUEUED_PROMPTS} queued prompts reached. Message was not queued.`,
+              duration: 5000,
+            })
             return withEffectiveBase
           }
           return {
@@ -1162,9 +1221,10 @@ export const useSessionStore = create<State>((set, get) => ({
 
         case 'tool_call_update': {
           const msgs = [...updated.messages]
-          const lastTool = [...msgs].reverse().find((m) => m.role === 'tool' && m.toolStatus === 'running')
-          if (lastTool) {
-            lastTool.toolInput = (lastTool.toolInput || '') + event.partialInput
+          const lastToolIdx = findLastIndex(msgs, (m) => m.role === 'tool' && m.toolStatus === 'running')
+          if (lastToolIdx >= 0) {
+            const lastTool = msgs[lastToolIdx]
+            msgs[lastToolIdx] = { ...lastTool, toolInput: (lastTool.toolInput || '') + event.partialInput }
           }
           updated.messages = msgs
           break
@@ -1172,9 +1232,9 @@ export const useSessionStore = create<State>((set, get) => ({
 
         case 'tool_call_complete': {
           const msgs2 = [...updated.messages]
-          const runningTool = [...msgs2].reverse().find((m) => m.role === 'tool' && m.toolStatus === 'running')
-          if (runningTool) {
-            runningTool.toolStatus = 'completed'
+          const runningToolIdx = findLastIndex(msgs2, (m) => m.role === 'tool' && m.toolStatus === 'running')
+          if (runningToolIdx >= 0) {
+            msgs2[runningToolIdx] = { ...msgs2[runningToolIdx], toolStatus: 'completed' }
           }
           updated.messages = msgs2
           break

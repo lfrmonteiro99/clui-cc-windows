@@ -6,6 +6,7 @@ import { AgentMemory } from '../agent-memory'
 import type { SessionDigestManager } from './session-digest'
 import type { CompanionNarrator } from './companion-narrator'
 import type { RetrievalService } from '../context/retrieval-service'
+import type { GitContextProvider } from '../git-context'
 import { BudgetEnforcer } from '../budget-enforcer'
 import type { HookToolRequest, PermissionOption } from '../hooks/permission-server'
 import { WorktreeManager } from '../sandbox/worktree-manager'
@@ -94,6 +95,8 @@ export class ControlPlane extends EventEmitter {
   private companionNarrator: CompanionNarrator | null = null
   /** Optional context database retrieval service for memory packet injection. */
   private retrievalService: RetrievalService | null = null
+  /** Optional git context provider for injecting git status into smart packets. */
+  private gitContextProvider: GitContextProvider | null = null
   /** Optional budget enforcer for per-tab spending limits. */
   budgetEnforcer: BudgetEnforcer | null = null
   /** Sandbox worktree manager for isolated runs. */
@@ -356,6 +359,10 @@ export class ControlPlane extends EventEmitter {
     this.retrievalService = service
   }
 
+  setGitContextProvider(provider: GitContextProvider): void {
+    this.gitContextProvider = provider
+  }
+
   /**
    * Wire PtyRunManager events using the same routing logic as RunManager.
    */
@@ -582,6 +589,8 @@ export class ControlPlane extends EventEmitter {
     const tab = this.tabs.get(tabId)
     if (!tab) return
 
+    const wasWsl = tab.runtime === 'wsl'
+
     // Cancel active run if any
     if (tab.activeRequestId) {
       this.cancel(tab.activeRequestId)
@@ -614,6 +623,17 @@ export class ControlPlane extends EventEmitter {
     this.tabs.delete(tabId)
     this.agentMemory?.pruneStaleTabs(this.tabs.keys())
     log(`Tab closed: ${tabId}`)
+
+    // BUG-009: If this was a WSL tab and no WSL tabs remain, rebind permission
+    // server back to 127.0.0.1 to restore the default security posture.
+    if (wasWsl) {
+      const hasRemainingWslTabs = Array.from(this.tabs.values()).some((t) => t.runtime === 'wsl')
+      if (!hasRemainingWslTabs) {
+        this.permissionServer.disableWslAccess().catch((err) => {
+          log(`Failed to disable WSL access after last WSL tab closed: ${(err as Error).message}`)
+        })
+      }
+    }
   }
 
   getAgentMemorySnapshot(projectPath: string): AgentMemorySnapshot {
@@ -769,14 +789,21 @@ export class ControlPlane extends EventEmitter {
       }
     }
 
-    // Cross-session digest context injection
-    if (this.digestManager) {
-      const digestContext = this.digestManager.buildContextInjection(options.projectPath, tabId)
-      if (digestContext) {
-        options = {
-          ...options,
-          systemPrompt: [options.systemPrompt, digestContext].filter(Boolean).join('\n\n'),
+    // Fetch git status for smart context injection
+    let gitDiffFiles: string[] = []
+    let gitBranch: string | null = null
+    let gitFileStatuses: import('../../shared/types').GitFileStatus[] = []
+    if (this.gitContextProvider && options.projectPath) {
+      try {
+        const gitStatus = await this.gitContextProvider.getStatus(options.projectPath)
+        if (gitStatus.isRepo) {
+          gitBranch = gitStatus.branch
+          gitFileStatuses = gitStatus.files
+          gitDiffFiles = gitStatus.files.map((f) => f.path)
         }
+        log(`Git status: branch=${gitBranch}, files=${gitDiffFiles.length}`)
+      } catch (err) {
+        log(`Git status fetch failed: ${err}`)
       }
     }
 
@@ -786,7 +813,11 @@ export class ControlPlane extends EventEmitter {
       log(`Context retrieval: path="${options.projectPath}" → projectId=${projectId || 'null'}`)
       if (projectId) {
         const memoryPacket = this.retrievalService.buildSmartPacket(
-          projectId, tabId, options.prompt || ''
+          projectId, tabId, options.prompt || '',
+          gitDiffFiles,
+          undefined,
+          gitBranch,
+          gitFileStatuses,
         )
         log(`Smart context packet: ${memoryPacket ? `${memoryPacket.length} chars` : 'null (no data)'}`)
         if (memoryPacket) {

@@ -1,12 +1,13 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Terminal, CaretDown, Check, FolderOpen, Plus, X, ShieldCheck, ArrowsClockwise, Lightning } from '@phosphor-icons/react'
+import { Terminal, CaretDown, Check, FolderOpen, Plus, X, ShieldCheck, ArrowsClockwise, Lightning, Warning, Database } from '@phosphor-icons/react'
 import { useSessionStore, AVAILABLE_MODELS } from '../stores/sessionStore'
 import { usePermissionStore } from '../stores/permissionStore'
+import { useNotificationStore } from '../stores/notificationStore'
 import { usePopoverLayer } from './PopoverLayer'
 import { useColors } from '../theme'
-import type { AutoAttachState, TokenUsageSnapshot } from '../../shared/types'
+import type { AutoAttachState, TokenUsageSnapshot, ContextHealthResult } from '../../shared/types'
 
 /* ─── Model Picker (inline — tightly coupled to StatusBar) ─── */
 
@@ -139,6 +140,7 @@ function PermissionModePicker() {
   const colors = useColors()
 
   const [open, setOpen] = useState(false)
+  const [showAutoConfirm, setShowAutoConfirm] = useState(false)
   const triggerRef = useRef<HTMLButtonElement>(null)
   const popoverRef = useRef<HTMLDivElement>(null)
   const [pos, setPos] = useState({ bottom: 0, left: 0 })
@@ -159,6 +161,7 @@ function PermissionModePicker() {
       if (triggerRef.current?.contains(target)) return
       if (popoverRef.current?.contains(target)) return
       setOpen(false)
+      setShowAutoConfirm(false)
     }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
@@ -167,6 +170,22 @@ function PermissionModePicker() {
   const handleToggle = () => {
     if (!open) updatePos()
     setOpen((o) => !o)
+    setShowAutoConfirm(false)
+  }
+
+  const handleAutoClick = () => {
+    if (permissionMode === 'auto') return
+    setShowAutoConfirm(true)
+  }
+
+  const handleConfirmAuto = () => {
+    setPermissionMode('auto')
+    setOpen(false)
+    setShowAutoConfirm(false)
+  }
+
+  const handleCancelAuto = () => {
+    setShowAutoConfirm(false)
   }
 
   const isAuto = permissionMode === 'auto'
@@ -176,6 +195,7 @@ function PermissionModePicker() {
       <button
         ref={triggerRef}
         onClick={handleToggle}
+        data-testid="permission-mode-picker"
         className="flex items-center gap-0.5 text-[11px] rounded-full px-1.5 py-0.5 transition-colors clui-interactive"
         style={{
           color: colors.textTertiary,
@@ -201,7 +221,7 @@ function PermissionModePicker() {
             position: 'fixed',
             bottom: pos.bottom,
             left: pos.left,
-            width: 180,
+            width: showAutoConfirm ? 240 : 180,
             pointerEvents: 'auto',
             background: colors.popoverBg,
             backdropFilter: 'blur(20px)',
@@ -210,39 +230,76 @@ function PermissionModePicker() {
             border: `1px solid ${colors.popoverBorder}`,
           }}
         >
-          <div className="py-1">
-            <button
-              onClick={() => { setPermissionMode('ask'); setOpen(false) }}
-              className="w-full flex items-center justify-between px-3 py-1.5 text-[11px] transition-colors"
-              style={{
-                color: !isAuto ? colors.textPrimary : colors.textSecondary,
-                fontWeight: !isAuto ? 600 : 400,
-              }}
-            >
-              <span className="flex items-center gap-1.5">
-                <ShieldCheck size={12} />
-                Ask
-              </span>
-              {!isAuto && <Check size={12} style={{ color: colors.accent }} />}
-            </button>
+          {showAutoConfirm ? (
+            /* Auto mode confirmation dialog (UX-018) */
+            <div className="p-3" data-testid="auto-confirm-dialog">
+              <div className="flex items-center gap-1.5 mb-2">
+                <Warning size={14} weight="fill" style={{ color: colors.warningText }} />
+                <span className="text-[11px] font-semibold" style={{ color: colors.textPrimary }}>
+                  Enable Auto Mode?
+                </span>
+              </div>
+              <p className="text-[10px] leading-[1.4] mb-3" style={{ color: colors.textSecondary }}>
+                Auto mode will automatically approve all permission requests. Tools like Bash and file writes will run without confirmation.
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleConfirmAuto}
+                  data-testid="auto-confirm-yes"
+                  className="text-[11px] font-medium px-3 py-1.5 rounded-full transition-colors cursor-pointer"
+                  style={{
+                    background: colors.warningBg,
+                    color: colors.warningText,
+                    border: `1px solid ${colors.warningBorder}`,
+                  }}
+                >
+                  Enable Auto
+                </button>
+                <button
+                  onClick={handleCancelAuto}
+                  data-testid="auto-confirm-cancel"
+                  className="text-[11px] px-3 py-1.5 rounded-full transition-colors cursor-pointer"
+                  style={{ color: colors.textTertiary }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="py-1">
+              <button
+                onClick={() => { setPermissionMode('ask'); setOpen(false) }}
+                className="w-full flex items-center justify-between px-3 py-1.5 text-[11px] transition-colors"
+                style={{
+                  color: !isAuto ? colors.textPrimary : colors.textSecondary,
+                  fontWeight: !isAuto ? 600 : 400,
+                }}
+              >
+                <span className="flex items-center gap-1.5">
+                  <ShieldCheck size={12} />
+                  Ask
+                </span>
+                {!isAuto && <Check size={12} style={{ color: colors.accent }} />}
+              </button>
 
-            <div className="mx-2 my-0.5" style={{ height: 1, background: colors.popoverBorder }} />
+              <div className="mx-2 my-0.5" style={{ height: 1, background: colors.popoverBorder }} />
 
-            <button
-              onClick={() => { setPermissionMode('auto'); setOpen(false) }}
-              className="w-full flex items-center justify-between px-3 py-1.5 text-[11px] transition-colors"
-              style={{
-                color: isAuto ? colors.textPrimary : colors.textSecondary,
-                fontWeight: isAuto ? 600 : 400,
-              }}
-            >
-              <span className="flex items-center gap-1.5">
-                <ShieldCheck size={12} weight="fill" />
-                Auto
-              </span>
-              {isAuto && <Check size={12} style={{ color: colors.accent }} />}
-            </button>
-          </div>
+              <button
+                onClick={isAuto ? () => { setOpen(false) } : handleAutoClick}
+                className="w-full flex items-center justify-between px-3 py-1.5 text-[11px] transition-colors"
+                style={{
+                  color: isAuto ? colors.textPrimary : colors.textSecondary,
+                  fontWeight: isAuto ? 600 : 400,
+                }}
+              >
+                <span className="flex items-center gap-1.5">
+                  <ShieldCheck size={12} weight="fill" />
+                  Auto
+                </span>
+                {isAuto && <Check size={12} style={{ color: colors.accent }} />}
+              </button>
+            </div>
+          )}
         </motion.div>,
         popoverLayer,
       )}
@@ -283,6 +340,99 @@ function TokenIndicator() {
     >
       <Lightning size={14} weight={isLarge ? 'fill' : 'regular'} />
       {formatTokenCount(tokenUsage.totalTokens)}
+    </span>
+  )
+}
+
+/* ─── Context Health Indicator (CTX-008) ─── */
+
+type ContextHealthLevel = 'active' | 'low' | 'unavailable' | 'no-project'
+
+function getHealthLevel(health: ContextHealthResult | null, hasProject: boolean): ContextHealthLevel {
+  if (!hasProject) return 'no-project'
+  if (!health || !health.available) return 'unavailable'
+  if (health.memoryCount < 3) return 'low'
+  return 'active'
+}
+
+function ContextHealthIndicator() {
+  const tab = useSessionStore(
+    (s) => s.tabs.find((t) => t.id === s.activeTabId),
+    (a, b) => a === b || (!!a && !!b && a.hasChosenDirectory === b.hasChosenDirectory && a.workingDirectory === b.workingDirectory),
+  )
+  const colors = useColors()
+  const addToast = useNotificationStore((s) => s.addToast)
+
+  const [health, setHealth] = useState<ContextHealthResult | null>(null)
+  const toastShownRef = useRef(false)
+
+  const hasProject = !!tab?.hasChosenDirectory
+
+  useEffect(() => {
+    let cancelled = false
+    async function fetchHealth() {
+      try {
+        const result = await window.clui.getContextHealth()
+        if (!cancelled) {
+          setHealth(result)
+          // Show toast once on degraded state
+          if (!result.available && hasProject && !toastShownRef.current) {
+            toastShownRef.current = true
+            addToast({
+              type: 'warning',
+              title: 'Context database unavailable',
+              message: 'Session memory and context features are degraded. SQLite may not be built correctly.',
+              duration: 8000,
+            })
+          }
+        }
+      } catch (err) {
+        console.warn('[ContextHealthIndicator] Failed to fetch context health:', err)
+      }
+    }
+
+    void fetchHealth()
+    return () => { cancelled = true }
+  }, [hasProject, addToast])
+
+  const level = getHealthLevel(health, hasProject)
+
+  const dotColor = (() => {
+    switch (level) {
+      case 'active': return colors.statusComplete
+      case 'low': return colors.warningText
+      case 'unavailable': return colors.statusError
+      case 'no-project': return colors.statusIdle
+    }
+  })()
+
+  const tooltip = (() => {
+    switch (level) {
+      case 'active': return `Context active: ${health!.memoryCount} memories, ${health!.sessionCount} sessions`
+      case 'low': return `Context active: ${health!.memoryCount} memories (low) - use more to build context`
+      case 'unavailable': return `Context unavailable: ${health?.degradedReason ?? 'unknown'}`
+      case 'no-project': return 'No project selected - context requires a project directory'
+    }
+  })()
+
+  return (
+    <span
+      data-testid="context-health-indicator"
+      className="flex items-center gap-1 text-[10px] rounded-full px-1.5 py-0.5"
+      style={{ color: colors.textTertiary }}
+      title={tooltip}
+    >
+      <Database size={12} weight={level === 'active' ? 'fill' : 'regular'} />
+      <span
+        style={{
+          width: 6,
+          height: 6,
+          borderRadius: '50%',
+          background: dotColor,
+          display: 'inline-block',
+          flexShrink: 0,
+        }}
+      />
     </span>
   )
 }
@@ -456,8 +606,8 @@ export function StatusBar() {
       className="flex items-center justify-between px-4 py-1.5"
       style={{ minHeight: 28 }}
     >
-      {/* Left — directory + model picker */}
-      <div className="flex items-center gap-3 text-[11px] min-w-0" style={{ color: colors.textTertiary }}>
+      {/* Left cluster — directory + model (UX-013) */}
+      <div data-testid="status-left-cluster" className="flex items-center gap-2 min-w-0" style={{ color: colors.textTertiary }}>
         {/* Directory button */}
         <button
           ref={dirRef}
@@ -467,6 +617,8 @@ export function StatusBar() {
             color: colors.textTertiary,
             cursor: isRunning ? 'not-allowed' : 'pointer',
             maxWidth: 140,
+            fontSize: 10,
+            minHeight: 20,
           }}
           title={dirTooltip}
           disabled={isRunning}
@@ -616,14 +768,16 @@ export function StatusBar() {
           popoverLayer,
         )}
 
-        <ModelPicker />
+        {/* Separator between directory and model */}
+        <span data-testid="status-separator" className="flex-shrink-0" style={{ width: 1, height: 14, background: colors.containerBorder }} />
 
-        <PermissionModePicker />
-
-        <TokenIndicator />
+        <span style={{ fontSize: 12 }}>
+          <ModelPicker />
+        </span>
 
         {tab.agentAssignment && (
           <>
+            <span data-testid="status-separator" className="flex-shrink-0" style={{ width: 1, height: 14, background: colors.containerBorder }} />
             <span
               className="max-w-[220px] truncate rounded-full px-1.5 py-0.5 text-[10px]"
               style={{
@@ -641,12 +795,24 @@ export function StatusBar() {
         )}
       </div>
 
-      {/* Right — Open in CLI */}
-      <div className="flex items-center gap-1.5 flex-shrink-0">
+      {/* Right cluster — context + tokens + permissions + CLI (UX-013, CTX-008) */}
+      <div data-testid="status-right-cluster" className="flex items-center gap-2 flex-shrink-0">
+        <ContextHealthIndicator />
+
+        <span data-testid="status-separator" className="flex-shrink-0" style={{ width: 1, height: 14, background: colors.containerBorder }} />
+
+        <TokenIndicator />
+
+        <span data-testid="status-separator" className="flex-shrink-0" style={{ width: 1, height: 14, background: colors.containerBorder }} />
+
+        <PermissionModePicker />
+
+        <span data-testid="status-separator" className="flex-shrink-0" style={{ width: 1, height: 14, background: colors.containerBorder }} />
+
         <button
           onClick={handleOpenInTerminal}
-          className="flex items-center gap-1 text-[11px] rounded-full px-2 py-0.5 transition-colors"
-          style={{ color: colors.textTertiary }}
+          className="flex items-center gap-1 rounded-full px-2 py-0.5 transition-colors"
+          style={{ color: colors.textTertiary, fontSize: 10, minHeight: 20 }}
           title="Open this session in Terminal"
         >
           Open in CLI

@@ -222,7 +222,8 @@ export default function App() {
           break
         case 'toggle-theme': {
           const theme = useThemeStore.getState()
-          theme.setThemeMode(theme.themeMode === 'dark' ? 'light' : 'dark')
+          const nextMode = theme.themeMode === 'dark' ? 'light' : theme.themeMode === 'light' ? 'system' : 'dark'
+          theme.setThemeMode(nextMode)
           break
         }
         case 'sandbox-toggle': {
@@ -241,9 +242,6 @@ export default function App() {
         }
         case 'stash-browser':
           useSandboxStore.getState().setStashBrowserOpen(true)
-          break
-        case 'review-changes':
-          // No-op for now — SandboxRunSummary auto-shows on diff
           break
       }
     }
@@ -400,7 +398,7 @@ export default function App() {
               <div
                 data-clui-ui
                 style={{
-                  width: 720,
+                  width: '100%',
                   maxWidth: 720,
                   marginLeft: '50%',
                   transform: 'translateX(-50%)',
@@ -433,7 +431,7 @@ export default function App() {
           <AnimatePresence initial={false}>
             {filePeekOpen && (
               <div data-clui-ui style={{
-                width: 720, maxWidth: 720, marginLeft: '50%',
+                width: '100%', maxWidth: 720, marginLeft: '50%',
                 transform: 'translateX(-50%)', marginBottom: 14,
                 position: 'relative', zIndex: 32,
               }}>
@@ -454,7 +452,7 @@ export default function App() {
           <AnimatePresence initial={false}>
             {contextPanelOpen && (
               <div data-clui-ui style={{
-                width: 720, maxWidth: 720, marginLeft: '50%',
+                width: '100%', maxWidth: 720, marginLeft: '50%',
                 transform: 'translateX(-50%)', marginBottom: 14,
                 position: 'relative', zIndex: 31,
               }}>
@@ -477,7 +475,7 @@ export default function App() {
               <div
                 data-clui-ui
                 style={{
-                  width: 720,
+                  width: '100%',
                   maxWidth: 720,
                   marginLeft: '50%',
                   transform: 'translateX(-50%)',
@@ -512,7 +510,7 @@ export default function App() {
               <div
                 data-clui-ui
                 style={{
-                  width: 720,
+                  width: '100%',
                   maxWidth: 720,
                   marginLeft: '50%',
                   transform: 'translateX(-50%)',
@@ -547,7 +545,7 @@ export default function App() {
               <div
                 data-clui-ui
                 style={{
-                  width: 720,
+                  width: '100%',
                   maxWidth: 720,
                   marginLeft: '50%',
                   transform: 'translateX(-50%)',
@@ -582,7 +580,7 @@ export default function App() {
               <div
                 data-clui-ui
                 style={{
-                  width: 720,
+                  width: '100%',
                   maxWidth: 720,
                   marginLeft: '50%',
                   transform: 'translateX(-50%)',
@@ -617,7 +615,7 @@ export default function App() {
               <div
                 data-clui-ui
                 style={{
-                  width: 720,
+                  width: '100%',
                   maxWidth: 720,
                   marginLeft: '50%',
                   transform: 'translateX(-50%)',
@@ -652,7 +650,7 @@ export default function App() {
               <div
                 data-clui-ui
                 style={{
-                  width: expandedUI ? 720 : 560,
+                  width: '100%',
                   maxWidth: expandedUI ? 720 : 560,
                   marginLeft: '50%',
                   transform: 'translateX(-50%)',
@@ -755,12 +753,19 @@ export default function App() {
                 data-clui-ui
                 className="circles-out"
               >
-                <div className="btn-stack" data-compact={expandedUI ? '' : undefined}>
+                <div
+                  className="btn-stack"
+                  role="toolbar"
+                  aria-label="Actions"
+                  data-compact={expandedUI ? '' : undefined}
+                >
                   {/* btn-0: Terminal toggle */}
                   <ModeToggle />
                   {/* btn-1: Attach (front, rightmost) */}
                   <button
+                    data-testid="attach-button"
                     className="stack-btn stack-btn-1 glass-surface"
+                    tabIndex={0}
                     title="Attach file"
                     aria-label="Attach file"
                     onClick={handleAttachFile}
@@ -771,6 +776,7 @@ export default function App() {
                   {/* btn-2: Screenshot (middle) */}
                   <button
                     className="stack-btn stack-btn-2 glass-surface"
+                    tabIndex={0}
                     title="Take screenshot"
                     aria-label="Take screenshot"
                     onClick={handleScreenshot}
@@ -781,6 +787,7 @@ export default function App() {
                   {/* btn-3: Skills (back, leftmost) */}
                   <button
                     className="stack-btn stack-btn-3 glass-surface"
+                    tabIndex={0}
                     title="Skills & Plugins"
                     aria-label="Skills & Plugins"
                     onClick={() => useSessionStore.getState().toggleMarketplace()}

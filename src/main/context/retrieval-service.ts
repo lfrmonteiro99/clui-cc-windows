@@ -7,6 +7,7 @@ import type {
 import { DEFAULT_MEMORY_PACKET_CONFIG } from './types'
 import { PromptAnalyzer } from './prompt-analyzer'
 import { scoreItem, computePromptMatch, extractKeyTokens } from './relevance-scorer'
+import { applyMemoryDecay, daysSince } from './memory-decay'
 import type {
   SmartMemoryPacketConfig,
   PromptSignals,
@@ -14,7 +15,9 @@ import type {
   PitfallRow,
   UserPatternRow,
 } from './types'
+import type { GitFileStatus } from '../../shared/types'
 import { DEFAULT_SMART_PACKET_CONFIG, ContextTier } from './types'
+import type { GitFileStatus } from '../../shared/types'
 
 // ── Raw row types from custom queries ────────────────────────────────────
 
@@ -49,6 +52,7 @@ interface MemoryRow {
   access_count: number
   created_at: string
   updated_at: string
+  last_accessed_at: string | null
 }
 
 interface ActiveFileRow {
@@ -63,6 +67,28 @@ interface ActiveFileRow {
 
 function estimateTokens(content: string): number {
   return Math.ceil(content.length / 4)
+}
+
+/**
+ * Intra-tier truncation: given a list of scored entries and a token budget,
+ * keep only the highest-scoring entries that fit within the budget.
+ * Entries are sorted by score (descending) and greedily packed.
+ */
+export function trimTier(
+  entries: Array<{ content: string; score: number }>,
+  budgetTokens: number,
+): Array<{ content: string; score: number }> {
+  const sorted = [...entries].sort((a, b) => b.score - a.score)
+  let total = 0
+  const kept: Array<{ content: string; score: number }> = []
+  for (const entry of sorted) {
+    const tokens = Math.ceil(entry.content.length / 4)
+    if (total + tokens <= budgetTokens) {
+      kept.push(entry)
+      total += tokens
+    }
+  }
+  return kept
 }
 
 function formatDuration(ms: number): string {
@@ -245,7 +271,8 @@ export class RetrievalService {
         const rows = db
           .prepare(
             `SELECT m.id, m.memory_type, m.scope, m.title, m.body, m.importance_score,
-                    m.confidence_score, m.is_pinned, m.access_count, m.created_at, m.updated_at
+                    m.confidence_score, m.is_pinned, m.access_count, m.created_at, m.updated_at,
+                    m.last_accessed_at
              FROM memories m
              JOIN memory_fts ON memory_fts.rowid = m.rowid
              WHERE m.project_id = ? AND m.deleted_at IS NULL
@@ -265,7 +292,8 @@ export class RetrievalService {
     const rows = db
       .prepare(
         `SELECT m.id, m.memory_type, m.scope, m.title, m.body, m.importance_score,
-                m.confidence_score, m.is_pinned, m.access_count, m.created_at, m.updated_at
+                m.confidence_score, m.is_pinned, m.access_count, m.created_at, m.updated_at,
+                m.last_accessed_at
          FROM memories m
          WHERE m.project_id = ? AND m.deleted_at IS NULL
          ORDER BY m.is_pinned DESC, m.importance_score DESC, m.updated_at DESC
@@ -286,6 +314,8 @@ export class RetrievalService {
     prompt: string,
     gitDiffFiles: string[] = [],
     config: SmartMemoryPacketConfig = DEFAULT_SMART_PACKET_CONFIG,
+    gitBranch: string | null = null,
+    gitFileStatuses: GitFileStatus[] = [],
   ): string | null {
     const db = this.dbService.db
 
@@ -326,11 +356,12 @@ export class RetrievalService {
       const patterns = this.queryPatterns(db, projectId, config)
       const memories = this.queryScoredMemories(db, projectId, signals, gitDiffFiles, config)
       const sessions = this.queryRecentSessionsSmart(db, projectId, signals, config)
+      const gitStatus = this.buildGitStatusTier(gitBranch, gitFileStatuses)
 
       // 4. Assemble with budget enforcement
       return this.assembleSmartPacket(
         projectSection,
-        { continuation, decisions, pitfalls, hotFiles, patterns, memories, sessions },
+        { continuation, decisions, pitfalls, hotFiles, patterns, memories, sessions, gitStatus },
         config,
       )
     } catch (err) {
@@ -435,15 +466,21 @@ Files touched: ${fileStr}
 
     if (rows.length === 0) return ''
 
-    const entries = rows.map((d) => {
+    // Build scored entries for intra-tier trimming
+    const scoredEntries = rows.map((d) => {
       const date = d.created_at.split(' ')[0]
-      return `<decision date="${date}" importance="${d.importance_score}">
-${d.body}
-</decision>`
+      return {
+        content: `<decision date="${date}" importance="${d.importance_score}">\n${d.body}\n</decision>`,
+        score: d.importance_score,
+      }
     })
 
-    return `<decisions count="${rows.length}">
-${entries.join('\n')}
+    const tierBudget = config.tierBudgets[ContextTier.Decisions] ?? 400
+    const trimmed = trimTier(scoredEntries, tierBudget)
+    if (trimmed.length === 0) return ''
+
+    return `<decisions count="${trimmed.length}">
+${trimmed.map((e) => e.content).join('\n')}
 </decisions>`
   }
 
@@ -469,15 +506,18 @@ ${entries.join('\n')}
 
     if (rows.length === 0) return ''
 
-    // Boost score for fix intents
-    const entries = rows.map((p) => {
-      return `<pitfall importance="${p.importance_score}" occurrences="${p.occurrence_count}">
-${p.body}
-</pitfall>`
-    })
+    // Build scored entries for intra-tier trimming
+    const scoredEntries = rows.map((p) => ({
+      content: `<pitfall importance="${p.importance_score}" occurrences="${p.occurrence_count}">\n${p.body}\n</pitfall>`,
+      score: p.importance_score,
+    }))
 
-    return `<pitfalls count="${rows.length}">
-${entries.join('\n')}
+    const tierBudget = config.tierBudgets[ContextTier.Pitfalls] ?? 300
+    const trimmed = trimTier(scoredEntries, tierBudget)
+    if (trimmed.length === 0) return ''
+
+    return `<pitfalls count="${trimmed.length}">
+${trimmed.map((e) => e.content).join('\n')}
 </pitfalls>`
   }
 
@@ -525,14 +565,22 @@ ${entries.join('\n')}
     scored.sort((a, b) => b.score - a.score)
     const topFiles = scored.slice(0, 5)
 
-    const entries = topFiles.map((f) => {
+    // Build scored entries for intra-tier trimming
+    const scoredEntries = topFiles.map((f) => {
       const sessionLabel =
         f.session_count === 1 ? '1 session' : `${f.session_count} sessions`
-      return `${f.path} — ${f.touch_count} times across ${sessionLabel}`
+      return {
+        content: `${f.path} — ${f.touch_count} times across ${sessionLabel}`,
+        score: f.score,
+      }
     })
 
-    return `<hot_files count="${topFiles.length}">
-${entries.join('\n')}
+    const tierBudget = config.tierBudgets[ContextTier.HotFiles] ?? 150
+    const trimmed = trimTier(scoredEntries, tierBudget)
+    if (trimmed.length === 0) return ''
+
+    return `<hot_files count="${trimmed.length}">
+${trimmed.map((e) => e.content).join('\n')}
 </hot_files>`
   }
 
@@ -552,12 +600,18 @@ ${entries.join('\n')}
 
     if (rows.length === 0) return ''
 
-    const entries = rows.map(
-      (p) => `<pattern type="${p.pattern_type}">${p.title}${p.body ? ': ' + p.body : ''}</pattern>`,
-    )
+    // Build scored entries for intra-tier trimming
+    const scoredEntries = rows.map((p) => ({
+      content: `<pattern type="${p.pattern_type}">${p.title}${p.body ? ': ' + p.body : ''}</pattern>`,
+      score: p.confidence_score,
+    }))
 
-    return `<patterns count="${rows.length}">
-${entries.join('\n')}
+    const tierBudget = config.tierBudgets[ContextTier.Patterns] ?? 200
+    const trimmed = trimTier(scoredEntries, tierBudget)
+    if (trimmed.length === 0) return ''
+
+    return `<patterns count="${trimmed.length}">
+${trimmed.map((e) => e.content).join('\n')}
 </patterns>`
   }
 
@@ -582,10 +636,9 @@ ${entries.join('\n')}
     const projectState = { gitDiffFiles, recentlyOpenedFiles: [] as string[] }
     const prompt = signals.keyTerms.size > 0 ? [...signals.keyTerms].join(' ') : ''
 
-    // Score and sort
-    const scored = memoryRows.map((m) => ({
-      ...m,
-      score: scoreItem(
+    // Score and sort, applying memory decay based on last access time
+    const scored = memoryRows.map((m) => {
+      const baseScore = scoreItem(
         {
           updatedAt: m.updated_at,
           importanceScore: m.importance_score,
@@ -595,8 +648,14 @@ ${entries.join('\n')}
         },
         prompt,
         projectState,
-      ),
-    }))
+      )
+      const accessTs = m.last_accessed_at || m.created_at
+      const daysAgo = daysSince(accessTs)
+      return {
+        ...m,
+        score: applyMemoryDecay(baseScore, daysAgo),
+      }
+    })
 
     scored.sort((a, b) => b.score - a.score)
     const topMemories = scored.slice(0, 6)
@@ -611,16 +670,22 @@ ${entries.join('\n')}
       ).run(...ids)
     }
 
-    const entries = topMemories.map((m) => {
+    // Build scored entries for intra-tier trimming
+    const scoredEntries = topMemories.map((m) => {
       const created = m.created_at.split(' ')[0]
       const content = m.body || m.title
-      return `<memory type="${m.memory_type}" importance="${m.importance_score}" created="${created}">
-${content}
-</memory>`
+      return {
+        content: `<memory type="${m.memory_type}" importance="${m.importance_score}" created="${created}">\n${content}\n</memory>`,
+        score: m.score,
+      }
     })
 
-    return `<relevant_memories count="${topMemories.length}">
-${entries.join('\n')}
+    const tierBudget = config.tierBudgets[ContextTier.RelevantMemories] ?? 350
+    const trimmed = trimTier(scoredEntries, tierBudget)
+    if (trimmed.length === 0) return ''
+
+    return `<relevant_memories count="${trimmed.length}">
+${trimmed.map((e) => e.content).join('\n')}
 </relevant_memories>`
   }
 
@@ -648,6 +713,32 @@ ${entries.join('\n')}
     })
   }
 
+  // ── Smart Packet: Git Status Tier ────────────────────────────────────
+
+  /** Max number of file paths to include in the git_status tier (~155 tokens) */
+  private static readonly GIT_STATUS_FILE_CAP = 15
+
+  /**
+   * Build a <git_status> XML tier from branch name and changed files.
+   * Returns empty string if there is no meaningful git info.
+   */
+  buildGitStatusTier(branch: string | null, files: GitFileStatus[]): string {
+    if (!branch && files.length === 0) return ''
+
+    const capped = files.slice(0, RetrievalService.GIT_STATUS_FILE_CAP)
+    const overflow = files.length - capped.length
+
+    const lines = capped.map((f) => `${f.status} ${f.path}`)
+    if (overflow > 0) {
+      lines.push(`...and ${overflow} more`)
+    }
+
+    const branchAttr = branch ? ` branch="${branch}"` : ''
+    return `<git_status${branchAttr} file_count="${capped.length}">
+${lines.join('\n')}
+</git_status>`
+  }
+
   // ── Smart Packet: Assembly ────────────────────────────────────────────
 
   private assembleSmartPacket(
@@ -660,11 +751,13 @@ ${entries.join('\n')}
       patterns: string
       memories: string
       sessions: string
+      gitStatus: string
     },
     config: SmartMemoryPacketConfig,
   ): string {
     const parts = ['<clui_context>', projectSection]
 
+    if (tiers.gitStatus) parts.push(tiers.gitStatus)
     if (tiers.continuation) parts.push(tiers.continuation)
     if (tiers.decisions) parts.push(tiers.decisions)
     if (tiers.pitfalls) parts.push(tiers.pitfalls)
@@ -680,7 +773,7 @@ ${entries.join('\n')}
 
     if (tokens <= config.totalBudget) return result
 
-    // Trim tiers in order: sessions → memories → patterns → hotFiles → pitfalls → decisions → continuation
+    // Trim tiers in order: sessions → memories → patterns → hotFiles → pitfalls → decisions → gitStatus → continuation
     const trimOrder: (keyof typeof tiers)[] = [
       'sessions',
       'memories',
@@ -688,6 +781,7 @@ ${entries.join('\n')}
       'hotFiles',
       'pitfalls',
       'decisions',
+      'gitStatus',
       'continuation',
     ]
 
@@ -698,6 +792,7 @@ ${entries.join('\n')}
         tiers[tier] = ''
         // Rebuild
         const rebuiltParts = ['<clui_context>', projectSection]
+        if (tiers.gitStatus) rebuiltParts.push(tiers.gitStatus)
         if (tiers.continuation) rebuiltParts.push(tiers.continuation)
         if (tiers.decisions) rebuiltParts.push(tiers.decisions)
         if (tiers.pitfalls) rebuiltParts.push(tiers.pitfalls)
@@ -868,7 +963,8 @@ ${entries.join('\n')}
           const rows = db
             .prepare(
               `SELECT m.id, m.memory_type, m.scope, m.title, m.body, m.importance_score,
-                      m.confidence_score, m.is_pinned, m.access_count, m.created_at, m.updated_at
+                      m.confidence_score, m.is_pinned, m.access_count, m.created_at, m.updated_at,
+                      m.last_accessed_at
                FROM memories m
                JOIN memory_fts ON memory_fts.rowid = m.rowid
                WHERE m.project_id = ? AND m.deleted_at IS NULL AND m.importance_score >= ?
@@ -889,7 +985,8 @@ ${entries.join('\n')}
     return db
       .prepare(
         `SELECT m.id, m.memory_type, m.scope, m.title, m.body, m.importance_score,
-                m.confidence_score, m.is_pinned, m.access_count, m.created_at, m.updated_at
+                m.confidence_score, m.is_pinned, m.access_count, m.created_at, m.updated_at,
+                m.last_accessed_at
          FROM memories m
          WHERE m.project_id = ? AND m.deleted_at IS NULL AND m.importance_score >= ?
          ORDER BY m.is_pinned DESC, m.importance_score DESC, m.updated_at DESC

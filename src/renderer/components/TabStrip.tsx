@@ -108,6 +108,7 @@ interface TabItemProps {
   totalTabs: number
   onSelect: (tabId: string) => void
   onClose: (tabId: string) => void
+  onRename: (tabId: string, title: string) => void
   onDragStart: (tabId: string) => void
   onDragEnd: () => void
   onContextMenu: (tabId: string, e: React.MouseEvent) => void
@@ -120,11 +121,32 @@ function TabItem({
   totalTabs,
   onSelect,
   onClose,
+  onRename,
   onDragStart,
   onDragEnd,
   onContextMenu,
 }: TabItemProps) {
   const colors = useColors()
+  const [isRenaming, setIsRenaming] = React.useState(false)
+  const [renameValue, setRenameValue] = React.useState(tab.title)
+  const renameInputRef = React.useRef<HTMLInputElement>(null)
+
+  React.useEffect(() => {
+    if (isRenaming && renameInputRef.current) {
+      renameInputRef.current.focus()
+      renameInputRef.current.select()
+    }
+  }, [isRenaming])
+
+  const commitRename = () => {
+    const trimmed = renameValue.trim()
+    if (trimmed && trimmed !== tab.title) {
+      onRename(tab.id, trimmed)
+    } else {
+      setRenameValue(tab.title)
+    }
+    setIsRenaming(false)
+  }
 
   return (
     <Reorder.Item
@@ -162,6 +184,12 @@ function TabItem({
         fontWeight: isActive ? 500 : 400,
         cursor: isDragging ? 'grabbing' : 'grab',
       }}
+      onMouseEnter={(e) => {
+        if (!isActive) (e.currentTarget as HTMLElement).style.background = colors.surfaceHover
+      }}
+      onMouseLeave={(e) => {
+        if (!isActive) (e.currentTarget as HTMLElement).style.background = 'transparent'
+      }}
     >
       <StatusDot
         status={tab.status}
@@ -191,7 +219,45 @@ function TabItem({
           />
         </span>
       ) : null}
-      <span className="truncate flex-1">{tab.title}</span>
+      {isRenaming ? (
+        <input
+          ref={renameInputRef}
+          data-testid="tab-rename-input"
+          value={renameValue}
+          onChange={(e) => setRenameValue(e.target.value)}
+          onBlur={commitRename}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') commitRename()
+            if (e.key === 'Escape') {
+              setRenameValue(tab.title)
+              setIsRenaming(false)
+            }
+          }}
+          onClick={(e) => e.stopPropagation()}
+          onPointerDown={(e) => e.stopPropagation()}
+          className="truncate flex-1 bg-transparent outline-none"
+          style={{
+            fontSize: 'inherit',
+            color: 'inherit',
+            fontWeight: 'inherit',
+            border: 'none',
+            padding: 0,
+            minWidth: 0,
+          }}
+        />
+      ) : (
+        <span
+          data-testid="tab-title"
+          className="truncate flex-1"
+          onDoubleClick={(e) => {
+            e.stopPropagation()
+            setRenameValue(tab.title)
+            setIsRenaming(true)
+          }}
+        >
+          {tab.title}
+        </span>
+      )}
       {tab.runtime === 'wsl' && (
         <span
           style={{
@@ -216,7 +282,8 @@ function TabItem({
             onClose(tab.id)
           }}
           onPointerDown={(e) => e.stopPropagation()}
-          className="flex-shrink-0 rounded-full w-4 h-4 flex items-center justify-center transition-opacity"
+          aria-label="Close tab"
+          className="flex-shrink-0 rounded-full w-5 h-5 flex items-center justify-center transition-opacity clui-focus-ring group-hover:opacity-50 focus-visible:opacity-100"
           style={{
             opacity: isActive ? 0.5 : 0,
             color: colors.textSecondary,
@@ -224,7 +291,7 @@ function TabItem({
           onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.opacity = '1' }}
           onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.opacity = isActive ? '0.5' : '0' }}
         >
-          <X size={10} />
+          <X size={11} />
         </button>
       )}
     </Reorder.Item>
@@ -238,6 +305,7 @@ export function TabStrip() {
   const selectTab = useSessionStore((s) => s.selectTab)
   const createTab = useSessionStore((s) => s.createTab)
   const closeTab = useSessionStore((s) => s.closeTab)
+  const renameTab = useSessionStore((s) => s.renameTab)
   const reorderTabs = useSessionStore((s) => s.reorderTabs)
   const groups = useTabGroupStore((s) => s.groups)
   const openContextMenu = useTabGroupStore((s) => s.openContextMenu)
@@ -329,6 +397,7 @@ export function TabStrip() {
                             totalTabs={orderedTabs.length}
                             onSelect={selectTab}
                             onClose={closeTab}
+                            onRename={renameTab}
                             onDragStart={setDraggingTabId}
                             onDragEnd={() => setDraggingTabId(null)}
                             onContextMenu={handleContextMenu}
@@ -347,6 +416,7 @@ export function TabStrip() {
                     totalTabs={orderedTabs.length}
                     onSelect={selectTab}
                     onClose={closeTab}
+                    onRename={renameTab}
                     onDragStart={setDraggingTabId}
                     onDragEnd={() => setDraggingTabId(null)}
                     onContextMenu={handleContextMenu}
@@ -364,6 +434,7 @@ export function TabStrip() {
                   totalTabs={orderedTabs.length}
                   onSelect={selectTab}
                   onClose={closeTab}
+                  onRename={renameTab}
                   onDragStart={setDraggingTabId}
                   onDragEnd={() => setDraggingTabId(null)}
                   onContextMenu={handleContextMenu}

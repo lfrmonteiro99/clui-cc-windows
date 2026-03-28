@@ -2,7 +2,7 @@
 
 Clui CC is an Electron overlay for Claude Code CLI. It keeps Claude in a floating desktop shell with tabs, workflows, diffs, permissions, costs, and Git-aware context so you can stay inside your coding flow without living in the terminal.
 
-The app runs locally on macOS and Windows, talks to Claude through the installed `claude` CLI, and keeps the renderer, preload bridge, and main-process orchestration clearly separated.
+The app runs locally on macOS, Windows, and Linux, talks to Claude through the installed `claude` CLI, and keeps the renderer, preload bridge, and main-process orchestration clearly separated.
 
 ## What Is Clui CC
 
@@ -25,9 +25,18 @@ If you already use Claude Code in the terminal, Clui CC adds the interface and w
 - Session export (Markdown/JSON)
 - Snippets and prompt templates
 - Context files auto-attach
-- Permission approval with auto-deny timeout
+- Permission approval with auto-deny timeout and auto-permission mode
 - Voice input (Whisper)
-- Dark/light theme
+- Dark/light/system theme (3-way selector)
+- Welcome card with example prompt chips
+- Dead session recovery card
+- Queue full toast notification
+- Keyboard-accessible toolbar and tab controls (ARIA)
+- Permission focus rings and command palette ARIA attributes
+- Image protocol support (2MB guard + lightbox)
+- Mouse protocol support in terminal
+- Linux support (AppImage/deb/rpm) with Wayland awareness
+- Responsive panel widths with ResizeObserver
 
 ## Screenshots
 
@@ -94,11 +103,12 @@ These screenshots were captured from the Electron app in isolated E2E mode with 
 
 ## Prerequisites
 
-- macOS 13+ or Windows 10+
+- macOS 13+, Windows 10+, or Linux (X11/Wayland)
 - Node.js 18+
 - Claude Code CLI 2.1+
 - macOS: Xcode Command Line Tools recommended for native dependency rebuilds
 - Windows: Visual Studio Build Tools recommended for native dependency rebuilds
+- Linux: `build-essential` / `base-devel` for native dependency rebuilds (see [docs/LINUX.md](docs/LINUX.md))
 
 Verify your environment before starting:
 
@@ -121,8 +131,8 @@ npm install
 Run the platform doctor if you want a quick environment check:
 
 ```bash
-npm run doctor
-npm run doctor:win
+npm run doctor          # macOS / Linux
+npm run doctor:win      # Windows
 ```
 
 Start the desktop app in development:
@@ -160,6 +170,11 @@ Clui CC is split into three runtime layers plus the Claude Code CLI. The rendere
 ```
 
 For a deeper breakdown of the renderer stores, main-process services, IPC channels, and prompt-to-response flow, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+## Platform Guides
+
+- [docs/LINUX.md](docs/LINUX.md) — Linux setup, Wayland workarounds, terminal/screenshot detection, troubleshooting
+- [docs/WINDOWS.md](docs/WINDOWS.md) — Windows setup, shortcuts, terminal providers, troubleshooting
 
 ## Links
 

@@ -159,6 +159,21 @@ export function SlashCommandMenu({ filter, selectedIndex, onSelect, anchorRect, 
             </button>
           )
         })}
+        {/* Keyboard navigation hint */}
+        <div
+          className="flex items-center gap-3 px-3 py-1 border-t"
+          style={{ borderColor: colors.popoverBorder }}
+        >
+          <span className="text-[10px]" style={{ color: colors.textTertiary }}>
+            <kbd style={{ opacity: 0.7 }}>↑↓</kbd> navigate
+          </span>
+          <span className="text-[10px]" style={{ color: colors.textTertiary }}>
+            <kbd style={{ opacity: 0.7 }}>↵</kbd> select
+          </span>
+          <span className="text-[10px]" style={{ color: colors.textTertiary }}>
+            <kbd style={{ opacity: 0.7 }}>esc</kbd> close
+          </span>
+        </div>
       </div>
     </motion.div>,
     popoverLayer,

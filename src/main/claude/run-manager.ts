@@ -15,6 +15,41 @@ import type { ClaudeEvent, NormalizedEvent, RunOptions, EnrichedError } from '..
 const MAX_RING_LINES = 100
 const DEBUG = process.env.CLUI_DEBUG === '1'
 
+/**
+ * Safety cap for appended system prompt tokens.
+ * If the combined system prompt (smart packet + CLUI hint) exceeds this,
+ * the smart packet portion is trimmed to fit. Prevents runaway context injection.
+ */
+export const MAX_APPENDED_SYSTEM_TOKENS = 8000
+
+/**
+ * Estimate token count from string length (approx 4 chars per token).
+ */
+function estimateTokens(content: string): number {
+  return Math.ceil(content.length / 4)
+}
+
+/**
+ * Trim the smart packet if the combined system prompt exceeds the safety cap.
+ * Always preserves the CLUI hint. Returns the final combined prompt string.
+ */
+export function trimSystemPromptIfNeeded(smartPacketOrSystemPrompt: string, cluiHint: string): string {
+  const combined = smartPacketOrSystemPrompt + '\n\n' + cluiHint
+  if (estimateTokens(combined) <= MAX_APPENDED_SYSTEM_TOKENS) {
+    return combined
+  }
+
+  console.warn('[context] System prompt exceeds safety budget, trimming smart packet')
+
+  // Reserve space for the CLUI hint + separator
+  const hintTokens = estimateTokens('\n\n' + cluiHint)
+  const availableTokens = MAX_APPENDED_SYSTEM_TOKENS - hintTokens
+  const maxChars = Math.max(0, availableTokens * 4)
+
+  const trimmedPacket = smartPacketOrSystemPrompt.substring(0, maxChars)
+  return trimmedPacket + '\n\n' + cluiHint
+}
+
 // Appended to Claude's default system prompt so it knows it's running inside CLUI.
 // Uses --append-system-prompt (additive) not --system-prompt (replacement).
 const CLUI_SYSTEM_HINT = [
@@ -177,7 +212,10 @@ export class RunManager extends EventEmitter {
     // Combine CLUI hint with any existing system prompt (memory packet, agent context).
     // Delivered via temp file (--append-system-prompt-file) to avoid CLI arg length limits.
     // WSL runs use inline --append-system-prompt to avoid path translation issues.
-    const combinedSystemPrompt = [options.systemPrompt, CLUI_SYSTEM_HINT].filter(Boolean).join('\n\n')
+    // Safety guard: trim the smart packet if total exceeds MAX_APPENDED_SYSTEM_TOKENS.
+    const combinedSystemPrompt = options.systemPrompt
+      ? trimSystemPromptIfNeeded(options.systemPrompt, CLUI_SYSTEM_HINT)
+      : CLUI_SYSTEM_HINT
     const isWsl = options.runtime === 'wsl' && !!options.wslDistro
     const promptResult = buildPromptArgs(requestId, combinedSystemPrompt, isWsl)
     args.push(...promptResult.args)
@@ -372,11 +410,11 @@ export class RunManager extends EventEmitter {
     // Fallback: SIGKILL if process hasn't exited after 5s.
     // Only check exitCode — process.killed is set true by the SIGINT call above,
     // so checking !killed would prevent the fallback from ever firing.
+    // Guard against the process reference being cleaned up before the timeout fires.
     setTimeout(() => {
-      if (handle.process.exitCode === null) {
-        log(`Force killing run ${requestId} (SIGINT did not terminate)`)
-        handle.process.kill('SIGKILL')
-      }
+      if (!handle.process || handle.process.exitCode !== null) return
+      log(`Force killing run ${requestId} (SIGINT did not terminate)`)
+      handle.process.kill('SIGKILL')
     }, 5000)
 
     return true

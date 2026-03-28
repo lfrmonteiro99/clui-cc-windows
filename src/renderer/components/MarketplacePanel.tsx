@@ -100,6 +100,7 @@ export function MarketplacePanel() {
   return (
     <div
       data-clui-ui
+      data-testid="marketplace-panel"
       style={{
         height: 470,
         display: 'flex',
@@ -367,14 +368,14 @@ function PluginCard({ plugin, status, colors, expanded, onToggleExpand, scrollCo
     if (expanded) needsScrollRef.current = true
   }, [expanded])
 
-  const handleLayoutComplete = useCallback(() => {
+  // Scroll card into view when expanded
+  useEffect(() => {
     if (!needsScrollRef.current || !expanded || !cardRef.current || !scrollContainerRef.current) return
     needsScrollRef.current = false
     const container = scrollContainerRef.current
     const card = cardRef.current
     const containerRect = container.getBoundingClientRect()
     const cardRect = card.getBoundingClientRect()
-    // Scroll so the card is vertically centered in the scroll container
     const cardTopRelative = cardRect.top - containerRect.top + container.scrollTop
     const targetScroll = cardTopRelative - (containerRect.height - cardRect.height) / 2
     container.scrollTo({ top: Math.max(0, targetScroll), behavior: 'smooth' })
@@ -443,9 +444,7 @@ function PluginCard({ plugin, status, colors, expanded, onToggleExpand, scrollCo
   return (
     <motion.div
       ref={cardRef}
-      layout
       transition={{ duration: 0.22, ease: [0.25, 0.1, 0.25, 1] }}
-      onLayoutAnimationComplete={handleLayoutComplete}
       onClick={onToggleExpand}
       style={{
         padding: '12px',

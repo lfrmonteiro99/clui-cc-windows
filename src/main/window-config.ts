@@ -32,6 +32,6 @@ export function getWindowConfig(options: WindowConfigOptions = {}): WindowConfig
     skipTaskbar: true,
     hasShadow: false,
     backgroundColor: fallback ? '#1a1a2e' : '#00000000',
-    iconFile: isWin ? 'icon.png' : 'icon.icns',
+    iconFile: isDarwin ? 'icon.icns' : 'icon.png',
   }
 }

@@ -65,7 +65,8 @@ function loadSnippets(): Snippet[] {
         hasSlots: templateHasSlots(content),
       }]
     })
-  } catch {
+  } catch (err) {
+    console.warn('[snippetStore] loadSnippets failed:', err)
     return []
   }
 }
@@ -74,7 +75,9 @@ function saveSnippets(snippets: Snippet[]): void {
   try {
     if (typeof localStorage === 'undefined') return
     localStorage.setItem(STORAGE_KEY, JSON.stringify(snippets))
-  } catch {}
+  } catch (err) {
+    console.warn('[snippetStore] saveSnippets failed:', err)
+  }
 }
 
 function normalizeCommand(command: string): string {

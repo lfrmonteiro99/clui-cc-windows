@@ -271,11 +271,11 @@ export function DirectoryPicker({ onSelect }: DirectoryPickerProps) {
     : detectedRuntime === 'wsl'
       ? 'Detected: WSL'
       : detectedRuntime === 'native'
-        ? 'Detected: Windows'
+        ? (navigator.userAgent.includes('Linux') ? 'Detected: Linux' : 'Detected: Windows')
         : null
 
   return (
-    <div className="flex flex-col gap-2 px-4 py-3" style={{ minWidth: 0 }}>
+    <div data-testid="directory-picker" className="flex flex-col gap-2 px-4 py-3" style={{ minWidth: 0 }}>
       {/* Input row */}
       <div className="flex items-center gap-1.5">
         <input

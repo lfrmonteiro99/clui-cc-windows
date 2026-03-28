@@ -40,3 +40,4 @@ release/
 
 # Sandbox worktrees
 .clui-sandboxes/
+.claude/worktrees/

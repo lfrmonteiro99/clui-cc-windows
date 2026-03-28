@@ -108,16 +108,31 @@ export function PermissionCard({ tabId, permission, queueLength = 1 }: Props) {
           )}
 
           {inputPreview && (
-            <pre
-              className="text-[10px] leading-[1.4] px-2 py-1.5 rounded-md overflow-x-auto whitespace-pre-wrap break-all mb-2"
-              style={{
-                background: colors.codeBg,
-                color: colors.textSecondary,
-                maxHeight: 80,
-              }}
+            <div
+              data-testid="permission-input-wrapper"
+              className="relative mb-2"
             >
-              {inputPreview}
-            </pre>
+              <pre
+                data-testid="permission-input-preview"
+                className="text-[10px] leading-[1.4] px-2 py-1.5 rounded-md whitespace-pre-wrap break-all"
+                style={{
+                  background: colors.codeBg,
+                  color: colors.textSecondary,
+                  maxHeight: '120px',
+                  overflowY: 'auto',
+                  overflowX: 'auto',
+                }}
+              >
+                {inputPreview}
+              </pre>
+              {/* Gradient fade at bottom when content may overflow */}
+              <div
+                className="absolute bottom-0 left-0 right-0 h-4 pointer-events-none rounded-b-md"
+                style={{
+                  background: `linear-gradient(to bottom, transparent, ${colors.codeBg})`,
+                }}
+              />
+            </div>
           )}
 
           <div className="flex items-center gap-2 flex-wrap">
@@ -154,7 +169,7 @@ export function PermissionCard({ tabId, permission, queueLength = 1 }: Props) {
                   key={opt.optionId}
                   onClick={() => handleOption(opt.optionId)}
                   disabled={responded}
-                  className="text-[11px] font-medium px-3 py-1.5 rounded-full transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="clui-focus-ring text-[11px] font-medium px-3 py-1.5 rounded-full transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                   style={{
                     background: bg,
                     color: textColor,

@@ -25,12 +25,18 @@ interface ContextMenuState {
   setFocusedIndex: (index: number) => void
 }
 
+const isLinux = typeof navigator !== 'undefined' && navigator.userAgent.includes('Linux')
 const isMac = typeof navigator !== 'undefined' && navigator.userAgent.includes('Macintosh')
+
+/** Platform-appropriate label for "reveal in file manager" action. */
+export function getRevealLabel(): string {
+  return isMac ? 'Reveal in Finder' : isLinux ? 'Show in File Manager' : 'Reveal in Explorer'
+}
 
 const FILE_CONTEXT_ITEMS: ContextMenuItem[] = [
   { id: 'peek', label: 'Peek File', icon: 'Eye', shortcut: 'Ctrl+Click' },
   { id: 'copy-path', label: 'Copy Path', icon: 'Copy' },
-  { id: 'reveal', label: isMac ? 'Reveal in Finder' : 'Reveal in Explorer', icon: 'FolderOpen' },
+  { id: 'reveal', label: getRevealLabel(), icon: 'FolderOpen' },
   { id: 'open-external', label: 'Open in Editor', icon: 'ArrowSquareOut' },
 ]
 

@@ -76,6 +76,8 @@ function executeCommand(command: PaletteCommand): void {
     window.dispatchEvent(new Event('clui-toggle-git-panel'))
   } else if (id === 'toggle-expanded') {
     session.toggleExpanded()
+  } else if (id === 'theme-system') {
+    theme.setThemeMode('system')
   } else if (id === 'theme-dark') {
     theme.setThemeMode('dark')
   } else if (id === 'theme-light') {
@@ -99,10 +101,6 @@ function executeCommand(command: PaletteCommand): void {
     sandbox.setFileTreeOpen(!sandbox.fileTreeOpen)
   } else if (id === 'stash-browser') {
     useSandboxStore.getState().setStashBrowserOpen(true)
-  } else if (id === 'review-changes') {
-    // No-op for now — SandboxRunSummary auto-shows on diff
-  } else if (id === 'clean-worktrees') {
-    // Future: call cleanup IPC
   } else if (id === 'terminal-toggle') {
     useTerminalStore.getState().toggleMode()
   } else if (id === 'terminal-new-tab') {
@@ -136,8 +134,6 @@ function buildCommands(): PaletteCommand[] {
     { id: 'sandbox-toggle', category: 'action' as const, icon: 'GitBranch', label: 'Toggle Safe Mode', description: 'Review AI changes before they touch your files' },
     { id: 'file-tree-toggle', category: 'action' as const, icon: 'FolderOpen', label: 'Toggle File Tree', description: 'Browse project files' },
     { id: 'stash-browser', category: 'action' as const, icon: 'Archive', label: 'Browse Git Stashes', description: 'View and manage stashes' },
-    { id: 'review-changes', category: 'action' as const, icon: 'ArrowsLeftRight', label: 'Review Safe Mode Changes', description: 'View diff from last run' },
-    { id: 'clean-worktrees', category: 'action' as const, icon: 'Trash', label: 'Clean Old Worktrees', description: 'Remove isolated worktrees' },
     {
       id: 'toggle-expanded',
       category: 'action',
@@ -148,6 +144,13 @@ function buildCommands(): PaletteCommand[] {
   ]
 
   // Theme commands
+  commands.push({
+    id: 'theme-system',
+    category: 'theme',
+    icon: 'Browser',
+    label: 'System Theme',
+    description: themeMode === 'system' ? 'Active' : undefined,
+  })
   commands.push({
     id: 'theme-dark',
     category: 'theme',
@@ -356,6 +359,7 @@ export function CommandPalette() {
         role="dialog"
         aria-modal="true"
         aria-label="Command palette"
+        data-testid="command-palette"
         initial={{ opacity: 0, y: -8, scale: 0.98 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: -8, scale: 0.98 }}
@@ -378,6 +382,12 @@ export function CommandPalette() {
           <input
             ref={inputRef}
             type="text"
+            role="combobox"
+            aria-expanded={true}
+            aria-controls="command-palette-list"
+            aria-activedescendant={flatList[selectedIndex] ? `cmd-${flatList[selectedIndex].id}` : undefined}
+            aria-autocomplete="list"
+            data-testid="command-palette-search"
             placeholder="Search commands..."
             value={searchQuery}
             onChange={(e) => setSearch(e.target.value)}
@@ -397,6 +407,8 @@ export function CommandPalette() {
         {/* Command list */}
         <div
           ref={listRef}
+          id="command-palette-list"
+          role="listbox"
           className="overflow-y-auto"
           style={{ flex: 1, padding: '4px 0' }}
         >
@@ -523,7 +535,11 @@ interface CommandRowProps {
 function CommandRow({ command, isSelected, colors, onExecute, onHover, dataSelected }: CommandRowProps) {
   return (
     <button
+      id={`cmd-${command.id}`}
+      role="option"
+      aria-selected={isSelected}
       data-selected={dataSelected}
+      data-testid={`command-palette-item-${command.id}`}
       onClick={() => onExecute(command)}
       onMouseEnter={onHover}
       className="w-full flex items-center gap-2.5 px-3 py-1.5 text-left transition-colors"

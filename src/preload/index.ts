@@ -22,8 +22,7 @@ import type {
   WslStatus,
   ShellExecRequest,
   ShellOutput,
-  SessionDigest,
-  SessionDigestStats,
+  ContextHealthResult,
 } from '../shared/types'
 import type {
   ContextMemory,
@@ -137,6 +136,7 @@ export interface CluiAPI {
   wslBrowse(distro: string): Promise<string | null>
 
   // Context database
+  getContextHealth(): Promise<ContextHealthResult>
   contextSearchMemories(projectPath: string, query: string, limit?: number): Promise<MemorySearchResult[]>
   contextGetSessionHistory(projectPath: string, limit?: number, offset?: number): Promise<ContextSessionSummary[]>
   contextGetSessionDetail(sessionId: string): Promise<any>
@@ -347,6 +347,7 @@ const api: CluiAPI = {
   companionSetSetting: (enabled: boolean) => ipcRenderer.invoke(IPC.COMPANION_SETTING_SET, enabled),
 
   // Context database
+  getContextHealth: () => ipcRenderer.invoke(IPC.CONTEXT_HEALTH),
   contextSearchMemories: (projectPath, query, limit) =>
     ipcRenderer.invoke(IPC.CONTEXT_SEARCH_MEMORIES, { projectPath, query, limit }),
   contextGetSessionHistory: (projectPath, limit, offset) =>

@@ -33,14 +33,18 @@ function loadPrefs(): { desktopEnabled: boolean; toastsEnabled: boolean } {
         toastsEnabled: typeof parsed.toastsEnabled === 'boolean' ? parsed.toastsEnabled : true,
       }
     }
-  } catch {}
+  } catch (err) {
+    console.warn('[notificationStore] loadPrefs failed:', err)
+  }
   return { desktopEnabled: true, toastsEnabled: true }
 }
 
 function savePrefs(prefs: { desktopEnabled: boolean; toastsEnabled: boolean }): void {
   try {
     localStorage.setItem(NOTIFICATION_PREFS_KEY, JSON.stringify(prefs))
-  } catch {}
+  } catch (err) {
+    console.warn('[notificationStore] savePrefs failed:', err)
+  }
 }
 
 const savedPrefs = loadPrefs()

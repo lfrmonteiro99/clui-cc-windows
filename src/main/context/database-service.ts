@@ -1,10 +1,21 @@
-import Database from 'better-sqlite3'
+import type Database from 'better-sqlite3'
 import { existsSync, mkdirSync, renameSync, unlinkSync } from 'fs'
+
+// Lazy-load better-sqlite3 to avoid crashing the app if the native module is missing
+// (e.g., Linux without build-essential). The app degrades gracefully without context DB.
+let BetterSqlite3: typeof import('better-sqlite3').default | null = null
+try {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  BetterSqlite3 = require('better-sqlite3')
+} catch (err) {
+  console.warn('[DatabaseService] better-sqlite3 native module not available:', err)
+}
 import { dirname, resolve, normalize } from 'path'
 import { generateId } from './id'
 import { shouldUseBlob, writeBlob } from './blob-store'
 import { migration as migration001 } from './migrations/001-initial-schema'
 import { migration as migration002 } from './migrations/002-smart-context'
+import { migration as migration003 } from './migrations/003-memory-decay'
 import type {
   Migration,
   ProjectRow,
@@ -15,7 +26,7 @@ import type {
   ContextFileTouched,
 } from './types'
 
-const MIGRATIONS: Migration[] = [migration001, migration002]
+const MIGRATIONS: Migration[] = [migration001, migration002, migration003]
 
 export class DatabaseService {
   private _db: Database.Database | null = null
@@ -37,13 +48,18 @@ export class DatabaseService {
   // ── Initialization ──────────────────────────────────────────────────
 
   init(): void {
+    if (!BetterSqlite3) {
+      console.warn('[DatabaseService] Skipping init — better-sqlite3 not available')
+      return
+    }
+
     const dir = dirname(this.dbPath)
     if (!existsSync(dir)) {
       mkdirSync(dir, { recursive: true })
     }
 
     try {
-      this._db = new Database(this.dbPath)
+      this._db = new BetterSqlite3(this.dbPath)
       this._db.pragma('journal_mode = WAL')
       this._db.pragma('foreign_keys = ON')
       this._db.pragma('busy_timeout = 5000')
@@ -98,7 +114,7 @@ export class DatabaseService {
 
     // Create fresh — if this also fails, let it propagate (caller catches)
     try {
-      this._db = new Database(this.dbPath)
+      this._db = new BetterSqlite3!(this.dbPath)
       this._db.pragma('journal_mode = WAL')
       this._db.pragma('foreign_keys = ON')
       this._db.pragma('busy_timeout = 5000')
@@ -666,20 +682,36 @@ export class DatabaseService {
     }
   }
 
+  // ── Global Counts (for health indicator) ────────────────────────────
+
+  getGlobalMemoryCount(): number {
+    const row = this.db
+      .prepare('SELECT COUNT(*) as cnt FROM memories WHERE deleted_at IS NULL')
+      .get() as { cnt: number }
+    return row.cnt
+  }
+
+  getGlobalSessionCount(): number {
+    const row = this.db
+      .prepare('SELECT COUNT(*) as cnt FROM sessions WHERE deleted_at IS NULL')
+      .get() as { cnt: number }
+    return row.cnt
+  }
+
   // ── Maintenance ─────────────────────────────────────────────────────
 
-  pruneStaleMemories(): number {
+  pruneStaleMemories(maxAgeDays: number = 60, maxImportance: number = 0.3): number {
     const result = this.db
       .prepare(
         `
         UPDATE memories SET deleted_at = datetime('now'), updated_at = datetime('now')
         WHERE deleted_at IS NULL
           AND is_pinned = 0
-          AND importance_score < 0.2
-          AND COALESCE(last_accessed_at, created_at) < datetime('now', '-90 days')
+          AND importance_score < ?
+          AND COALESCE(last_accessed_at, created_at) < datetime('now', '-' || ? || ' days')
       `,
       )
-      .run()
+      .run(maxImportance, maxAgeDays)
 
     return result.changes
   }

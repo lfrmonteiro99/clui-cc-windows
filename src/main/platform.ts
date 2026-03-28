@@ -42,7 +42,7 @@ export function findBinary(name: string): string {
       const cmdOrExe = lines.find(l => /\.(cmd|exe)$/i.test(l))
       if (cmdOrExe) return cmdOrExe
       if (lines[0]) return lines[0]
-    } catch {}
+    } catch { /* where command failed */ }
     return name
   }
 
@@ -50,12 +50,17 @@ export function findBinary(name: string): string {
   try {
     const result = execSync(`/bin/zsh -lc "whence -p ${name}"`, { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'ignore'] }).trim()
     if (result) return result
-  } catch {}
+  } catch { /* zsh lookup failed */ }
 
   try {
     const result = execSync(`/bin/bash -lc "which ${name}"`, { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'ignore'] }).trim()
     if (result) return result
-  } catch {}
+  } catch { /* bash lookup failed */ }
+
+  try {
+    const result = execSync(`/usr/bin/fish -lc "type -P ${name}"`, { timeout: 5000, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'ignore'] }).trim()
+    if (result) return result
+  } catch { console.warn('[platform] fish lookup failed') }
 
   return name
 }
@@ -71,11 +76,11 @@ export function getLoginShellPath(): string {
 
   try {
     return execSync('/bin/zsh -lc "echo $PATH"', { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'ignore'] }).trim()
-  } catch {}
+  } catch { /* zsh not available */ }
 
   try {
     return execSync('/bin/bash -lc "echo $PATH"', { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'ignore'] }).trim()
-  } catch {}
+  } catch { /* bash not available */ }
 
   return ''
 }
@@ -157,9 +162,18 @@ export function findClaudeBinary(): string {
       ]
     : [
         '/usr/local/bin/claude',
-        '/opt/homebrew/bin/claude',
+        ...(process.platform === 'darwin' ? ['/opt/homebrew/bin/claude'] : []),
         join(home, '.npm-global/bin/claude'),
       ]
+
+  // Add Linux-standard paths
+  if (process.platform === 'linux') {
+    candidates.push(
+      '/usr/bin/claude',
+      join(home, '.local/bin/claude'),
+      '/snap/bin/claude',
+    )
+  }
 
   for (const c of candidates) {
     try {
@@ -170,7 +184,7 @@ export function findClaudeBinary(): string {
         }
         return c
       }
-    } catch {}
+    } catch { /* candidate not accessible */ }
   }
 
   // Fall back to PATH-based lookup
