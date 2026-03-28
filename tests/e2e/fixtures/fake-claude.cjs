@@ -63,8 +63,42 @@ function emitInit(sessionId, model) {
 }
 
 async function emitPromptResponse(sessionId, model, prompt) {
-  const responseText = `Fake response to: ${prompt || 'empty prompt'}`
-  const chunks = ['Fake response to: ', prompt || 'empty prompt']
+  // ─── E2E test hooks: special prompt prefixes ───
+  // "SLOW:…" — stream with long delays (for cancel/interrupt tests)
+  // "ERROR:…" — emit an error result instead of success
+  const isSlow = prompt && prompt.startsWith('SLOW:')
+  const isError = prompt && prompt.startsWith('ERROR:')
+  const cleanPrompt = prompt
+    ? prompt.replace(/^(SLOW:|ERROR:)\s*/, '')
+    : prompt
+
+  const responseText = `Fake response to: ${cleanPrompt || 'empty prompt'}`
+  const chunkDelay = isSlow ? 800 : 40
+
+  // For ERROR: prompts, emit an error result immediately
+  if (isError) {
+    writeEvent({
+      type: 'result',
+      subtype: 'error',
+      is_error: true,
+      duration_ms: 10,
+      num_turns: 0,
+      result: `Error: ${cleanPrompt || 'simulated failure'}`,
+      total_cost_usd: 0,
+      session_id: sessionId,
+      usage: {
+        input_tokens: 0,
+        output_tokens: 0,
+        cache_read_input_tokens: 0,
+        cache_creation_input_tokens: 0,
+      },
+      permission_denials: [],
+      uuid: randomUUID(),
+    })
+    return
+  }
+
+  const chunks = ['Fake response to: ', cleanPrompt || 'empty prompt']
 
   writeEvent({
     type: 'stream_event',
@@ -100,7 +134,7 @@ async function emitPromptResponse(sessionId, model, prompt) {
   })
 
   for (const chunk of chunks) {
-    await sleep(40)
+    await sleep(chunkDelay)
     writeEvent({
       type: 'stream_event',
       event: {
@@ -218,8 +252,9 @@ process.stdin.on('data', (chunk) => {
     if (!prompt && payload.type !== 'user') continue
 
     responded = true
+    const exitCode = prompt && prompt.startsWith('ERROR:') ? 1 : 0
     void emitPromptResponse(sessionId, model, prompt).then(() => {
-      setTimeout(() => process.exit(0), 10)
+      setTimeout(() => process.exit(exitCode), 10)
     })
   }
 })
