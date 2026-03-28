@@ -55,7 +55,7 @@ describe('getColors', () => {
   it('returns light palette when isDark is false', () => {
     const colors = getColors(false)
     expect(colors.containerBg).toBeDefined()
-    expect(colors.accent).toBe('#d97757') // accent is same in both
+    expect(colors.accent).toBe('#c4613d') // light accent darkened for contrast
   })
 
   it('dark and light have different containerBg', () => {

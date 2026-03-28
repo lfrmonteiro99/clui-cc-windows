@@ -763,6 +763,7 @@ export default function App() {
                   <ModeToggle />
                   {/* btn-1: Attach (front, rightmost) */}
                   <button
+                    data-testid="attach-button"
                     className="stack-btn stack-btn-1 glass-surface"
                     tabIndex={0}
                     title="Attach file"
