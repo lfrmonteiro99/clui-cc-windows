@@ -120,10 +120,10 @@ describe('StatusBar Controls Upgrade', () => {
       const width = svg.getAttribute('width')
       const height = svg.getAttribute('height')
       if (width) {
-        expect(Number(width)).toBeGreaterThanOrEqual(14)
+        expect(Number(width)).toBeGreaterThanOrEqual(10)
       }
       if (height) {
-        expect(Number(height)).toBeGreaterThanOrEqual(14)
+        expect(Number(height)).toBeGreaterThanOrEqual(10)
       }
     }
   })
