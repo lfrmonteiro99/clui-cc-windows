@@ -359,6 +359,7 @@ export function CommandPalette() {
         role="dialog"
         aria-modal="true"
         aria-label="Command palette"
+        data-testid="command-palette"
         initial={{ opacity: 0, y: -8, scale: 0.98 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: -8, scale: 0.98 }}
@@ -386,6 +387,7 @@ export function CommandPalette() {
             aria-controls="command-palette-list"
             aria-activedescendant={flatList[selectedIndex] ? `cmd-${flatList[selectedIndex].id}` : undefined}
             aria-autocomplete="list"
+            data-testid="command-palette-search"
             placeholder="Search commands..."
             value={searchQuery}
             onChange={(e) => setSearch(e.target.value)}
@@ -537,6 +539,7 @@ function CommandRow({ command, isSelected, colors, onExecute, onHover, dataSelec
       role="option"
       aria-selected={isSelected}
       data-selected={dataSelected}
+      data-testid={`command-palette-item-${command.id}`}
       onClick={() => onExecute(command)}
       onMouseEnter={onHover}
       className="w-full flex items-center gap-2.5 px-3 py-1.5 text-left transition-colors"

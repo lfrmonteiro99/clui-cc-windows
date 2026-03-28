@@ -30,7 +30,17 @@ export function createIsolatedHome(testInfo: TestInfo): {
   return { homeDir, appDataDir, localAppDataDir, settingsPath }
 }
 
-export async function launchCluiApp(testInfo: TestInfo, homeDir?: string): Promise<CluiAppSession> {
+export interface LaunchOptions {
+  homeDir?: string
+  /** Use the fake-claude-permissions.cjs fixture that emits permission_request events */
+  withPermissions?: boolean
+}
+
+export async function launchCluiApp(testInfo: TestInfo, homeDirOrOptions?: string | LaunchOptions): Promise<CluiAppSession> {
+  const opts: LaunchOptions = typeof homeDirOrOptions === 'string'
+    ? { homeDir: homeDirOrOptions }
+    : homeDirOrOptions ?? {}
+  const homeDir = opts.homeDir
   const isolated = homeDir
     ? {
         homeDir,
@@ -52,7 +62,7 @@ export async function launchCluiApp(testInfo: TestInfo, homeDir?: string): Promi
       CI: '1',
       CLUI_E2E: '1',
       CLUI_CLAUDE_BIN: process.execPath,
-      CLUI_CLAUDE_NODE_SCRIPT: path.join(process.cwd(), 'tests', 'e2e', 'fixtures', 'fake-claude.cjs'),
+      CLUI_CLAUDE_NODE_SCRIPT: path.join(process.cwd(), 'tests', 'e2e', 'fixtures', opts.withPermissions ? 'fake-claude-permissions.cjs' : 'fake-claude.cjs'),
       HOME: isolated.homeDir,
       USERPROFILE: isolated.homeDir,
       HOMEDRIVE: path.parse(isolated.homeDir).root.replace(/[/\\]$/, ''),
