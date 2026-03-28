@@ -1385,9 +1385,9 @@ app.whenReady().then(() => {
       controlPlane.setRetrievalService(retrievalService)
       log('Context database initialized')
 
-      // Auto-prune stale memories on startup
+      // Auto-prune stale memories on startup (60 days, importance < 0.3, not pinned)
       try {
-        const pruned = contextDb.pruneStaleMemories()
+        const pruned = contextDb.pruneStaleMemories(60, 0.3)
         if (pruned > 0) log(`Pruned ${pruned} stale memories`)
       } catch (err) {
         log(`Memory pruning error: ${err}`)
@@ -1397,7 +1397,7 @@ app.whenReady().then(() => {
       const PRUNE_INTERVAL_MS = 24 * 60 * 60 * 1000
       const pruneInterval = setInterval(() => {
         try {
-          const pruned = contextDb!.pruneStaleMemories()
+          const pruned = contextDb!.pruneStaleMemories(60, 0.3)
           if (pruned > 0) log(`Daily pruning: removed ${pruned} stale memories`)
         } catch (err) {
           log(`Daily pruning error: ${err}`)
