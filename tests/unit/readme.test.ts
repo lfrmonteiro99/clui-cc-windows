@@ -27,7 +27,7 @@ describe('README', () => {
     expect(readme).toContain('Marketplace for skills and plugins')
     expect(readme).toContain('Session export')
     expect(readme).toContain('Voice input')
-    expect(readme).toContain('Dark/light theme')
+    expect(readme).toContain('Dark/light/system theme')
   })
 
   it('includes working setup instructions and platform prerequisites', () => {

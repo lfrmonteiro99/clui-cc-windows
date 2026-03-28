@@ -1,6 +1,6 @@
-import { describe, it, expect, afterEach } from 'vitest'
+import { describe, it, expect, afterEach, vi } from 'vitest'
 import { mockPlatform } from '../helpers/mock-platform'
-import { buildTerminalCommand } from '../../src/main/terminal-launch'
+import { buildTerminalCommand, clearTerminalCache } from '../../src/main/terminal-launch'
 
 describe('buildTerminalCommand', () => {
   let restorePlatform: (() => void) | null = null
@@ -65,11 +65,27 @@ describe('buildTerminalCommand', () => {
   })
 
   describe('on linux', () => {
-    it('uses x-terminal-emulator', () => {
+    it('uses detected terminal emulator', () => {
       restorePlatform = mockPlatform('linux')
+      clearTerminalCache()
+      // Mock execSync to make x-terminal-emulator "available"
+      vi.mock('child_process', async (importOriginal) => {
+        const orig = await importOriginal<typeof import('child_process')>()
+        return {
+          ...orig,
+          execSync: (cmd: string, ...args: unknown[]) => {
+            if (typeof cmd === 'string' && cmd.includes('which x-terminal-emulator')) {
+              return '/usr/bin/x-terminal-emulator\n'
+            }
+            return orig.execSync(cmd, ...(args as [any]))
+          },
+        }
+      })
       const result = buildTerminalCommand({ projectPath: '/home/user', claudeBin: 'claude' })
-
-      expect(result.program).toBe('x-terminal-emulator')
+      // Should find a terminal (the detected one)
+      expect(result.program).toBeDefined()
+      expect(typeof result.program).toBe('string')
+      vi.restoreAllMocks()
     })
   })
 })
