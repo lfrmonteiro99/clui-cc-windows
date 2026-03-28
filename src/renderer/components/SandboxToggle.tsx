@@ -21,6 +21,7 @@ export function SandboxToggle() {
         border: `1px solid ${enabled ? 'rgba(34,197,94,0.25)' : colors.containerBorder}`,
         color: enabled ? colors.statusComplete : colors.textSecondary,
       }}
+      data-testid="sandbox-toggle"
       aria-label={enabled ? 'Disable safe mode' : 'Enable safe mode'}
       aria-pressed={enabled}
       title="AI changes are isolated — review and merge before they touch your files"
