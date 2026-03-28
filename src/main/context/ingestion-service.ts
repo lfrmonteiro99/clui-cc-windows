@@ -131,8 +131,20 @@ export class IngestionService extends EventEmitter {
       const state = this.ensureSession(tabId)
       if (!state?.sessionId) return
 
+      const isFirstMessage = state.messageSeqCounter === 0
+
       state.messageSeqCounter++
       this.db.insertMessage(state.sessionId, 'user', prompt, state.messageSeqCounter)
+
+      // Extract goal from first substantial user prompt
+      if (isFirstMessage && prompt.length >= 10) {
+        const goal = prompt.slice(0, 200).trim()
+        try {
+          this.db.updateSession(state.sessionId, { goal })
+        } catch (err) {
+          console.warn('[ingestion] Failed to extract early goal:', err)
+        }
+      }
 
       this.consecutiveErrors = 0
     } catch (err) {
@@ -518,6 +530,19 @@ export class IngestionService extends EventEmitter {
       status: 'completed',
       ended_at: new Date().toISOString(),
     })
+
+    // Refine goal: only set from task_complete result if no early goal exists
+    if (event.result && typeof event.result === 'string' && event.result.length >= 10) {
+      const existingSession = this.db.getSessionDetail(state.sessionId)
+      if (existingSession && !existingSession.goal) {
+        try {
+          const goal = event.result.slice(0, 200).trim()
+          this.db.updateSession(state.sessionId, { goal })
+        } catch (err) {
+          console.warn('[ingestion] Failed to set goal from task_complete:', err)
+        }
+      }
+    }
 
     // Generate mechanical session summary
     const summary = this.generateMechanicalSummary(state.sessionId)
