@@ -189,6 +189,7 @@ export function TerminalPanel() {
   return (
     <div
       data-clui-ui
+      data-testid="terminal-panel"
       className="flex flex-col"
       style={{ height: '100%', minHeight: 0, position: 'relative' }}
     >
