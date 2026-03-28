@@ -117,6 +117,7 @@ export function CostDashboard() {
   return (
     <div
       data-clui-ui
+      data-testid="cost-dashboard"
       style={{
         height: 470,
         display: 'flex',
