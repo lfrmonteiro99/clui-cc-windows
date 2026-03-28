@@ -22,6 +22,8 @@ import type {
   WslStatus,
   ShellExecRequest,
   ShellOutput,
+  SessionDigest,
+  SessionDigestStats,
 } from '../shared/types'
 import type {
   ContextMemory,
@@ -144,6 +146,12 @@ export interface CluiAPI {
   contextDeleteMemory(memoryId: string): Promise<void>
   contextGetFilesTouched(projectPath: string, limit?: number): Promise<ContextFileTouched[]>
   contextGetMemoryPacketPreview(projectPath: string, tabId: string, prompt: string): Promise<string | null>
+  // Session digests
+  sessionDigestGetSetting(): Promise<boolean>
+  sessionDigestSetSetting(enabled: boolean): Promise<boolean>
+  sessionDigestGetDigests(projectPath: string): Promise<SessionDigest[]>
+  sessionDigestGetStats(): Promise<SessionDigestStats>
+
   onContextMemoryCreated(callback: (memory: ContextMemory) => void): () => void
   onContextSessionRecorded(callback: (session: ContextSessionSummary) => void): () => void
 
@@ -324,6 +332,12 @@ const api: CluiAPI = {
   wslStatus: () => ipcRenderer.invoke(IPC.WSL_STATUS),
   wslCheckClaude: (distro: string) => ipcRenderer.invoke(IPC.WSL_CHECK_CLAUDE, distro),
   wslBrowse: (distro: string) => ipcRenderer.invoke(IPC.WSL_BROWSE, distro),
+
+  // Session digests
+  sessionDigestGetSetting: () => ipcRenderer.invoke(IPC.SESSION_DIGEST_SETTING),
+  sessionDigestSetSetting: (enabled: boolean) => ipcRenderer.invoke(IPC.SESSION_DIGEST_SETTING, enabled),
+  sessionDigestGetDigests: (projectPath: string) => ipcRenderer.invoke(IPC.SESSION_DIGEST_GET, projectPath),
+  sessionDigestGetStats: () => ipcRenderer.invoke(IPC.SESSION_DIGEST_STATS),
 
   // Context database
   contextSearchMemories: (projectPath, query, limit) =>

@@ -29,6 +29,7 @@ import { WorktreeManager, GitDiffEngine, DirtyDetector, StashManager, FileLister
 import { DatabaseService } from './context/database-service'
 import { IngestionService } from './context/ingestion-service'
 import { RetrievalService } from './context/retrieval-service'
+import { SessionDigestManager } from './claude/session-digest'
 import { IPC } from '../shared/types'
 import type { RunOptions, NormalizedEvent, EnrichedError, ExportOptions, SessionExportData, CostRecord, ShellExecRequest } from '../shared/types'
 import { MIN_WINDOW_HEIGHT, SCREEN_EDGE_MARGIN, clampHeight } from '../shared/adaptive-height'
@@ -80,6 +81,7 @@ const stashManager = new StashManager()
 const fileLister = new FileLister()
 
 const controlPlane = new ControlPlane(INTERACTIVE_PTY)
+const sessionDigestManager = new SessionDigestManager(broadcast)
 
 // Context database (skip in E2E mode — no real database needed)
 const userDataPath = app.getPath('userData')
@@ -149,6 +151,9 @@ const eventBatcher = new IpcEventBatcher(broadcast)
 /** High-frequency event types that benefit from batching during streaming */
 const BATCHED_EVENT_TYPES = new Set(['text_chunk', 'tool_call_update'])
 
+// ─── Per-tab digest tracking (accumulates messages for digest generation) ───
+const digestTabData = new Map<string, { projectPath: string; title: string; messages: import('../shared/types').Message[] }>()
+
 // ─── Wire ControlPlane events → renderer ───
 
 controlPlane.on('event', (tabId: string, event: NormalizedEvent) => {
@@ -157,10 +162,49 @@ controlPlane.on('event', (tabId: string, event: NormalizedEvent) => {
   } else {
     eventBatcher.sendImmediate(IPC.NORMALIZED_EVENT, tabId, event)
   }
+
+  // Accumulate data for session digests
+  if (sessionDigestManager.isEnabled()) {
+    const data = digestTabData.get(tabId)
+    if (data) {
+      if (event.type === 'text_chunk') {
+        // Append text to the last assistant message or create one
+        const last = data.messages[data.messages.length - 1]
+        if (last && last.role === 'assistant') {
+          last.content += event.text
+        } else {
+          data.messages.push({ id: crypto.randomUUID(), role: 'assistant', content: event.text, timestamp: Date.now() })
+        }
+      } else if (event.type === 'tool_call') {
+        data.messages.push({
+          id: event.toolId,
+          role: 'tool',
+          content: '',
+          toolName: event.toolName,
+          timestamp: Date.now(),
+        })
+      } else if (event.type === 'tool_call_update') {
+        const toolMsg = data.messages.findLast((m) => m.role === 'tool')
+        if (toolMsg) {
+          toolMsg.toolInput = (toolMsg.toolInput || '') + event.partialInput
+        }
+      }
+    }
+  }
 })
 
 controlPlane.on('tab-status-change', (tabId: string, newStatus: string, oldStatus: string) => {
   eventBatcher.sendImmediate(IPC.TAB_STATUS_CHANGE, tabId, newStatus, oldStatus)
+
+  // Trigger digest generation on successful completion (fire-and-forget)
+  if (newStatus === 'completed' && sessionDigestManager.isEnabled()) {
+    const data = digestTabData.get(tabId)
+    if (data && data.messages.length > 0) {
+      sessionDigestManager.generateDigest(tabId, data.title, data.projectPath, data.messages)
+        .catch((err) => log(`Session digest generation failed: ${err}`))
+    }
+    digestTabData.delete(tabId)
+  }
 })
 
 controlPlane.on('error', (tabId: string, error: EnrichedError) => {
@@ -455,6 +499,15 @@ ipcMain.handle(IPC.PROMPT, async (_event, { tabId, requestId, options }: { tabId
     throw new Error('No requestId provided — prompt rejected')
   }
 
+  // Initialize digest tracking for this tab
+  if (sessionDigestManager.isEnabled()) {
+    digestTabData.set(tabId, {
+      projectPath: options.projectPath || '~',
+      title: options.prompt?.substring(0, 60) || 'Untitled',
+      messages: [],
+    })
+  }
+
   // Capture user prompt and init tab for context database
   if (ingestionService) {
     try {
@@ -728,6 +781,24 @@ ipcMain.handle(IPC.AGENT_MEMORY_DONE, (_event, { tabId, note }: { tabId: string;
 ipcMain.handle(IPC.AGENT_MEMORY_RELEASE, (_event, tabId: string) => {
   log(`IPC AGENT_MEMORY_RELEASE: tab=${tabId}`)
   return controlPlane.releaseAgentWork(tabId)
+})
+
+// ─── Session Digest IPC ───
+
+ipcMain.handle(IPC.SESSION_DIGEST_SETTING, (_event, enabled?: boolean) => {
+  if (typeof enabled === 'boolean') {
+    sessionDigestManager.setSettings({ enabled })
+    return enabled
+  }
+  return sessionDigestManager.getSettings().enabled
+})
+
+ipcMain.handle(IPC.SESSION_DIGEST_GET, (_event, projectPath: string) => {
+  return sessionDigestManager.getDigestsForProject(projectPath)
+})
+
+ipcMain.handle(IPC.SESSION_DIGEST_STATS, () => {
+  return sessionDigestManager.getStats()
 })
 
 ipcMain.handle(IPC.SELECT_DIRECTORY, async () => {
@@ -1352,6 +1423,7 @@ app.whenReady().then(() => {
   cleanOrphanedPromptFiles()
   agentMemory = new AgentMemory(join(app.getPath('userData'), 'agent-memory.json'))
   controlPlane.setAgentMemory(agentMemory)
+  controlPlane.setDigestManager(sessionDigestManager)
 
   // ─── Context database ───
   if (contextDb && retrievalService) {

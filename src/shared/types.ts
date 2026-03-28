@@ -474,6 +474,30 @@ export interface CostSummary {
   byDay: Array<{ date: string; costUsd: number; runs: number }>
 }
 
+// ─── Session Digest Types ───
+
+export interface SessionDigest {
+  id: string
+  tabId: string
+  tabTitle: string
+  projectPath: string
+  digest: string
+  filesModified: string[]
+  generatedAt: number
+  costUsd: number
+}
+
+export interface SessionDigestSettings {
+  enabled: boolean
+}
+
+export interface SessionDigestStats {
+  totalDigests: number
+  totalCostUsd: number
+  monthlyDigests: number
+  monthlyCostUsd: number
+}
+
 // ─── Marketplace / Plugin Types ───
 
 export type PluginStatus = 'not_installed' | 'checking' | 'installing' | 'installed' | 'failed'
@@ -735,6 +759,12 @@ export const IPC = {
   CONTEXT_GET_MEMORY_PACKET_PREVIEW: 'clui:context-get-memory-packet-preview',
   CONTEXT_MEMORY_CREATED: 'clui:context-memory-created',
   CONTEXT_SESSION_RECORDED: 'clui:context-session-recorded',
+
+  // Session digest
+  SESSION_DIGEST_GENERATE: 'clui:session-digest-generate',
+  SESSION_DIGEST_GET: 'clui:session-digest-get',
+  SESSION_DIGEST_SETTING: 'clui:session-digest-setting',
+  SESSION_DIGEST_STATS: 'clui:session-digest-stats',
 
   // Legacy (kept for backward compat during migration)
   STREAM_EVENT: 'clui:stream-event',

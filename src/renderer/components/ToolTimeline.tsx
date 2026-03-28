@@ -10,7 +10,9 @@ import { useColors } from '../theme'
 import { FilePath } from './FilePath'
 import { DiffViewer } from './DiffViewer'
 import { CollapsibleToolOutput } from './ToolBlockSummary'
+import { FilesTouchedTree } from './FilesTouchedTree'
 import type { Message } from '../../shared/types'
+import { getEnrichedToolLabel, extractFilesFromTools } from '../../shared/tool-enrichment'
 
 // ─── Icon mapping ───
 
@@ -279,6 +281,8 @@ export const ToolTimeline = React.memo(function ToolTimeline({ tools, skipMotion
     setExpanded(true)
   }, [])
 
+  const filesTouched = useMemo(() => extractFilesFromTools(tools), [tools])
+
   if (isOpen) {
     const inner = (
       <div className="py-1" data-testid="tool-timeline">
@@ -301,7 +305,7 @@ export const ToolTimeline = React.memo(function ToolTimeline({ tools, skipMotion
           {tools.map((tool, idx) => {
             const toolName = tool.toolName || 'Tool'
             const ToolIcon = getToolIcon(toolName, tool.toolInput)
-            const label = getToolLabel(toolName, tool.toolInput)
+            const label = getEnrichedToolLabel(toolName, tool.toolInput)
             const duration = getToolDuration(tool, idx, tools)
             const isRunning = tool.toolStatus === 'running'
             const isError = tool.toolStatus === 'error'
@@ -346,7 +350,7 @@ export const ToolTimeline = React.memo(function ToolTimeline({ tools, skipMotion
                 ) : (
                   <ToolIcon size={16} />
                 )}
-                <span className="truncate max-w-[140px]">{label}</span>
+                <span className="truncate max-w-[200px]">{label}</span>
                 {duration && (
                   <span style={{ color: colors.textMuted, fontSize: 11 }}>{duration}</span>
                 )}
@@ -364,6 +368,11 @@ export const ToolTimeline = React.memo(function ToolTimeline({ tools, skipMotion
             />
           )}
         </AnimatePresence>
+
+        {/* Files touched tree */}
+        {!hasRunning && filesTouched.length > 0 && (
+          <FilesTouchedTree files={filesTouched} />
+        )}
 
         {/* Running tools: show timeline for active ones */}
         {hasRunning && (

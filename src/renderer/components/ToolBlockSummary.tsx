@@ -6,6 +6,7 @@ import {
 } from '@phosphor-icons/react'
 import type { Icon } from '@phosphor-icons/react'
 import { useColors } from '../theme'
+import { getEnrichedToolLabel } from '../../shared/tool-enrichment'
 
 // ─── Constants ───
 
@@ -75,6 +76,9 @@ export function getToolSummary(
   const info = getToolTypeInfo(toolName)
   const parsed = toolInput ? safeParse(toolInput) : null
 
+  // Use enriched label as base, then append output stats where useful
+  const enriched = getEnrichedToolLabel(toolName, toolInput)
+
   switch (info.category) {
     case 'bash': {
       const cmd = parsed?.command
@@ -86,32 +90,20 @@ export function getToolSummary(
       return shortCmd ? `$ ${shortCmd}${exitStr}` : `Bash${exitStr}`
     }
     case 'read': {
-      const fp = parsed?.file_path ?? parsed?.path
-      const name = typeof fp === 'string' ? basename(fp) : 'file'
       const lines = countLines(content)
-      return `Read ${name} (${lines} lines)`
+      // enriched is like "Reading `file.ts`"
+      return `${enriched} (${lines} lines)`
     }
     case 'edit': {
-      const fp = parsed?.file_path ?? ''
-      const name = typeof fp === 'string' ? basename(fp) : 'file'
-      const oldStr = typeof parsed?.old_string === 'string' ? parsed.old_string : ''
-      const newStr = typeof parsed?.new_string === 'string' ? parsed.new_string : (typeof parsed?.content === 'string' ? parsed.content : '')
-      const removed = oldStr ? oldStr.split('\n').length : 0
-      const added = newStr ? newStr.split('\n').length : 0
-      if (added > 0 || removed > 0) {
-        return `Edited ${name} (+${added} -${removed})`
-      }
-      return `Edited ${name}`
+      // enriched already includes diff stats like "Editing `file.ts` (+3 −1)"
+      return enriched
     }
     case 'search': {
-      const pattern = parsed?.pattern ?? ''
-      const patternStr = typeof pattern === 'string' ? pattern : ''
       const resultLines = content ? content.split('\n').filter((l) => l.trim()).length : 0
-      const patternPart = patternStr ? `"${patternStr.length > 20 ? `${patternStr.substring(0, 17)}...` : patternStr}"` : ''
-      return `Search ${patternPart} (${resultLines} results)`
+      return `${enriched} (${resultLines} results)`
     }
     default:
-      return toolName
+      return enriched !== toolName ? enriched : toolName
   }
 }
 

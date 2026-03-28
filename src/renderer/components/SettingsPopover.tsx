@@ -11,6 +11,7 @@ import { usePopoverLayer } from './PopoverLayer'
 import { useColors } from '../theme'
 import { PermissionEditor } from './PermissionEditor'
 import { SandboxToggle } from './SandboxToggle'
+import { SessionDigestSettings } from './SessionDigestSettings'
 
 function RowToggle({
   checked,
@@ -285,6 +286,13 @@ export function SettingsPopover() {
             {/* Sandbox mode */}
             <div>
               <SandboxToggle />
+            </div>
+
+            <div style={{ height: 1, background: colors.popoverBorder }} />
+
+            {/* Session digests */}
+            <div>
+              <SessionDigestSettings />
             </div>
 
             <div style={{ height: 1, background: colors.popoverBorder }} />

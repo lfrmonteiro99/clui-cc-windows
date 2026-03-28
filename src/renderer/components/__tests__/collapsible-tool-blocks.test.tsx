@@ -154,7 +154,7 @@ describe('ToolBlockSummary', () => {
         JSON.stringify({ file_path: '/src/app.ts', old_string: 'foo\nbar', new_string: 'baz\nqux\nextra' }),
         'Edited file',
       )
-      expect(summary).toContain('Edited')
+      expect(summary).toContain('Editing')
       expect(summary).toContain('app.ts')
     })
 

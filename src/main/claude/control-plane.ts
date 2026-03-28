@@ -3,6 +3,7 @@ import { RunManager } from './run-manager'
 import { PtyRunManager } from './pty-run-manager'
 import { PermissionServer, maskSensitiveFields } from '../hooks/permission-server'
 import { AgentMemory } from '../agent-memory'
+import type { SessionDigestManager } from './session-digest'
 import type { RetrievalService } from '../context/retrieval-service'
 import { BudgetEnforcer } from '../budget-enforcer'
 import type { HookToolRequest, PermissionOption } from '../hooks/permission-server'
@@ -86,6 +87,8 @@ export class ControlPlane extends EventEmitter {
   private hookServerReady: Promise<void>
   /** Optional persisted coordination memory shared across tabs/agents. */
   private agentMemory: AgentMemory | null = null
+  /** Optional session digest manager for cross-session context. */
+  private digestManager: SessionDigestManager | null = null
   /** Optional context database retrieval service for memory packet injection. */
   private retrievalService: RetrievalService | null = null
   /** Optional budget enforcer for per-tab spending limits. */
@@ -336,6 +339,10 @@ export class ControlPlane extends EventEmitter {
   setAgentMemory(agentMemory: AgentMemory): void {
     this.agentMemory = agentMemory
     this.agentMemory.pruneStaleTabs(this.tabs.keys())
+  }
+
+  setDigestManager(manager: SessionDigestManager): void {
+    this.digestManager = manager
   }
 
   setRetrievalService(service: RetrievalService): void {
@@ -751,6 +758,17 @@ export class ControlPlane extends EventEmitter {
         options = {
           ...options,
           systemPrompt: [options.systemPrompt, agentMemoryPrompt].filter(Boolean).join('\n\n'),
+        }
+      }
+    }
+
+    // Cross-session digest context injection
+    if (this.digestManager) {
+      const digestContext = this.digestManager.buildContextInjection(options.projectPath, tabId)
+      if (digestContext) {
+        options = {
+          ...options,
+          systemPrompt: [options.systemPrompt, digestContext].filter(Boolean).join('\n\n'),
         }
       }
     }
