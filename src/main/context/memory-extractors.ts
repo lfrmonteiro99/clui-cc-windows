@@ -12,8 +12,8 @@ import type { MemoryInsert } from './types'
 // ── file_pattern extractor ──────────────────────────────────────────────
 
 /**
- * Creates `file_pattern` memories for files that have been touched >= 5 times
- * across >= 2 sessions in the same project — indicating a "hot file" the user
+ * Creates `file_pattern` memories for files that have been touched >= 3 times
+ * across >= 1 session in the same project — indicating a "hot file" the user
  * works on frequently.
  */
 export function extractFilePatterns(
@@ -30,7 +30,7 @@ export function extractFilePatterns(
       JOIN sessions s ON s.id = ft.session_id
       WHERE s.project_id = ? AND ft.deleted_at IS NULL AND s.deleted_at IS NULL
       GROUP BY ft.path
-      HAVING touch_count >= 5 AND session_count >= 2
+      HAVING touch_count >= 3 AND session_count >= 1
     `,
     )
     .all(projectId) as Array<{
@@ -73,7 +73,7 @@ export function extractFilePatterns(
 // ── error_pattern extractor ─────────────────────────────────────────────
 
 /**
- * Creates `error_pattern` memories for error messages that appear >= 3 times
+ * Creates `error_pattern` memories for error messages that appear >= 2 times
  * across the project's sessions — indicating recurring problems.
  */
 export function extractErrorPatterns(
@@ -90,7 +90,7 @@ export function extractErrorPatterns(
       WHERE s.project_id = ? AND e.event_type = 'error' AND e.deleted_at IS NULL AND s.deleted_at IS NULL
         AND json_extract(e.payload_json, '$.message') IS NOT NULL
       GROUP BY error_msg
-      HAVING count >= 3
+      HAVING count >= 2
     `,
     )
     .all(projectId) as Array<{ error_msg: string; count: number }>
@@ -179,7 +179,7 @@ export function extractToolPreferences(
     title,
     body: `Tool distribution (${total} total calls): ${distribution}`,
     sourceRefsJson: null,
-    importanceScore: 0.4,
+    importanceScore: 0.5,
     confidenceScore: 1.0,
   }
 
