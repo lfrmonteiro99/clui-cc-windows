@@ -4,6 +4,7 @@ import { PtyRunManager } from './pty-run-manager'
 import { PermissionServer, maskSensitiveFields } from '../hooks/permission-server'
 import { AgentMemory } from '../agent-memory'
 import type { RetrievalService } from '../context/retrieval-service'
+import type { GitContextProvider } from '../git-context'
 import { BudgetEnforcer } from '../budget-enforcer'
 import type { HookToolRequest, PermissionOption } from '../hooks/permission-server'
 import { WorktreeManager } from '../sandbox/worktree-manager'
@@ -88,6 +89,8 @@ export class ControlPlane extends EventEmitter {
   private agentMemory: AgentMemory | null = null
   /** Optional context database retrieval service for memory packet injection. */
   private retrievalService: RetrievalService | null = null
+  /** Optional git context provider for injecting git status into smart packets. */
+  private gitContextProvider: GitContextProvider | null = null
   /** Optional budget enforcer for per-tab spending limits. */
   budgetEnforcer: BudgetEnforcer | null = null
   /** Sandbox worktree manager for isolated runs. */
@@ -340,6 +343,10 @@ export class ControlPlane extends EventEmitter {
 
   setRetrievalService(service: RetrievalService): void {
     this.retrievalService = service
+  }
+
+  setGitContextProvider(provider: GitContextProvider): void {
+    this.gitContextProvider = provider
   }
 
   /**
@@ -768,13 +775,35 @@ export class ControlPlane extends EventEmitter {
       }
     }
 
+    // Fetch git status for smart context injection
+    let gitDiffFiles: string[] = []
+    let gitBranch: string | null = null
+    let gitFileStatuses: import('../../shared/types').GitFileStatus[] = []
+    if (this.gitContextProvider && options.projectPath) {
+      try {
+        const gitStatus = await this.gitContextProvider.getStatus(options.projectPath)
+        if (gitStatus.isRepo) {
+          gitBranch = gitStatus.branch
+          gitFileStatuses = gitStatus.files
+          gitDiffFiles = gitStatus.files.map((f) => f.path)
+        }
+        log(`Git status: branch=${gitBranch}, files=${gitDiffFiles.length}`)
+      } catch (err) {
+        log(`Git status fetch failed: ${err}`)
+      }
+    }
+
     // Context database memory packet (smart context injection)
     if (this.retrievalService) {
       const projectId = this.retrievalService.resolveProjectId(options.projectPath || '')
       log(`Context retrieval: path="${options.projectPath}" → projectId=${projectId || 'null'}`)
       if (projectId) {
         const memoryPacket = this.retrievalService.buildSmartPacket(
-          projectId, tabId, options.prompt || ''
+          projectId, tabId, options.prompt || '',
+          gitDiffFiles,
+          undefined,
+          gitBranch,
+          gitFileStatuses,
         )
         log(`Smart context packet: ${memoryPacket ? `${memoryPacket.length} chars` : 'null (no data)'}`)
         if (memoryPacket) {
