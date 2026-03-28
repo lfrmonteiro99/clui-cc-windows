@@ -1,12 +1,13 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Terminal, CaretDown, Check, FolderOpen, Plus, X, ShieldCheck, ArrowsClockwise, Lightning, Warning } from '@phosphor-icons/react'
+import { Terminal, CaretDown, Check, FolderOpen, Plus, X, ShieldCheck, ArrowsClockwise, Lightning, Warning, Database } from '@phosphor-icons/react'
 import { useSessionStore, AVAILABLE_MODELS } from '../stores/sessionStore'
 import { usePermissionStore } from '../stores/permissionStore'
+import { useNotificationStore } from '../stores/notificationStore'
 import { usePopoverLayer } from './PopoverLayer'
 import { useColors } from '../theme'
-import type { AutoAttachState, TokenUsageSnapshot } from '../../shared/types'
+import type { AutoAttachState, TokenUsageSnapshot, ContextHealthResult } from '../../shared/types'
 
 /* ─── Model Picker (inline — tightly coupled to StatusBar) ─── */
 
@@ -339,6 +340,99 @@ function TokenIndicator() {
     >
       <Lightning size={14} weight={isLarge ? 'fill' : 'regular'} />
       {formatTokenCount(tokenUsage.totalTokens)}
+    </span>
+  )
+}
+
+/* ─── Context Health Indicator (CTX-008) ─── */
+
+type ContextHealthLevel = 'active' | 'low' | 'unavailable' | 'no-project'
+
+function getHealthLevel(health: ContextHealthResult | null, hasProject: boolean): ContextHealthLevel {
+  if (!hasProject) return 'no-project'
+  if (!health || !health.available) return 'unavailable'
+  if (health.memoryCount < 3) return 'low'
+  return 'active'
+}
+
+function ContextHealthIndicator() {
+  const tab = useSessionStore(
+    (s) => s.tabs.find((t) => t.id === s.activeTabId),
+    (a, b) => a === b || (!!a && !!b && a.hasChosenDirectory === b.hasChosenDirectory && a.workingDirectory === b.workingDirectory),
+  )
+  const colors = useColors()
+  const addToast = useNotificationStore((s) => s.addToast)
+
+  const [health, setHealth] = useState<ContextHealthResult | null>(null)
+  const toastShownRef = useRef(false)
+
+  const hasProject = !!tab?.hasChosenDirectory
+
+  useEffect(() => {
+    let cancelled = false
+    async function fetchHealth() {
+      try {
+        const result = await window.clui.getContextHealth()
+        if (!cancelled) {
+          setHealth(result)
+          // Show toast once on degraded state
+          if (!result.available && hasProject && !toastShownRef.current) {
+            toastShownRef.current = true
+            addToast({
+              type: 'warning',
+              title: 'Context database unavailable',
+              message: 'Session memory and context features are degraded. SQLite may not be built correctly.',
+              duration: 8000,
+            })
+          }
+        }
+      } catch (err) {
+        console.warn('[ContextHealthIndicator] Failed to fetch context health:', err)
+      }
+    }
+
+    void fetchHealth()
+    return () => { cancelled = true }
+  }, [hasProject, addToast])
+
+  const level = getHealthLevel(health, hasProject)
+
+  const dotColor = (() => {
+    switch (level) {
+      case 'active': return colors.statusComplete
+      case 'low': return colors.warningText
+      case 'unavailable': return colors.statusError
+      case 'no-project': return colors.statusIdle
+    }
+  })()
+
+  const tooltip = (() => {
+    switch (level) {
+      case 'active': return `Context active: ${health!.memoryCount} memories, ${health!.sessionCount} sessions`
+      case 'low': return `Context active: ${health!.memoryCount} memories (low) - use more to build context`
+      case 'unavailable': return `Context unavailable: ${health?.degradedReason ?? 'unknown'}`
+      case 'no-project': return 'No project selected - context requires a project directory'
+    }
+  })()
+
+  return (
+    <span
+      data-testid="context-health-indicator"
+      className="flex items-center gap-1 text-[10px] rounded-full px-1.5 py-0.5"
+      style={{ color: colors.textTertiary }}
+      title={tooltip}
+    >
+      <Database size={12} weight={level === 'active' ? 'fill' : 'regular'} />
+      <span
+        style={{
+          width: 6,
+          height: 6,
+          borderRadius: '50%',
+          background: dotColor,
+          display: 'inline-block',
+          flexShrink: 0,
+        }}
+      />
     </span>
   )
 }
@@ -701,8 +795,12 @@ export function StatusBar() {
         )}
       </div>
 
-      {/* Right cluster — tokens + permissions + CLI (UX-013) */}
+      {/* Right cluster — context + tokens + permissions + CLI (UX-013, CTX-008) */}
       <div data-testid="status-right-cluster" className="flex items-center gap-2 flex-shrink-0">
+        <ContextHealthIndicator />
+
+        <span data-testid="status-separator" className="flex-shrink-0" style={{ width: 1, height: 14, background: colors.containerBorder }} />
+
         <TokenIndicator />
 
         <span data-testid="status-separator" className="flex-shrink-0" style={{ width: 1, height: 14, background: colors.containerBorder }} />
