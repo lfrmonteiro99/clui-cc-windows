@@ -4,6 +4,7 @@ import { PtyRunManager } from './pty-run-manager'
 import { PermissionServer, maskSensitiveFields } from '../hooks/permission-server'
 import { AgentMemory } from '../agent-memory'
 import type { SessionDigestManager } from './session-digest'
+import type { CompanionNarrator } from './companion-narrator'
 import type { RetrievalService } from '../context/retrieval-service'
 import { BudgetEnforcer } from '../budget-enforcer'
 import type { HookToolRequest, PermissionOption } from '../hooks/permission-server'
@@ -89,6 +90,8 @@ export class ControlPlane extends EventEmitter {
   private agentMemory: AgentMemory | null = null
   /** Optional session digest manager for cross-session context. */
   private digestManager: SessionDigestManager | null = null
+  /** Optional companion narrator for idle-time commentary. */
+  private companionNarrator: CompanionNarrator | null = null
   /** Optional context database retrieval service for memory packet injection. */
   private retrievalService: RetrievalService | null = null
   /** Optional budget enforcer for per-tab spending limits. */
@@ -343,6 +346,10 @@ export class ControlPlane extends EventEmitter {
 
   setDigestManager(manager: SessionDigestManager): void {
     this.digestManager = manager
+  }
+
+  setCompanionNarrator(narrator: CompanionNarrator): void {
+    this.companionNarrator = narrator
   }
 
   setRetrievalService(service: RetrievalService): void {

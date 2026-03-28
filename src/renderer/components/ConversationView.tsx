@@ -13,6 +13,7 @@ import { FilePath } from './FilePath'
 import { EnrichedText } from './EnrichedText'
 import { isLikelyFilePath } from '../utils/file-path-detect'
 import { PermissionCard } from './PermissionCard'
+import { CompanionMessage } from './CompanionMessage'
 import { PermissionDeniedCard } from './PermissionDeniedCard'
 import { RetryBanner } from './RetryBanner'
 import { DirectoryPicker } from './DirectoryPicker'
@@ -348,6 +349,9 @@ export function ConversationView({ overrideTabId }: { overrideTabId?: string } =
               case 'tool-group':
                 return <ToolTimeline key={`tg-${item.messages[0].id}`} tools={item.messages} skipMotion={isHistorical} />
               case 'system':
+                if (item.message.isCompanion) {
+                  return <CompanionMessage key={item.message.id} message={item.message} />
+                }
                 return <SystemMessage key={item.message.id} message={item.message} skipMotion={isHistorical} />
               default:
                 return null

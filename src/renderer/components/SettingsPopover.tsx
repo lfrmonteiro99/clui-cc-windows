@@ -12,6 +12,7 @@ import { useColors } from '../theme'
 import { PermissionEditor } from './PermissionEditor'
 import { SandboxToggle } from './SandboxToggle'
 import { SessionDigestSettings } from './SessionDigestSettings'
+import { CompanionSettings } from './CompanionSettings'
 
 function RowToggle({
   checked,
@@ -293,6 +294,13 @@ export function SettingsPopover() {
             {/* Session digests */}
             <div>
               <SessionDigestSettings />
+            </div>
+
+            <div style={{ height: 1, background: colors.popoverBorder }} />
+
+            {/* Companion narrator */}
+            <div>
+              <CompanionSettings />
             </div>
 
             <div style={{ height: 1, background: colors.popoverBorder }} />

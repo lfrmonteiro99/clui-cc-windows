@@ -274,6 +274,8 @@ export interface Message {
   timestamp: number
   /** Internal: streaming text chunk accumulator. Joined into `content` on flush. */
   _textChunks?: string[]
+  /** Companion narrator message (Haiku-powered idle-time commentary) */
+  isCompanion?: boolean
 }
 
 export interface RunResult {
@@ -341,6 +343,7 @@ export type NormalizedEvent =
   | { type: 'sandbox_dirty_warning'; runId: string; dirty: import('./sandbox-types').DirtyState }
   | { type: 'token_usage'; inputTokens: number; outputTokens: number; totalTokens: number; cacheReadTokens?: number; cacheWriteTokens?: number }
   | { type: 'context_management'; data: unknown }
+  | { type: 'companion_message'; content: string }
 
 // ─── Token Usage Tracking ───
 
@@ -631,6 +634,8 @@ export const IPC = {
   CREATE_AGENT_TAB: 'clui:create-agent-tab',
   LIST_AGENTS: 'clui:list-agents',
   SHELL_EXEC: 'clui:shell-exec',
+  COMPANION_SETTING_GET: 'clui:companion-setting-get',
+  COMPANION_SETTING_SET: 'clui:companion-setting-set',
 
   // One-way events (main → renderer)
   TEXT_CHUNK: 'clui:text-chunk',

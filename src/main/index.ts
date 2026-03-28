@@ -30,6 +30,7 @@ import { DatabaseService } from './context/database-service'
 import { IngestionService } from './context/ingestion-service'
 import { RetrievalService } from './context/retrieval-service'
 import { SessionDigestManager } from './claude/session-digest'
+import { CompanionNarrator } from './claude/companion-narrator'
 import { IPC } from '../shared/types'
 import type { RunOptions, NormalizedEvent, EnrichedError, ExportOptions, SessionExportData, CostRecord, ShellExecRequest } from '../shared/types'
 import { MIN_WINDOW_HEIGHT, SCREEN_EDGE_MARGIN, clampHeight } from '../shared/adaptive-height'
@@ -82,6 +83,10 @@ const fileLister = new FileLister()
 
 const controlPlane = new ControlPlane(INTERACTIVE_PTY)
 const sessionDigestManager = new SessionDigestManager(broadcast)
+// Companion narrator broadcasts companion_message events directly to renderer
+const companionNarrator = new CompanionNarrator((tabId, event) => {
+  broadcast(IPC.NORMALIZED_EVENT, tabId, event)
+})
 
 // Context database (skip in E2E mode — no real database needed)
 const userDataPath = app.getPath('userData')
@@ -162,6 +167,9 @@ controlPlane.on('event', (tabId: string, event: NormalizedEvent) => {
   } else {
     eventBatcher.sendImmediate(IPC.NORMALIZED_EVENT, tabId, event)
   }
+
+  // Feed events to companion narrator for idle-gap commentary
+  companionNarrator.onEvent(tabId, event)
 
   // Accumulate data for session digests
   if (sessionDigestManager.isEnabled()) {
@@ -801,6 +809,17 @@ ipcMain.handle(IPC.SESSION_DIGEST_STATS, () => {
   return sessionDigestManager.getStats()
 })
 
+// ─── Companion Narrator IPC ───
+
+ipcMain.handle(IPC.COMPANION_SETTING_GET, () => {
+  return companionNarrator.isEnabled()
+})
+
+ipcMain.handle(IPC.COMPANION_SETTING_SET, (_event, enabled: boolean) => {
+  companionNarrator.setEnabled(enabled)
+  return enabled
+})
+
 ipcMain.handle(IPC.SELECT_DIRECTORY, async () => {
   if (!mainWindow) return null
   // macOS: activate app so unparented dialog appears on top (not behind other apps).
@@ -1424,6 +1443,7 @@ app.whenReady().then(() => {
   agentMemory = new AgentMemory(join(app.getPath('userData'), 'agent-memory.json'))
   controlPlane.setAgentMemory(agentMemory)
   controlPlane.setDigestManager(sessionDigestManager)
+  controlPlane.setCompanionNarrator(companionNarrator)
 
   // ─── Context database ───
   if (contextDb && retrievalService) {

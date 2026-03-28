@@ -107,6 +107,7 @@ export interface State {
   buildYourOwn: () => void
   resumeSession: (sessionId: string, title?: string, projectPath?: string) => Promise<string>
   addSystemMessage: (content: string) => void
+  dismissCompanionMessage: (messageId: string) => void
   sendMessage: (prompt: string, projectPath?: string) => void
   respondPermission: (tabId: string, questionId: string, optionId: string) => void
   addDirectory: (dir: string) => void
@@ -681,6 +682,17 @@ export const useSessionStore = create<State>((set, get) => ({
                 { id: nextMsgId(), role: 'system' as const, content, timestamp: Date.now() },
               ],
             }
+          : t
+      ),
+    }))
+  },
+
+  dismissCompanionMessage: (messageId) => {
+    const { activeTabId } = get()
+    set((s) => ({
+      tabs: s.tabs.map((t) =>
+        t.id === activeTabId
+          ? { ...t, messages: t.messages.filter((m) => m.id !== messageId) }
           : t
       ),
     }))
@@ -1355,6 +1367,14 @@ export const useSessionStore = create<State>((set, get) => ({
               timestamp: Date.now(),
             },
           ])
+          break
+        }
+
+        case 'companion_message': {
+          updated.messages = [
+            ...updated.messages,
+            { id: nextMsgId(), role: 'system' as const, content: event.content, timestamp: Date.now(), isCompanion: true },
+          ]
           break
         }
 

@@ -151,6 +151,9 @@ export interface CluiAPI {
   sessionDigestSetSetting(enabled: boolean): Promise<boolean>
   sessionDigestGetDigests(projectPath: string): Promise<SessionDigest[]>
   sessionDigestGetStats(): Promise<SessionDigestStats>
+  // Companion narrator
+  companionGetSetting(): Promise<boolean>
+  companionSetSetting(enabled: boolean): Promise<boolean>
 
   onContextMemoryCreated(callback: (memory: ContextMemory) => void): () => void
   onContextSessionRecorded(callback: (session: ContextSessionSummary) => void): () => void
@@ -338,6 +341,10 @@ const api: CluiAPI = {
   sessionDigestSetSetting: (enabled: boolean) => ipcRenderer.invoke(IPC.SESSION_DIGEST_SETTING, enabled),
   sessionDigestGetDigests: (projectPath: string) => ipcRenderer.invoke(IPC.SESSION_DIGEST_GET, projectPath),
   sessionDigestGetStats: () => ipcRenderer.invoke(IPC.SESSION_DIGEST_STATS),
+
+  // Companion narrator
+  companionGetSetting: () => ipcRenderer.invoke(IPC.COMPANION_SETTING_GET),
+  companionSetSetting: (enabled: boolean) => ipcRenderer.invoke(IPC.COMPANION_SETTING_SET, enabled),
 
   // Context database
   contextSearchMemories: (projectPath, query, limit) =>
