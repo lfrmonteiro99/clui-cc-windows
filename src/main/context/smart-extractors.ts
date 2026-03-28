@@ -9,11 +9,66 @@ import { extractKeyTokens } from './relevance-scorer'
 // ── Decision patterns ────────────────────────────────────────────────────
 
 const DECISION_PATTERNS = [
+  // Existing patterns
   /(?:chose|choosing|picked|selected|going with|decided on|will use|opted for)\s+(.{10,80})\s+(?:over|instead of|rather than)\s+(.{5,60})/gi,
   /(?:decision|approach|strategy|architecture):\s*(.{10,120})/gi,
   /(?:let's|we'll|I'll)\s+(?:use|go with|adopt|implement)\s+(.{10,80})\s+(?:for|because|since)/gi,
   /(?:decided to|decided on)\s+(.{10,120})/gi,
+  // New patterns (CTX-006)
+  /(?:we should|you should)\s+(?:use|adopt|implement|try)\s+(.{3,80})/gi,
+  /let's go with\s+(.{3,80})/gi,
+  /the (?:approach|plan|strategy|method) will be\s+(.{3,80})/gi,
+  /I recommend\s+(.{3,80})/gi,
+  /(?:switched|migrated|moved|transitioned) from\s+(.{3,40})\s+to\s+(.{3,40})/gi,
+  /(?:it's |it is )?better to (?:use|adopt|implement)\s+(.{3,80})/gi,
 ]
+
+/** Maximum decisions to extract per session. */
+const MAX_DECISIONS_PER_SESSION = 8
+
+/** Minimum match length to avoid false positives. */
+const MIN_DECISION_LENGTH = 20
+
+/**
+ * Pattern for detecting concrete nouns — capitalized words, technical terms,
+ * or words containing digits/hyphens that suggest a specific technology or concept.
+ */
+const CONCRETE_NOUN_RE = /[A-Z][a-zA-Z]+|[a-z]+[-_][a-z]+|[a-z]*\d+[a-z]*|(?:api|cli|orm|sdk|tdd|css|sql|jwt|ssr|ssr|esm|cjs)\b/i
+
+/**
+ * Compute Jaccard similarity between two strings based on word tokens.
+ * Returns a value between 0 (no overlap) and 1 (identical token sets).
+ */
+function jaccardSimilarity(a: string, b: string): number {
+  const tokensA = new Set(a.toLowerCase().split(/\s+/).filter(Boolean))
+  const tokensB = new Set(b.toLowerCase().split(/\s+/).filter(Boolean))
+
+  if (tokensA.size === 0 && tokensB.size === 0) return 1
+
+  let intersection = 0
+  for (const t of tokensA) {
+    if (tokensB.has(t)) intersection++
+  }
+
+  const union = tokensA.size + tokensB.size - intersection
+  return union === 0 ? 0 : intersection / union
+}
+
+/**
+ * Check whether two decision texts are duplicates using Jaccard similarity.
+ * A threshold of >0.6 word overlap means they express the same decision.
+ */
+export function isDuplicateDecision(a: string, b: string): boolean {
+  return jaccardSimilarity(a, b) > 0.6
+}
+
+/**
+ * Check whether a matched decision text contains a concrete noun
+ * (technology name, acronym, etc.) to avoid false positives like "let's go".
+ */
+function hasConcreteNoun(text: string): boolean {
+  return CONCRETE_NOUN_RE.test(text)
+}
 
 /**
  * Extract architectural decisions from assistant messages in a session.
@@ -32,6 +87,18 @@ export function extractDecisions(
     )
     .all(sessionId) as Array<{ content: string | null }>
 
+  // Track decisions inserted in this session for Jaccard dedup and cap
+  const sessionDecisionTitles: string[] = []
+
+  // Also load existing decisions for this project for cross-session dedup
+  const existingDecisions = db.db
+    .prepare(
+      `SELECT title FROM decisions
+       WHERE project_id = ? AND deleted_at IS NULL`,
+    )
+    .all(projectId) as Array<{ title: string }>
+  const existingTitles = existingDecisions.map((d) => d.title)
+
   for (const msg of messages) {
     if (!msg.content) continue
 
@@ -39,25 +106,38 @@ export function extractDecisions(
       pattern.lastIndex = 0
       let match: RegExpExecArray | null
       while ((match = pattern.exec(msg.content)) !== null) {
-        const title = match[0].substring(0, 100)
-        const body = match[0].substring(0, 300)
+        // Enforce session cap
+        if (sessionDecisionTitles.length >= MAX_DECISIONS_PER_SESSION) break
 
-        // Deduplicate
-        const existing = db.db
+        const fullMatch = match[0]
+
+        // Min length check to avoid false positives
+        if (fullMatch.length < MIN_DECISION_LENGTH) continue
+
+        // Concrete noun check to avoid vague matches like "let's go"
+        if (!hasConcreteNoun(fullMatch)) continue
+
+        const title = fullMatch.substring(0, 100)
+        const body = fullMatch.substring(0, 300)
+
+        // Exact title dedup (existing behavior)
+        const exactDup = existingTitles.includes(title) ||
+          sessionDecisionTitles.includes(title)
+        if (exactDup) continue
+
+        // Jaccard similarity dedup against existing + session decisions
+        const allKnownTitles = [...existingTitles, ...sessionDecisionTitles]
+        const isSimilarDup = allKnownTitles.some((t) => isDuplicateDecision(title, t))
+        if (isSimilarDup) continue
+
+        db.db
           .prepare(
-            `SELECT id FROM decisions
-             WHERE project_id = ? AND title = ? AND deleted_at IS NULL`,
+            `INSERT INTO decisions (id, project_id, session_id, title, body, importance_score)
+             VALUES (?, ?, ?, ?, ?, ?)`,
           )
-          .get(projectId, title)
+          .run(generateId(), projectId, sessionId, title, body, 0.7)
 
-        if (!existing) {
-          db.db
-            .prepare(
-              `INSERT INTO decisions (id, project_id, session_id, title, body, importance_score)
-               VALUES (?, ?, ?, ?, ?, ?)`,
-            )
-            .run(generateId(), projectId, sessionId, title, body, 0.7)
-        }
+        sessionDecisionTitles.push(title)
       }
     }
   }
