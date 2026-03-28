@@ -1,5 +1,15 @@
-import Database from 'better-sqlite3'
+import type Database from 'better-sqlite3'
 import { existsSync, mkdirSync, renameSync, unlinkSync } from 'fs'
+
+// Lazy-load better-sqlite3 to avoid crashing the app if the native module is missing
+// (e.g., Linux without build-essential). The app degrades gracefully without context DB.
+let BetterSqlite3: typeof import('better-sqlite3').default | null = null
+try {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  BetterSqlite3 = require('better-sqlite3')
+} catch (err) {
+  console.warn('[DatabaseService] better-sqlite3 native module not available:', err)
+}
 import { dirname, resolve, normalize } from 'path'
 import { generateId } from './id'
 import { shouldUseBlob, writeBlob } from './blob-store'
@@ -37,13 +47,18 @@ export class DatabaseService {
   // ── Initialization ──────────────────────────────────────────────────
 
   init(): void {
+    if (!BetterSqlite3) {
+      console.warn('[DatabaseService] Skipping init — better-sqlite3 not available')
+      return
+    }
+
     const dir = dirname(this.dbPath)
     if (!existsSync(dir)) {
       mkdirSync(dir, { recursive: true })
     }
 
     try {
-      this._db = new Database(this.dbPath)
+      this._db = new BetterSqlite3(this.dbPath)
       this._db.pragma('journal_mode = WAL')
       this._db.pragma('foreign_keys = ON')
       this._db.pragma('busy_timeout = 5000')
@@ -98,7 +113,7 @@ export class DatabaseService {
 
     // Create fresh — if this also fails, let it propagate (caller catches)
     try {
-      this._db = new Database(this.dbPath)
+      this._db = new BetterSqlite3!(this.dbPath)
       this._db.pragma('journal_mode = WAL')
       this._db.pragma('foreign_keys = ON')
       this._db.pragma('busy_timeout = 5000')

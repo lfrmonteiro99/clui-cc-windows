@@ -86,7 +86,14 @@ const controlPlane = new ControlPlane(INTERACTIVE_PTY)
 const userDataPath = app.getPath('userData')
 const contextDbPath = join(userDataPath, 'state', 'context.sqlite')
 const contextBlobsPath = join(userDataPath, 'state', 'blobs')
-const contextDb = E2E_MODE ? null : new DatabaseService(contextDbPath, contextBlobsPath)
+let contextDb: DatabaseService | null = null
+if (!E2E_MODE) {
+  try {
+    contextDb = new DatabaseService(contextDbPath, contextBlobsPath)
+  } catch (err) {
+    console.warn('[context] Failed to initialize DatabaseService (better-sqlite3 may not be built):', err)
+  }
+}
 const ingestionService = contextDb ? new IngestionService(contextDb) : null
 const retrievalService = contextDb ? new RetrievalService(contextDb) : null
 
