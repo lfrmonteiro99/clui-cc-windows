@@ -340,10 +340,10 @@ const lightColors = {
   warningBorder: 'rgba(196, 154, 60, 0.25)',
   warningText: '#9a7a2e',
 
-  // Accent opacity variants
-  accentSolid: '#d97757',
-  accentMuted: 'rgba(217, 119, 87, 0.2)',
-  accentGhost: 'rgba(217, 119, 87, 0.05)',
+  // Accent opacity variants (must match light theme accent #c4613d)
+  accentSolid: '#c4613d',
+  accentMuted: 'rgba(196, 97, 61, 0.2)',
+  accentGhost: 'rgba(196, 97, 61, 0.05)',
 } as const
 
 export type ColorPalette = { [K in keyof typeof darkColors]: string }
