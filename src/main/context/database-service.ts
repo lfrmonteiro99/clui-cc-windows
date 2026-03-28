@@ -15,6 +15,7 @@ import { generateId } from './id'
 import { shouldUseBlob, writeBlob } from './blob-store'
 import { migration as migration001 } from './migrations/001-initial-schema'
 import { migration as migration002 } from './migrations/002-smart-context'
+import { migration as migration003 } from './migrations/003-memory-decay'
 import type {
   Migration,
   ProjectRow,
@@ -25,7 +26,7 @@ import type {
   ContextFileTouched,
 } from './types'
 
-const MIGRATIONS: Migration[] = [migration001, migration002]
+const MIGRATIONS: Migration[] = [migration001, migration002, migration003]
 
 export class DatabaseService {
   private _db: Database.Database | null = null
@@ -683,18 +684,18 @@ export class DatabaseService {
 
   // ── Maintenance ─────────────────────────────────────────────────────
 
-  pruneStaleMemories(): number {
+  pruneStaleMemories(maxAgeDays: number = 60, maxImportance: number = 0.3): number {
     const result = this.db
       .prepare(
         `
         UPDATE memories SET deleted_at = datetime('now'), updated_at = datetime('now')
         WHERE deleted_at IS NULL
           AND is_pinned = 0
-          AND importance_score < 0.2
-          AND COALESCE(last_accessed_at, created_at) < datetime('now', '-90 days')
+          AND importance_score < ?
+          AND COALESCE(last_accessed_at, created_at) < datetime('now', '-' || ? || ' days')
       `,
       )
-      .run()
+      .run(maxImportance, maxAgeDays)
 
     return result.changes
   }

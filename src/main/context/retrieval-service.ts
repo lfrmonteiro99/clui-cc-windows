@@ -7,6 +7,7 @@ import type {
 import { DEFAULT_MEMORY_PACKET_CONFIG } from './types'
 import { PromptAnalyzer } from './prompt-analyzer'
 import { scoreItem, computePromptMatch, extractKeyTokens } from './relevance-scorer'
+import { applyMemoryDecay, daysSince } from './memory-decay'
 import type {
   SmartMemoryPacketConfig,
   PromptSignals,
@@ -49,6 +50,7 @@ interface MemoryRow {
   access_count: number
   created_at: string
   updated_at: string
+  last_accessed_at: string | null
 }
 
 interface ActiveFileRow {
@@ -245,7 +247,8 @@ export class RetrievalService {
         const rows = db
           .prepare(
             `SELECT m.id, m.memory_type, m.scope, m.title, m.body, m.importance_score,
-                    m.confidence_score, m.is_pinned, m.access_count, m.created_at, m.updated_at
+                    m.confidence_score, m.is_pinned, m.access_count, m.created_at, m.updated_at,
+                    m.last_accessed_at
              FROM memories m
              JOIN memory_fts ON memory_fts.rowid = m.rowid
              WHERE m.project_id = ? AND m.deleted_at IS NULL
@@ -265,7 +268,8 @@ export class RetrievalService {
     const rows = db
       .prepare(
         `SELECT m.id, m.memory_type, m.scope, m.title, m.body, m.importance_score,
-                m.confidence_score, m.is_pinned, m.access_count, m.created_at, m.updated_at
+                m.confidence_score, m.is_pinned, m.access_count, m.created_at, m.updated_at,
+                m.last_accessed_at
          FROM memories m
          WHERE m.project_id = ? AND m.deleted_at IS NULL
          ORDER BY m.is_pinned DESC, m.importance_score DESC, m.updated_at DESC
@@ -582,10 +586,9 @@ ${entries.join('\n')}
     const projectState = { gitDiffFiles, recentlyOpenedFiles: [] as string[] }
     const prompt = signals.keyTerms.size > 0 ? [...signals.keyTerms].join(' ') : ''
 
-    // Score and sort
-    const scored = memoryRows.map((m) => ({
-      ...m,
-      score: scoreItem(
+    // Score and sort, applying memory decay based on last access time
+    const scored = memoryRows.map((m) => {
+      const baseScore = scoreItem(
         {
           updatedAt: m.updated_at,
           importanceScore: m.importance_score,
@@ -595,8 +598,14 @@ ${entries.join('\n')}
         },
         prompt,
         projectState,
-      ),
-    }))
+      )
+      const accessTs = m.last_accessed_at || m.created_at
+      const daysAgo = daysSince(accessTs)
+      return {
+        ...m,
+        score: applyMemoryDecay(baseScore, daysAgo),
+      }
+    })
 
     scored.sort((a, b) => b.score - a.score)
     const topMemories = scored.slice(0, 6)
@@ -868,7 +877,8 @@ ${entries.join('\n')}
           const rows = db
             .prepare(
               `SELECT m.id, m.memory_type, m.scope, m.title, m.body, m.importance_score,
-                      m.confidence_score, m.is_pinned, m.access_count, m.created_at, m.updated_at
+                      m.confidence_score, m.is_pinned, m.access_count, m.created_at, m.updated_at,
+                      m.last_accessed_at
                FROM memories m
                JOIN memory_fts ON memory_fts.rowid = m.rowid
                WHERE m.project_id = ? AND m.deleted_at IS NULL AND m.importance_score >= ?
@@ -889,7 +899,8 @@ ${entries.join('\n')}
     return db
       .prepare(
         `SELECT m.id, m.memory_type, m.scope, m.title, m.body, m.importance_score,
-                m.confidence_score, m.is_pinned, m.access_count, m.created_at, m.updated_at
+                m.confidence_score, m.is_pinned, m.access_count, m.created_at, m.updated_at,
+                m.last_accessed_at
          FROM memories m
          WHERE m.project_id = ? AND m.deleted_at IS NULL AND m.importance_score >= ?
          ORDER BY m.is_pinned DESC, m.importance_score DESC, m.updated_at DESC
