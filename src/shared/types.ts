@@ -418,6 +418,13 @@ export interface HealthReport {
   queueDepth: number
 }
 
+export interface ContextHealthResult {
+  available: boolean
+  memoryCount: number
+  sessionCount: number
+  degradedReason: string | null
+}
+
 export interface EnrichedError {
   message: string
   stderrTail: string[]
@@ -735,6 +742,7 @@ export const IPC = {
   CONTEXT_GET_MEMORY_PACKET_PREVIEW: 'clui:context-get-memory-packet-preview',
   CONTEXT_MEMORY_CREATED: 'clui:context-memory-created',
   CONTEXT_SESSION_RECORDED: 'clui:context-session-recorded',
+  CONTEXT_HEALTH: 'clui:context-health',
 
   // Legacy (kept for backward compat during migration)
   STREAM_EVENT: 'clui:stream-event',
