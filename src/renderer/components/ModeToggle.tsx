@@ -13,6 +13,7 @@ export function ModeToggle() {
 
   return (
     <button
+      data-testid="terminal-toggle"
       className="stack-btn stack-btn-0 glass-surface"
       title={disabled ? 'Terminal unavailable — node-pty not loaded' : terminalMode ? 'Switch to Chat (Ctrl+`)' : 'Terminal (Ctrl+`)'}
       onClick={disabled ? undefined : toggleMode}
