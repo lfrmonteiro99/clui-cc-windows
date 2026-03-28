@@ -1,0 +1,81 @@
+name: CI — Linux
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/main/**'
+      - 'src/renderer/**'
+      - 'src/shared/**'
+      - 'src/preload/**'
+      - 'tests/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'playwright.config.ts'
+      - 'tsconfig.json'
+      - '.github/workflows/**'
+      - 'electron.vite.config.ts'
+      - 'vitest.config.ts'
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [20, 22]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential python3-dev
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm run test
+
+      - name: Type-check and build
+        run: npm run build
+
+  e2e-smoke:
+    runs-on: ubuntu-latest
+    needs: build-and-test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential python3-dev xvfb
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Electron E2E smoke tests
+        run: xvfb-run npm run test:e2e
+
+      - name: Upload Playwright artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-artifacts-linux
+          path: output/playwright
