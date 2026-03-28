@@ -14,6 +14,7 @@ import type {
   PitfallRow,
   UserPatternRow,
 } from './types'
+import type { GitFileStatus } from '../../shared/types'
 import { DEFAULT_SMART_PACKET_CONFIG, ContextTier } from './types'
 import type { GitFileStatus } from '../../shared/types'
 
