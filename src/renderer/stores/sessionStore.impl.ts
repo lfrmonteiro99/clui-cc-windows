@@ -122,6 +122,7 @@ export interface State {
   claimAgentWork: (workKey: string, summary: string) => Promise<AgentMemoryClaimResult | null>
   markAgentDone: (note?: string) => Promise<boolean>
   releaseAgentWork: () => Promise<boolean>
+  renameTab: (tabId: string, title: string) => void
   setTabGroup: (tabId: string, groupId: string | undefined) => void
   setComposeDraft: (tabId: string, draft: string) => void
   clearComposeDraft: (tabId: string) => void
@@ -892,6 +893,14 @@ export const useSessionStore = create<State>((set, get) => ({
     if (tab?.activeRequestId && (tab.status === 'connecting' || tab.status === 'running')) {
       void window.clui.stopTab(tabId).catch(() => {})
     }
+  },
+
+  renameTab: (tabId, title) => {
+    const trimmed = title.trim()
+    if (!trimmed) return
+    set((s) => ({
+      tabs: s.tabs.map((t) => (t.id === tabId ? { ...t, title: trimmed } : t)),
+    }))
   },
 
   setTabGroup: (tabId, groupId) => {
