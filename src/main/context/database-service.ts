@@ -681,6 +681,22 @@ export class DatabaseService {
     }
   }
 
+  // ── Global Counts (for health indicator) ────────────────────────────
+
+  getGlobalMemoryCount(): number {
+    const row = this.db
+      .prepare('SELECT COUNT(*) as cnt FROM memories WHERE deleted_at IS NULL')
+      .get() as { cnt: number }
+    return row.cnt
+  }
+
+  getGlobalSessionCount(): number {
+    const row = this.db
+      .prepare('SELECT COUNT(*) as cnt FROM sessions WHERE deleted_at IS NULL')
+      .get() as { cnt: number }
+    return row.cnt
+  }
+
   // ── Maintenance ─────────────────────────────────────────────────────
 
   pruneStaleMemories(): number {
