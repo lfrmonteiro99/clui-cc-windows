@@ -12,6 +12,7 @@ import { useSnippetStore } from '../../src/renderer/stores/snippetStore'
 import { useTabGroupStore } from '../../src/renderer/stores/tabGroupStore'
 import { useTokenBudgetStore } from '../../src/renderer/stores/tokenBudgetStore'
 import { useWorkflowStore, type Workflow } from '../../src/renderer/stores/workflowStore'
+import { useBookmarkStore } from '../../src/renderer/stores/bookmarkStore'
 import { useThemeStore } from '../../src/renderer/theme'
 import type { CostSummary, Message, TabState } from '../../src/shared/types'
 
@@ -36,6 +37,7 @@ const stores: ResettableStore[] = [
   useTabGroupStore,
   useTokenBudgetStore,
   useWorkflowStore,
+  useBookmarkStore,
 ]
 
 export function makeMessage(overrides: Partial<Message> & Pick<Message, 'role' | 'content'>): Message {
@@ -76,6 +78,9 @@ export function makeTab(overrides: Partial<TabState> = {}): TabState {
     runtime: 'native',
     wslDistro: null,
     lastActivityAt: 0,
+    sandboxState: { enabled: false, activeWorktree: null, pendingDiff: null, mergeStatus: 'idle' },
+    tokenUsage: null,
+    contextNotificationShown: false,
     ...overrides,
   }
 }
