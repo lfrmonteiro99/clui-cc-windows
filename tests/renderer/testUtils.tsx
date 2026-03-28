@@ -133,6 +133,7 @@ export function installCluiMock(overrides: Partial<typeof window.clui> = {}) {
     onThemeChange: vi.fn(() => () => {}),
     transcribeAudio: vi.fn().mockResolvedValue('transcribed'),
     isVisible: vi.fn().mockResolvedValue(true),
+    getContextHealth: vi.fn().mockResolvedValue({ available: true, memoryCount: 10, sessionCount: 5, degradedReason: null }),
   }
 
   window.clui = {

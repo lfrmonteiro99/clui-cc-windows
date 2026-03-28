@@ -36,18 +36,15 @@ describe('Memory Extractors', () => {
   // ── extractFilePatterns ─────────────────────────────────────────────
 
   describe('extractFilePatterns', () => {
-    it('creates file_pattern memory when file touched >= 5 times across >= 2 sessions', () => {
+    it('creates file_pattern memory when file touched >= 3 times across >= 1 session', () => {
       const session1 = db.createSession(projectId)
-      const session2 = db.createSession(projectId)
 
-      // 3 touches in session1, 2 in session2 = 5 total across 2 sessions
+      // 3 touches in 1 session — meets lowered threshold of >= 3 touches, >= 1 session
       db.insertFileTouched(session1, null, 'src/hot-file.ts', 'write')
       db.insertFileTouched(session1, null, 'src/hot-file.ts', 'patch')
       db.insertFileTouched(session1, null, 'src/hot-file.ts', 'read')
-      db.insertFileTouched(session2, null, 'src/hot-file.ts', 'write')
-      db.insertFileTouched(session2, null, 'src/hot-file.ts', 'patch')
 
-      extractFilePatterns(db, projectId, session2)
+      extractFilePatterns(db, projectId, session1)
 
       const memories = db.db
         .prepare(
@@ -63,40 +60,18 @@ describe('Memory Extractors', () => {
 
       expect(memories.length).toBe(1)
       expect(memories[0].title).toBe('src/hot-file.ts')
-      expect(memories[0].body).toContain('5 touches')
-      expect(memories[0].body).toContain('2 sessions')
-      // importance = min(0.9, 0.5 + 5 * 0.02) = 0.6
-      expect(memories[0].importance_score).toBeCloseTo(0.6, 2)
+      expect(memories[0].body).toContain('3 touches')
+      expect(memories[0].body).toContain('1 sessions')
+      // importance = min(0.9, 0.5 + 3 * 0.02) = 0.56
+      expect(memories[0].importance_score).toBeCloseTo(0.56, 2)
     })
 
     it('does NOT create memory for low-frequency files', () => {
       const session1 = db.createSession(projectId)
-      const session2 = db.createSession(projectId)
 
-      // Only 3 touches across 2 sessions — below threshold of 5
+      // Only 2 touches — below threshold of 3
       db.insertFileTouched(session1, null, 'src/rare.ts', 'write')
       db.insertFileTouched(session1, null, 'src/rare.ts', 'read')
-      db.insertFileTouched(session2, null, 'src/rare.ts', 'patch')
-
-      extractFilePatterns(db, projectId, session2)
-
-      const count = db.db
-        .prepare(
-          `SELECT COUNT(*) as c FROM memories
-           WHERE project_id = ? AND memory_type = 'file_pattern' AND deleted_at IS NULL`,
-        )
-        .get(projectId) as { c: number }
-
-      expect(count.c).toBe(0)
-    })
-
-    it('does NOT create memory when touches are in only 1 session', () => {
-      const session1 = db.createSession(projectId)
-
-      // 5 touches but all in 1 session — below session_count threshold of 2
-      for (let i = 0; i < 5; i++) {
-        db.insertFileTouched(session1, null, 'src/single-session.ts', 'write')
-      }
 
       extractFilePatterns(db, projectId, session1)
 
@@ -110,19 +85,36 @@ describe('Memory Extractors', () => {
       expect(count.c).toBe(0)
     })
 
+    it('creates memory when touches are in only 1 session (session threshold is now 1)', () => {
+      const session1 = db.createSession(projectId)
+
+      // 5 touches in 1 session — meets threshold of >= 3 touches, >= 1 session
+      for (let i = 0; i < 5; i++) {
+        db.insertFileTouched(session1, null, 'src/single-session.ts', 'write')
+      }
+
+      extractFilePatterns(db, projectId, session1)
+
+      const count = db.db
+        .prepare(
+          `SELECT COUNT(*) as c FROM memories
+           WHERE project_id = ? AND memory_type = 'file_pattern' AND deleted_at IS NULL`,
+        )
+        .get(projectId) as { c: number }
+
+      expect(count.c).toBe(1)
+    })
+
     it('supersedes existing file_pattern memory with updated stats', () => {
       const session1 = db.createSession(projectId)
       const session2 = db.createSession(projectId)
-      const session3 = db.createSession(projectId)
 
-      // First: create 5 touches across 2 sessions
+      // First: create 3 touches in session1 — meets threshold of >= 3, >= 1 session
       for (let i = 0; i < 3; i++) {
         db.insertFileTouched(session1, null, 'src/evolving.ts', 'write')
       }
-      db.insertFileTouched(session2, null, 'src/evolving.ts', 'patch')
-      db.insertFileTouched(session2, null, 'src/evolving.ts', 'read')
 
-      extractFilePatterns(db, projectId, session2)
+      extractFilePatterns(db, projectId, session1)
 
       // Verify initial memory
       const initial = db.db
@@ -132,13 +124,13 @@ describe('Memory Extractors', () => {
         )
         .get(projectId) as { id: string; body: string }
       expect(initial).toBeDefined()
-      expect(initial.body).toContain('5 touches')
+      expect(initial.body).toContain('3 touches')
 
-      // Add more touches in session3
-      db.insertFileTouched(session3, null, 'src/evolving.ts', 'write')
-      db.insertFileTouched(session3, null, 'src/evolving.ts', 'patch')
+      // Add more touches in session2
+      db.insertFileTouched(session2, null, 'src/evolving.ts', 'write')
+      db.insertFileTouched(session2, null, 'src/evolving.ts', 'patch')
 
-      extractFilePatterns(db, projectId, session3)
+      extractFilePatterns(db, projectId, session2)
 
       // Original should be soft-deleted
       const oldRow = db.db
@@ -153,8 +145,8 @@ describe('Memory Extractors', () => {
            WHERE project_id = ? AND memory_type = 'file_pattern' AND deleted_at IS NULL`,
         )
         .get(projectId) as { body: string; supersedes_memory_id: string }
-      expect(updated.body).toContain('7 touches')
-      expect(updated.body).toContain('3 sessions')
+      expect(updated.body).toContain('5 touches')
+      expect(updated.body).toContain('2 sessions')
       expect(updated.supersedes_memory_id).toBe(initial.id)
     })
 
@@ -186,17 +178,15 @@ describe('Memory Extractors', () => {
   // ── extractErrorPatterns ────────────────────────────────────────────
 
   describe('extractErrorPatterns', () => {
-    it('creates error_pattern memory for errors occurring >= 3 times', () => {
+    it('creates error_pattern memory for errors occurring >= 2 times', () => {
       const session1 = db.createSession(projectId)
-      const session2 = db.createSession(projectId)
 
-      // Insert 3 error events with the same message
+      // Insert 2 error events with the same message — meets lowered threshold of >= 2
       const errorPayload = JSON.stringify({ message: 'TypeError: Cannot read property x of undefined' })
       db.insertEvent(session1, 'error', errorPayload, 1)
       db.insertEvent(session1, 'error', errorPayload, 2)
-      db.insertEvent(session2, 'error', errorPayload, 1)
 
-      extractErrorPatterns(db, projectId, session2)
+      extractErrorPatterns(db, projectId, session1)
 
       const memories = db.db
         .prepare(
@@ -212,18 +202,17 @@ describe('Memory Extractors', () => {
 
       expect(memories.length).toBe(1)
       expect(memories[0].title).toBe('TypeError: Cannot read property x of undefined')
-      expect(memories[0].body).toContain('3 occurrences')
-      // importance = min(0.8, 0.4 + 3*0.05) = 0.55
-      expect(memories[0].importance_score).toBeCloseTo(0.55, 2)
+      expect(memories[0].body).toContain('2 occurrences')
+      // importance = min(0.8, 0.4 + 2*0.05) = 0.5
+      expect(memories[0].importance_score).toBeCloseTo(0.5, 2)
     })
 
     it('does NOT create memory for infrequent errors', () => {
       const session1 = db.createSession(projectId)
 
-      // Only 2 errors — below threshold of 3
+      // Only 1 error — below threshold of 2
       const errorPayload = JSON.stringify({ message: 'Rare error' })
       db.insertEvent(session1, 'error', errorPayload, 1)
-      db.insertEvent(session1, 'error', errorPayload, 2)
 
       extractErrorPatterns(db, projectId, session1)
 
@@ -350,7 +339,7 @@ describe('Memory Extractors', () => {
       expect(memories[0].title).toBe('Tool usage distribution')
       expect(memories[0].body).toContain('4 total calls')
       expect(memories[0].body).toContain('Read 50%')
-      expect(memories[0].importance_score).toBe(0.4)
+      expect(memories[0].importance_score).toBe(0.5)
     })
 
     it('does nothing when no tool_call events exist', () => {
