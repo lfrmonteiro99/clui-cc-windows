@@ -107,10 +107,7 @@ describe('UX-013: Status bar hierarchy overhaul', () => {
 
 describe('UX-014: textMuted color contrast', () => {
   it('dark mode textMuted has adequate contrast against containerBg', async () => {
-    // Import the theme directly to check token values
-    const { default: themeModule } = await import('../../../src/renderer/theme')
-    const { getColors } = themeModule as unknown as { getColors: (isDark: boolean) => Record<string, string> }
-    // We test by checking the actual color value is not the old low-contrast one
+    const { getColors } = await import('../../../src/renderer/theme')
     const darkColors = getColors(true)
     // Old value was #353530 which is too close to #242422 container bg
     expect(darkColors.textMuted).not.toBe('#353530')
