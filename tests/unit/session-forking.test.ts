@@ -254,20 +254,11 @@ describe('Session Forking — SlashCommandMenu', () => {
 })
 
 describe('Session Forking — Keyboard Shortcut', () => {
-  it('fork-session shortcut is defined', async () => {
+  it('fork-session shortcut was removed (POLISH-001)', async () => {
     const { getDefaultShortcutBindings } = await import('../../src/shared/keyboard-shortcuts')
-    const bindings = getDefaultShortcutBindings(false) // Windows
+    const bindings = getDefaultShortcutBindings(false)
     const forkBinding = bindings.find(b => b.id === 'fork-session')
-    expect(forkBinding).toBeDefined()
-    expect(forkBinding!.defaultKeys).toBe('Ctrl+Shift+F')
-  })
-
-  it('fork-session shortcut has Mac variant', async () => {
-    const { getDefaultShortcutBindings } = await import('../../src/shared/keyboard-shortcuts')
-    const bindings = getDefaultShortcutBindings(true) // Mac
-    const forkBinding = bindings.find(b => b.id === 'fork-session')
-    expect(forkBinding).toBeDefined()
-    expect(forkBinding!.defaultKeys).toBe('Cmd+Shift+F')
+    expect(forkBinding).toBeUndefined()
   })
 })
 

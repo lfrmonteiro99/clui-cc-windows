@@ -29,7 +29,7 @@ describe('SettingsPopover', () => {
     renderWithProviders(<SettingsPopover />)
 
     fireEvent.click(screen.getByTestId('settings-button'))
-    fireEvent.click(screen.getByLabelText('Toggle dark theme'))
+    fireEvent.click(screen.getByTestId('settings-theme-light'))
     fireEvent.click(screen.getByLabelText('Toggle desktop notifications'))
 
     expect(useThemeStore.getState().themeMode).toBe('light')

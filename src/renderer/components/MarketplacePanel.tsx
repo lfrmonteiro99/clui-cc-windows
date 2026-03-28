@@ -100,6 +100,7 @@ export function MarketplacePanel() {
   return (
     <div
       data-clui-ui
+      data-testid="marketplace-panel"
       style={{
         height: 470,
         display: 'flex',

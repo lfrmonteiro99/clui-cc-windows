@@ -156,6 +156,7 @@ export function SettingsPopover() {
         <motion.div
           ref={popoverRef}
           data-clui-ui
+          data-testid="settings-popover"
           initial={{ opacity: 0, y: isExpanded ? -4 : 4 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: isExpanded ? -4 : 4 }}
@@ -305,6 +306,7 @@ export function SettingsPopover() {
                   {(['system', 'light', 'dark'] as const).map((mode) => (
                     <button
                       key={mode}
+                      data-testid={`settings-theme-${mode}`}
                       onClick={() => setThemeMode(mode)}
                       className="clui-focus-ring text-[10px] font-medium px-2 py-0.5 rounded-full transition-colors capitalize"
                       style={{

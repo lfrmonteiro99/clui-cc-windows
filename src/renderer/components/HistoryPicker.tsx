@@ -181,6 +181,7 @@ export function HistoryPicker() {
         className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-full transition-colors"
         style={{ color: colors.textTertiary }}
         title="Resume a previous session"
+        data-testid="history-picker-button"
       >
         <Clock size={13} />
       </button>
@@ -212,7 +213,7 @@ export function HistoryPicker() {
             flexDirection: 'column' as const,
           }}
         >
-          <div className="px-3 py-2 text-[11px] font-medium flex-shrink-0" style={{ color: colors.textTertiary, borderBottom: `1px solid ${colors.popoverBorder}` }}>
+          <div data-testid="history-picker-popover" className="px-3 py-2 text-[11px] font-medium flex-shrink-0" style={{ color: colors.textTertiary, borderBottom: `1px solid ${colors.popoverBorder}` }}>
             Session History
           </div>
 
@@ -259,6 +260,7 @@ export function HistoryPicker() {
                 {pinnedSessions.map((session) => (
                   <div
                     key={session.sessionId}
+                    data-testid="history-session-pinned"
                     className="flex items-start gap-2.5 px-3 py-2"
                     style={{ borderLeft: `2px solid ${colors.accent}` }}
                   >
@@ -289,6 +291,7 @@ export function HistoryPicker() {
                       </button>
                       <button
                         onClick={(event) => void handleTogglePin(session, event)}
+                        data-testid="history-unpin-btn"
                         className="flex-shrink-0"
                         style={{ color: colors.accent }}
                         title="Unpin session"
@@ -313,6 +316,7 @@ export function HistoryPicker() {
                 {recentSessions.map((session) => (
                   <div
                     key={session.sessionId}
+                    data-testid="history-session-item"
                     className="flex items-start gap-2.5 px-3 py-2"
                   >
                     <button
@@ -342,6 +346,7 @@ export function HistoryPicker() {
                       </button>
                       <button
                         onClick={(event) => void handleTogglePin(session, event)}
+                        data-testid="history-pin-btn"
                         className="flex-shrink-0"
                         style={{ color: colors.textTertiary }}
                         title="Pin session"
