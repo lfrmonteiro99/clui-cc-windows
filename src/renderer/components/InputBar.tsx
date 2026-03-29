@@ -9,6 +9,7 @@ import { useExportStore } from '../stores/exportStore'
 import { useSnippetStore } from '../stores/snippetStore'
 import { useWorkflowStore } from '../stores/workflowStore'
 import { useModelRouterStore } from '../stores/modelRouterStore'
+import { usePromptHistoryStore } from '../stores/promptHistoryStore'
 import { AttachmentChips } from './AttachmentChips'
 import { PromptLintBar } from './PromptLintBar'
 import { SlashCommandMenu, getFilteredCommandsWithExtras, type SlashCommand } from './SlashCommandMenu'
@@ -732,6 +733,13 @@ export function InputBar() {
 
     if (!prompt && attachments.length === 0) return
     if (isConnecting) return
+
+    // Save prompt to history before clearing
+    if (prompt) {
+      usePromptHistoryStore.getState().pushPrompt(activeTabId, prompt)
+      usePromptHistoryStore.getState().resetIndex(activeTabId)
+    }
+
     clearComposer()
 
     // Route through comparison store when a comparison is active
@@ -767,6 +775,29 @@ export function InputBar() {
 
   // ─── Keyboard ───
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    // Prompt history navigation (before slash menu checks)
+    if (e.key === 'ArrowUp' && !showSlashMenu) {
+      const textarea = textareaRef.current
+      const cursorAtStart = !textarea || textarea.selectionStart === 0
+      if (cursorAtStart || !input) {
+        const prev = usePromptHistoryStore.getState().navigateUp(activeTabId, input)
+        if (prev !== null) {
+          e.preventDefault()
+          setInput(prev)
+        }
+      }
+    }
+    if (e.key === 'ArrowDown' && !showSlashMenu) {
+      const textarea = textareaRef.current
+      const cursorAtEnd = !textarea || textarea.selectionStart === textarea.value.length
+      if (cursorAtEnd) {
+        const next = usePromptHistoryStore.getState().navigateDown(activeTabId)
+        if (next !== null) {
+          e.preventDefault()
+          setInput(next)
+        }
+      }
+    }
     if (showSlashMenu) {
       const filtered = getFilteredCommandsWithExtras(slashFilter!, [...snippetCommands, ...skillCommands])
       if (e.key === 'ArrowDown' && filtered.length > 0) { e.preventDefault(); setSlashIndex((i) => (i + 1) % filtered.length); return }
