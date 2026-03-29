@@ -1,8 +1,8 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { motion } from 'framer-motion'
-import { DotsThree, Bell, BellRinging, ChatText, ArrowsOutSimple, Moon, Sun, Monitor, ShieldCheck, NotePencil, Keyboard, ChartBar } from '@phosphor-icons/react'
-import { useThemeStore } from '../theme'
+import { DotsThree, Bell, BellRinging, ChatText, ArrowsOutSimple, Moon, Sun, Monitor, ShieldCheck, NotePencil, Keyboard, ChartBar, TextAa } from '@phosphor-icons/react'
+import { useThemeStore, DENSITY_SCALES, type DensityLevel } from '../theme'
 import { useSessionStore } from '../stores/sessionStore'
 import { useShortcutStore } from '../stores/shortcutStore'
 import { useSnippetStore } from '../stores/snippetStore'
@@ -57,6 +57,8 @@ export function SettingsPopover() {
   const setAutoResumeEnabled = useThemeStore((s) => s.setAutoResumeEnabled)
   const themeMode = useThemeStore((s) => s.themeMode)
   const setThemeMode = useThemeStore((s) => s.setThemeMode)
+  const density = useThemeStore((s) => s.density)
+  const setDensity = useThemeStore((s) => s.setDensity)
   const expandedUI = useThemeStore((s) => s.expandedUI)
   const setExpandedUI = useThemeStore((s) => s.setExpandedUI)
   const openShortcutSettings = useShortcutStore((s) => s.openSettings)
@@ -332,6 +334,37 @@ export function SettingsPopover() {
                       }}
                     >
                       {mode}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div style={{ height: 1, background: colors.popoverBorder }} />
+
+            {/* Density */}
+            <div>
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2 min-w-0">
+                  <TextAa size={14} style={{ color: colors.textTertiary }} />
+                  <div className="text-[12px] font-medium" style={{ color: colors.textPrimary }}>
+                    Density
+                  </div>
+                </div>
+                <div className="flex items-center gap-1">
+                  {(Object.keys(DENSITY_SCALES) as DensityLevel[]).map((level) => (
+                    <button
+                      key={level}
+                      data-testid={`settings-density-${level}`}
+                      onClick={() => setDensity(level)}
+                      className="clui-focus-ring text-[10px] font-medium px-2 py-0.5 rounded-full transition-colors capitalize"
+                      style={{
+                        background: density === level ? colors.accentLight : 'transparent',
+                        color: density === level ? colors.accent : colors.textTertiary,
+                        border: `1px solid ${density === level ? colors.accentSoft : 'transparent'}`,
+                      }}
+                    >
+                      {level}
                     </button>
                   ))}
                 </div>

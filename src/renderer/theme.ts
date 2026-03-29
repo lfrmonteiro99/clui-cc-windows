@@ -348,6 +348,33 @@ const lightColors = {
 
 export type ColorPalette = { [K in keyof typeof darkColors]: string }
 
+// ─── Density presets ───
+
+export const DENSITY_SCALES = {
+  compact: 0.85,
+  normal: 1.0,
+  spacious: 1.15,
+} as const
+
+export type DensityLevel = keyof typeof DENSITY_SCALES
+
+/** Apply density CSS variables to :root based on the given density level */
+export function applyDensity(density: DensityLevel): void {
+  const scale = DENSITY_SCALES[density]
+  const root = document.documentElement.style
+  root.setProperty('--clui-density', String(scale))
+  root.setProperty('--clui-font-base', `${Math.round(13 * scale)}px`)
+  root.setProperty('--clui-font-sm', `${Math.round(11 * scale)}px`)
+  root.setProperty('--clui-font-xs', `${Math.round(10 * scale)}px`)
+  root.setProperty('--clui-gap-sm', `${Math.round(4 * scale)}px`)
+  root.setProperty('--clui-gap-md', `${Math.round(8 * scale)}px`)
+  root.setProperty('--clui-gap-lg', `${Math.round(12 * scale)}px`)
+  root.setProperty('--clui-padding-sm', `${Math.round(8 * scale)}px`)
+  root.setProperty('--clui-padding-md', `${Math.round(12 * scale)}px`)
+  root.setProperty('--clui-padding-lg', `${Math.round(16 * scale)}px`)
+  root.setProperty('--clui-line-height', String(1.5 + (scale - 1) * 0.5))
+}
+
 // ─── Theme store ───
 
 export type ThemeMode = 'system' | 'light' | 'dark'
@@ -355,6 +382,7 @@ export type ThemeMode = 'system' | 'light' | 'dark'
 interface ThemeState {
   isDark: boolean
   themeMode: ThemeMode
+  density: DensityLevel
   soundEnabled: boolean
   expandedUI: boolean
   autoResumeEnabled: boolean
@@ -363,6 +391,7 @@ interface ThemeState {
   _systemIsDark: boolean
   setIsDark: (isDark: boolean) => void
   setThemeMode: (mode: ThemeMode) => void
+  setDensity: (density: DensityLevel) => void
   setSoundEnabled: (enabled: boolean) => void
   setExpandedUI: (expanded: boolean) => void
   setAutoResumeEnabled: (enabled: boolean) => void
@@ -392,13 +421,23 @@ function applyTheme(isDark: boolean): void {
 
 const SETTINGS_KEY = 'clui-settings'
 
-function loadSettings(): { themeMode: ThemeMode; soundEnabled: boolean; expandedUI: boolean; autoResumeEnabled: boolean; autoResumeMaxRetries: number } {
+interface SavedSettings {
+  themeMode: ThemeMode
+  density: DensityLevel
+  soundEnabled: boolean
+  expandedUI: boolean
+  autoResumeEnabled: boolean
+  autoResumeMaxRetries: number
+}
+
+function loadSettings(): SavedSettings {
   try {
     const raw = localStorage.getItem(SETTINGS_KEY)
     if (raw) {
       const parsed = JSON.parse(raw)
       return {
         themeMode: ['light', 'dark'].includes(parsed.themeMode) ? parsed.themeMode : 'dark',
+        density: parsed.density in DENSITY_SCALES ? parsed.density : 'normal',
         soundEnabled: typeof parsed.soundEnabled === 'boolean' ? parsed.soundEnabled : true,
         expandedUI: typeof parsed.expandedUI === 'boolean' ? parsed.expandedUI : false,
         autoResumeEnabled: typeof parsed.autoResumeEnabled === 'boolean' ? parsed.autoResumeEnabled : true,
@@ -408,19 +447,34 @@ function loadSettings(): { themeMode: ThemeMode; soundEnabled: boolean; expanded
   } catch (err) {
     console.warn('[theme] loadSettings failed:', err)
   }
-  return { themeMode: 'dark', soundEnabled: true, expandedUI: false, autoResumeEnabled: true, autoResumeMaxRetries: 3 }
+  return { themeMode: 'dark', density: 'normal', soundEnabled: true, expandedUI: false, autoResumeEnabled: true, autoResumeMaxRetries: 3 }
 }
 
-function saveSettings(s: { themeMode: ThemeMode; soundEnabled: boolean; expandedUI: boolean; autoResumeEnabled: boolean; autoResumeMaxRetries: number }): void {
+function saveSettings(s: SavedSettings): void {
   try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)) } catch (err) { console.warn('[theme] saveSettings failed:', err) }
 }
 
 // Always start in compact UI mode on launch.
 const saved = { ...loadSettings(), expandedUI: false }
 
+/** Helper to build a SavedSettings snapshot from current store state with one field overridden */
+function currentSettings(g: () => ThemeState, overrides?: Partial<SavedSettings>): SavedSettings {
+  const s = g()
+  return {
+    themeMode: s.themeMode,
+    density: s.density,
+    soundEnabled: s.soundEnabled,
+    expandedUI: s.expandedUI,
+    autoResumeEnabled: s.autoResumeEnabled,
+    autoResumeMaxRetries: s.autoResumeMaxRetries,
+    ...overrides,
+  }
+}
+
 export const useThemeStore = create<ThemeState>((set, get) => ({
   isDark: saved.themeMode === 'dark' ? true : saved.themeMode === 'light' ? false : true,
   themeMode: saved.themeMode,
+  density: saved.density,
   soundEnabled: saved.soundEnabled,
   expandedUI: saved.expandedUI,
   autoResumeEnabled: saved.autoResumeEnabled,
@@ -434,24 +488,29 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
     const resolved = mode === 'system' ? get()._systemIsDark : mode === 'dark'
     set({ themeMode: mode, isDark: resolved })
     applyTheme(resolved)
-    saveSettings({ themeMode: mode, soundEnabled: get().soundEnabled, expandedUI: get().expandedUI, autoResumeEnabled: get().autoResumeEnabled, autoResumeMaxRetries: get().autoResumeMaxRetries })
+    saveSettings(currentSettings(get, { themeMode: mode }))
+  },
+  setDensity: (density) => {
+    set({ density })
+    applyDensity(density)
+    saveSettings(currentSettings(get, { density }))
   },
   setSoundEnabled: (enabled) => {
     set({ soundEnabled: enabled })
-    saveSettings({ themeMode: get().themeMode, soundEnabled: enabled, expandedUI: get().expandedUI, autoResumeEnabled: get().autoResumeEnabled, autoResumeMaxRetries: get().autoResumeMaxRetries })
+    saveSettings(currentSettings(get, { soundEnabled: enabled }))
   },
   setExpandedUI: (expanded) => {
     set({ expandedUI: expanded })
-    saveSettings({ themeMode: get().themeMode, soundEnabled: get().soundEnabled, expandedUI: expanded, autoResumeEnabled: get().autoResumeEnabled, autoResumeMaxRetries: get().autoResumeMaxRetries })
+    saveSettings(currentSettings(get, { expandedUI: expanded }))
   },
   setAutoResumeEnabled: (enabled) => {
     set({ autoResumeEnabled: enabled })
-    saveSettings({ themeMode: get().themeMode, soundEnabled: get().soundEnabled, expandedUI: get().expandedUI, autoResumeEnabled: enabled, autoResumeMaxRetries: get().autoResumeMaxRetries })
+    saveSettings(currentSettings(get, { autoResumeEnabled: enabled }))
   },
   setAutoResumeMaxRetries: (retries) => {
     const next = Math.max(1, Math.floor(retries))
     set({ autoResumeMaxRetries: next })
-    saveSettings({ themeMode: get().themeMode, soundEnabled: get().soundEnabled, expandedUI: get().expandedUI, autoResumeEnabled: get().autoResumeEnabled, autoResumeMaxRetries: next })
+    saveSettings(currentSettings(get, { autoResumeMaxRetries: next }))
   },
   setSystemTheme: (isDark) => {
     set({ _systemIsDark: isDark })
@@ -463,8 +522,9 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
   },
 }))
 
-// Initialize CSS vars with saved theme
+// Initialize CSS vars with saved theme and density
 syncTokensToCss(saved.themeMode === 'light' ? lightColors : darkColors)
+applyDensity(saved.density)
 
 /** Reactive hook — returns the active color palette */
 export function useColors(): ColorPalette {
