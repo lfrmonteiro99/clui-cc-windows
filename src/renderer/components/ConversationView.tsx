@@ -4,7 +4,7 @@ import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import {
   Copy, Check, ArrowCounterClockwise, Square, Globe, ArrowDown,
-  Sparkle, FolderOpen, Warning, Plus, ArrowClockwise,
+  Sparkle, FolderOpen, Warning, Plus, ArrowClockwise, BookmarkSimple,
 } from '@phosphor-icons/react'
 import { useSessionStore } from '../stores/sessionStore'
 import { BookmarkButton } from './BookmarkButton'
