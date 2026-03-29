@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ShieldCheck, Trash, Plus, Lightning, Lock, X } from '@phosphor-icons/react'
+import { ShieldCheck, Trash, Plus, Lightning, Lock, X, Eraser } from '@phosphor-icons/react'
 import { useColors } from '../theme'
+import { usePermissionStore } from '../stores/permissionStore'
 
 interface Props {
   onClose: () => void
@@ -11,6 +12,8 @@ type PresetKey = 'permissive' | 'balanced' | 'strict'
 
 export function PermissionEditor({ onClose }: Props) {
   const colors = useColors()
+  const trustedTools = usePermissionStore((s) => s.trustedTools)
+  const clearTrustedTools = usePermissionStore((s) => s.clearTrustedTools)
   const [permissions, setPermissions] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [newPattern, setNewPattern] = useState('')
@@ -221,6 +224,25 @@ export function PermissionEditor({ onClose }: Props) {
           )}
         </AnimatePresence>
       </div>
+
+      {/* Clear trusted tools */}
+      {trustedTools.size > 0 && (
+        <div className="px-3 py-2" style={{ borderTop: `1px solid ${colors.popoverBorder}` }}>
+          <button
+            data-testid="clear-trusted-tools-button"
+            onClick={clearTrustedTools}
+            className="text-[10px] font-medium px-2 py-1 rounded-full cursor-pointer transition-colors flex items-center gap-1 w-full justify-center"
+            style={{
+              background: colors.permissionDenyBg,
+              color: colors.statusError,
+              border: `1px solid ${colors.permissionDenyBorder}`,
+            }}
+          >
+            <Eraser size={10} />
+            Clear trusted tools ({trustedTools.size})
+          </button>
+        </div>
+      )}
     </motion.div>
   )
 }

@@ -18,6 +18,7 @@ import { useBudgetStore } from './budgetStore'
 import { canScheduleAutoResume, DEFAULT_AUTO_RESUME_MAX_RETRIES, getAutoResumeDelayMs } from '../../shared/retry-policy'
 import { useThemeStore } from '../theme'
 import { useNotificationStore } from './notificationStore'
+import { usePermissionStore } from './permissionStore'
 import { useMarketplaceStore } from './marketplaceStore'
 import { usePermissionStore } from './permissionStore'
 import { useAgentMemoryStore } from './agentMemoryStore'
@@ -1383,6 +1384,23 @@ export const useSessionStore = create<State>((set, get) => ({
               label: o.label,
             })),
           }
+
+          // Auto-approve if tool is trusted or batch approve is active
+          const permStore = usePermissionStore.getState()
+          const shouldAutoApprove = permStore.isToolTrusted(event.toolName) || permStore.isBatchApproveActive()
+          if (shouldAutoApprove) {
+            const allowOpt = newReq.options.find(
+              (o) => o.kind === 'allow' || o.label.toLowerCase().includes('allow') || o.label.toLowerCase().includes('yes')
+            )
+            if (allowOpt) {
+              // Schedule auto-respond outside of setState to avoid re-entrancy
+              queueMicrotask(() => {
+                permStore.respondPermission(tabId, newReq.questionId, allowOpt.optionId)
+              })
+              break
+            }
+          }
+
           updated.permissionQueue = [...updated.permissionQueue, newReq]
           updated.currentActivity = `Waiting for permission: ${event.toolName}`
           break
