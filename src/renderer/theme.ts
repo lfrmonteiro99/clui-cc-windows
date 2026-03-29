@@ -201,12 +201,12 @@ const lightColors = {
   textPrimary: '#3c3929',
   textSecondary: '#5a5749',
   textTertiary: '#8a8a80',
-  textMuted: '#dddad2',
+  textMuted: '#8a8780',
 
   // Accent — orange (darkened for text contrast on light bg)
   accent: '#c4613d',
-  accentLight: 'rgba(217, 119, 87, 0.1)',
-  accentSoft: 'rgba(217, 119, 87, 0.12)',
+  accentLight: 'rgba(217, 119, 87, 0.15)',
+  accentSoft: 'rgba(217, 119, 87, 0.18)',
 
   // Status dots
   statusIdle: '#8a8a80',
@@ -260,7 +260,7 @@ const lightColors = {
   // Send button
   sendBg: '#d97757',
   sendHover: '#c96442',
-  sendDisabled: 'rgba(217, 119, 87, 0.3)',
+  sendDisabled: 'rgba(217, 119, 87, 0.5)',
 
   // Popover
   popoverBg: '#f9f8f5',
@@ -278,7 +278,7 @@ const lightColors = {
   micDisabled: '#c8c5bc',
 
   // Placeholder
-  placeholder: '#b0ada4',
+  placeholder: '#7a7770',
 
   // Disabled button color
   btnDisabled: '#c8c5bc',
@@ -323,14 +323,14 @@ const lightColors = {
 
   // Session freshness indicator
   freshnessActive: '#5a9e6f',
-  freshnessStale: '#c49a3c',
+  freshnessStale: '#96762a',
   freshnessNew: '#8a8a80',
 
   // Subtle border
   borderSubtle: '#dddad2',
 
   // Accent primary (alias for accent)
-  accentPrimary: '#d97757',
+  accentPrimary: '#b8522e',
 
   // Surface tertiary
   surfaceTertiary: '#e4e1d8',
