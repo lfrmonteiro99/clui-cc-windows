@@ -20,6 +20,10 @@ const darkColors = {
   surfaceSecondary: '#42423d',
   surfaceHover: 'rgba(255, 255, 255, 0.05)',
   surfaceActive: 'rgba(255, 255, 255, 0.08)',
+  surfaceElevated: '#3d3d38',   // between surfacePrimary and surfaceSecondary
+  surfaceDepressed: '#1e1e1c',  // below containerBg
+  surfaceOverlay: '#484843',    // above surfaceSecondary
+  surfaceCard: '#2e2e2b',       // between containerBg and surfacePrimary
 
   // Input
   inputBg: 'transparent',
@@ -190,6 +194,10 @@ const lightColors = {
   surfaceSecondary: '#dddad2',
   surfaceHover: 'rgba(0, 0, 0, 0.04)',
   surfaceActive: 'rgba(0, 0, 0, 0.06)',
+  surfaceElevated: '#e8e6e0',
+  surfaceDepressed: '#f2f1ed',
+  surfaceOverlay: '#d8d6d0',
+  surfaceCard: '#eeedea',
 
   // Input
   inputBg: 'transparent',

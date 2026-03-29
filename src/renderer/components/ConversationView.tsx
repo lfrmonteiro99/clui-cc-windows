@@ -893,7 +893,7 @@ function ImageCard({ src, alt, colors }: { src?: string; alt?: string; colors: R
     <button
       type="button"
       className="block my-2 rounded-lg overflow-hidden border text-left cursor-pointer"
-      style={{ borderColor: colors.toolBorder, background: colors.surfacePrimary }}
+      style={{ borderColor: colors.toolBorder, background: colors.surfaceCard }}
       onClick={open}
       title={src}
     >
