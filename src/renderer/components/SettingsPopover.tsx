@@ -1,8 +1,8 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { motion } from 'framer-motion'
-import { DotsThree, Bell, BellRinging, ChatText, ArrowsOutSimple, Moon, Sun, Monitor, ShieldCheck, NotePencil, Keyboard, ChartBar } from '@phosphor-icons/react'
-import { useThemeStore } from '../theme'
+import { DotsThree, Bell, BellRinging, ChatText, ArrowsOutSimple, Moon, Sun, Monitor, ShieldCheck, NotePencil, Keyboard, ChartBar, Check, Palette } from '@phosphor-icons/react'
+import { useThemeStore, ACCENT_PRESETS, type AccentPresetName } from '../theme'
 import { useSessionStore } from '../stores/sessionStore'
 import { useShortcutStore } from '../stores/shortcutStore'
 import { useSnippetStore } from '../stores/snippetStore'
@@ -57,6 +57,8 @@ export function SettingsPopover() {
   const setAutoResumeEnabled = useThemeStore((s) => s.setAutoResumeEnabled)
   const themeMode = useThemeStore((s) => s.themeMode)
   const setThemeMode = useThemeStore((s) => s.setThemeMode)
+  const accentColor = useThemeStore((s) => s.accentColor)
+  const setAccentColor = useThemeStore((s) => s.setAccentColor)
   const expandedUI = useThemeStore((s) => s.expandedUI)
   const setExpandedUI = useThemeStore((s) => s.setExpandedUI)
   const openShortcutSettings = useShortcutStore((s) => s.openSettings)
@@ -332,6 +334,46 @@ export function SettingsPopover() {
                       }}
                     >
                       {mode}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div style={{ height: 1, background: colors.popoverBorder }} />
+
+            {/* Accent color */}
+            <div>
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2 min-w-0">
+                  <Palette size={14} style={{ color: colors.textTertiary }} />
+                  <div className="text-[12px] font-medium" style={{ color: colors.textPrimary }}>
+                    Accent
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  {(Object.keys(ACCENT_PRESETS) as AccentPresetName[]).map((name) => (
+                    <button
+                      key={name}
+                      data-testid={`settings-accent-${name}`}
+                      onClick={() => setAccentColor(name)}
+                      className="flex items-center justify-center rounded-full transition-all"
+                      style={{
+                        width: 20,
+                        height: 20,
+                        background: ACCENT_PRESETS[name].dark,
+                        border: accentColor === name
+                          ? '2px solid rgba(255,255,255,0.9)'
+                          : '2px solid transparent',
+                        boxShadow: accentColor === name
+                          ? `0 0 0 1px ${ACCENT_PRESETS[name].dark}`
+                          : 'none',
+                      }}
+                      title={name.charAt(0).toUpperCase() + name.slice(1)}
+                    >
+                      {accentColor === name && (
+                        <Check size={10} weight="bold" color="#ffffff" />
+                      )}
                     </button>
                   ))}
                 </div>
