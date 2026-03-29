@@ -55,7 +55,7 @@ export async function launchCluiApp(testInfo: TestInfo, homeDirOrOptions?: strin
   fs.mkdirSync(path.dirname(isolated.settingsPath), { recursive: true })
 
   const electronApp = await electron.launch({
-    args: ['.'],
+    args: process.env.CI ? ['--no-sandbox', '.'] : ['.'],
     cwd: process.cwd(),
     env: {
       ...process.env,
