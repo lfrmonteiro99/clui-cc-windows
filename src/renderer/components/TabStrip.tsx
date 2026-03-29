@@ -482,7 +482,7 @@ export function TabStrip() {
         <button
           data-testid="tab-new-button"
           onClick={() => createTab()}
-          className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-full transition-colors"
+          className="clui-btn-ghost flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-full"
           style={{ color: colors.textTertiary }}
           title="New tab"
         >
