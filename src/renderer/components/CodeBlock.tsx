@@ -31,7 +31,7 @@ function CopyCodeButton({ text }: { text: string }) {
     <button
       data-testid="codeblock-copy-btn"
       onClick={handleCopy}
-      className="inline-flex items-center justify-center gap-1 rounded-md text-[11px] cursor-pointer flex-shrink-0 transition-opacity"
+      className="clui-btn-ghost inline-flex items-center justify-center gap-1 rounded-md text-[11px] flex-shrink-0 transition-opacity"
       style={{
         width: 28,
         height: 28,
@@ -172,7 +172,7 @@ export function CodeBlock({ code, language }: { code: string; language: string }
           data-testid="codeblock-expand-btn"
           type="button"
           onClick={() => setExpanded(true)}
-          className="flex items-center justify-center gap-1 w-full py-1.5 text-[11px] cursor-pointer transition-colors"
+          className="clui-btn-ghost flex items-center justify-center gap-1 w-full py-1.5 text-[11px]"
           style={{
             background: colors.surfaceHover,
             color: colors.textTertiary,

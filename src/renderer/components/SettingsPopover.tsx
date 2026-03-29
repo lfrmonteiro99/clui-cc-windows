@@ -147,7 +147,7 @@ export function SettingsPopover() {
         ref={triggerRef}
         data-testid="settings-button"
         onClick={handleToggle}
-        className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-full transition-colors"
+        className="clui-btn-ghost flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-full"
         style={{ color: colors.textTertiary }}
         title="Settings"
       >
@@ -345,7 +345,7 @@ export function SettingsPopover() {
               <button
                 data-testid="settings-permissions-button"
                 onClick={() => setPermEditorOpen((o) => !o)}
-                className="flex items-center gap-2 w-full text-left cursor-pointer rounded-md px-0 py-0 transition-colors"
+                className="clui-row-interactive flex items-center gap-2 w-full text-left rounded-md px-1 py-0.5"
                 style={{ background: 'transparent' }}
               >
                 <ShieldCheck size={14} style={{ color: colors.textTertiary }} />
@@ -363,7 +363,7 @@ export function SettingsPopover() {
                   openShortcutSettings()
                   setOpen(false)
                 }}
-                className="flex items-center gap-2 w-full text-left cursor-pointer rounded-md px-0 py-0 transition-colors"
+                className="clui-row-interactive flex items-center gap-2 w-full text-left rounded-md px-1 py-0.5"
                 style={{ background: 'transparent' }}
               >
                 <Keyboard size={14} style={{ color: colors.textTertiary }} />
@@ -381,7 +381,7 @@ export function SettingsPopover() {
                   openSnippetManager()
                   setOpen(false)
                 }}
-                className="flex items-center gap-2 w-full text-left cursor-pointer rounded-md px-0 py-0 transition-colors"
+                className="clui-row-interactive flex items-center gap-2 w-full text-left rounded-md px-1 py-0.5"
                 style={{ background: 'transparent' }}
               >
                 <NotePencil size={14} style={{ color: colors.textTertiary }} />
@@ -399,7 +399,7 @@ export function SettingsPopover() {
                   useSessionStore.getState().toggleCostDashboard()
                   setOpen(false)
                 }}
-                className="flex items-center gap-2 w-full text-left cursor-pointer rounded-md px-0 py-0 transition-colors"
+                className="clui-row-interactive flex items-center gap-2 w-full text-left rounded-md px-1 py-0.5"
                 style={{ background: 'transparent' }}
               >
                 <ChartBar size={14} style={{ color: colors.textTertiary }} />

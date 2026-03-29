@@ -169,7 +169,7 @@ export function PermissionCard({ tabId, permission, queueLength = 1 }: Props) {
                   key={opt.optionId}
                   onClick={() => handleOption(opt.optionId)}
                   disabled={responded}
-                  className="clui-focus-ring text-[11px] font-medium px-3 py-1.5 rounded-full transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="clui-btn clui-focus-ring text-[11px] font-medium px-3 py-1.5 rounded-full disabled:opacity-40 disabled:cursor-not-allowed"
                   style={{
                     background: bg,
                     color: textColor,

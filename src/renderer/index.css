@@ -270,6 +270,53 @@ input::placeholder {
   box-shadow: 0 0 0 2px var(--clui-accent-glow, rgba(217,119,87,0.25));
 }
 
+/* ─── Button base with hover/active feedback ─── */
+.clui-btn {
+  transition: background-color 0.15s ease, transform 0.1s ease, opacity 0.15s ease;
+  cursor: pointer;
+}
+.clui-btn:hover {
+  filter: brightness(1.1);
+}
+.clui-btn:active {
+  transform: scale(0.96);
+}
+.clui-btn:disabled,
+.clui-btn:disabled:hover,
+.clui-btn:disabled:active {
+  transform: none;
+  filter: none;
+  cursor: default;
+  opacity: 0.5;
+}
+
+/* Ghost button variant */
+.clui-btn-ghost {
+  transition: background-color 0.15s ease, transform 0.1s ease;
+  cursor: pointer;
+}
+.clui-btn-ghost:hover {
+  background-color: var(--clui-surface-hover);
+}
+.clui-btn-ghost:active {
+  transform: scale(0.97);
+}
+.clui-btn-ghost:disabled,
+.clui-btn-ghost:disabled:hover {
+  transform: none;
+  background-color: transparent;
+  cursor: default;
+}
+
+/* Interactive row (settings, menus) */
+.clui-row-interactive {
+  transition: background-color 0.12s ease;
+  cursor: pointer;
+}
+.clui-row-interactive:hover {
+  background-color: var(--clui-surface-hover);
+}
+
 /* ─── Conversation search highlights ─── */
 .search-highlight {
   background: var(--clui-accent-light, rgba(217, 119, 87, 0.2));
