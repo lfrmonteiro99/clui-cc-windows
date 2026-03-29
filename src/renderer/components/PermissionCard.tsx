@@ -2,7 +2,7 @@ import React from 'react'
 import { motion } from 'framer-motion'
 import { ShieldWarning, Terminal, PencilSimple, Globe, Wrench, Clock } from '@phosphor-icons/react'
 import { usePermissionStore } from '../stores/permissionStore'
-import { useColors } from '../theme'
+import { useColors, motion as motionTokens } from '../theme'
 import type { PermissionRequest } from '../../shared/types'
 
 interface Props {
@@ -106,7 +106,7 @@ export function PermissionCard({ tabId, permission, queueLength = 1 }: Props) {
       initial={{ opacity: 0, y: 8, scale: 0.97 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, y: -4, scale: 0.97 }}
-      transition={{ duration: 0.2 }}
+      transition={{ duration: motionTokens.durations.normal }}
       className="mx-4 mt-2 mb-2"
     >
       <div

@@ -1,12 +1,14 @@
-import React, { useState, useMemo, useCallback } from 'react'
+import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   CheckCircle, Copy, Check, FileCode, Timer, CurrencyDollar,
   Wrench, CaretDown, CaretUp,
 } from '@phosphor-icons/react'
 import { useSessionStore } from '../stores/sessionStore'
-import { useColors } from '../theme'
+import { useColors, useThemeStore } from '../theme'
+import { useNotificationStore } from '../stores/notificationStore'
 import { extractCodeBlocks, extractFilesTouched, countToolCalls } from '../../shared/completion-utils'
+import { ConfettiCelebration } from './ConfettiCelebration'
 
 // ─── Formatting Helpers (same as CostDashboard) ───
 
@@ -68,6 +70,11 @@ export function CompletionSummary({ tabId }: { tabId: string }) {
   const tokenUsage = tab?.tokenUsage ?? null
   const isCompleted = tab?.status === 'completed'
 
+  const celebrationEnabled = useThemeStore((s) => s.celebrationEnabled)
+  const addToast = useNotificationStore((s) => s.addToast)
+  const hasCelebrated = useRef(false)
+  const [showConfetti, setShowConfetti] = useState(false)
+
   const toolCallCount = useMemo(() => countToolCalls(messages), [messages])
   const filesTouched = useMemo(() => extractFilesTouched(messages), [messages])
   const codeBlocks = useMemo(() => extractCodeBlocks(messages), [messages])
@@ -81,6 +88,30 @@ export function CompletionSummary({ tabId }: { tabId: string }) {
     }
     return ''
   }, [messages])
+
+  // Fire celebration on successful completion
+  useEffect(() => {
+    if (
+      isCompleted &&
+      lastResult &&
+      celebrationEnabled &&
+      !hasCelebrated.current
+    ) {
+      hasCelebrated.current = true
+      setShowConfetti(true)
+
+      const parts: string[] = []
+      if (lastResult.durationMs > 0) parts.push(`Done in ${formatDuration(lastResult.durationMs)}`)
+      if (filesTouched.length > 0) parts.push(`${filesTouched.length} file${filesTouched.length === 1 ? '' : 's'}`)
+
+      addToast({
+        type: 'success',
+        title: 'Task Complete',
+        message: parts.join(' — ') || 'Finished successfully',
+        duration: 5000,
+      })
+    }
+  }, [isCompleted, lastResult, celebrationEnabled, addToast, filesTouched.length])
 
   const handleCopyCode = useCallback(async () => {
     if (codeBlocks.length === 0) return
@@ -131,8 +162,10 @@ export function CompletionSummary({ tabId }: { tabId: string }) {
         background: colors.surfaceHover,
         boxShadow: colors.cardShadow,
         overflow: 'hidden',
+        position: 'relative',
       }}
     >
+      {showConfetti && <ConfettiCelebration />}
       {/* Collapsed header row */}
       <button
         data-testid="completion-summary-toggle"

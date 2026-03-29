@@ -117,7 +117,7 @@ export function CodeBlock({ code, language }: { code: string; language: string }
     <div
       className="relative rounded-lg overflow-hidden my-2"
       style={{
-        background: colors.codeBg,
+        background: colors.surfaceDepressed,
         border: `1px solid ${colors.containerBorder}`,
       }}
     >

@@ -1,8 +1,8 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { motion } from 'framer-motion'
-import { DotsThree, Bell, BellRinging, ChatText, ArrowsOutSimple, Moon, Sun, Monitor, ShieldCheck, NotePencil, Keyboard, ChartBar, Check, Palette } from '@phosphor-icons/react'
-import { useThemeStore, ACCENT_PRESETS, type AccentPresetName } from '../theme'
+import { DotsThree, Bell, BellRinging, ChatText, ArrowsOutSimple, Moon, Sun, Monitor, ShieldCheck, NotePencil, Keyboard, ChartBar, Check, Palette, TextT, TextAa, Confetti, DownloadSimple, UploadSimple } from '@phosphor-icons/react'
+import { useThemeStore, ACCENT_PRESETS, type AccentPresetName, FONT_PRESETS, DENSITY_SCALES, type DensityLevel, motion as motionTokens } from '../theme'
 import { useSessionStore } from '../stores/sessionStore'
 import { useShortcutStore } from '../stores/shortcutStore'
 import { useSnippetStore } from '../stores/snippetStore'
@@ -13,6 +13,7 @@ import { PermissionEditor } from './PermissionEditor'
 import { SandboxToggle } from './SandboxToggle'
 import { SessionDigestSettings } from './SessionDigestSettings'
 import { CompanionSettings } from './CompanionSettings'
+import { exportTheme, downloadTheme, importTheme, applyImportedTheme } from '../utils/theme-io'
 
 function RowToggle({
   checked,
@@ -59,6 +60,12 @@ export function SettingsPopover() {
   const setThemeMode = useThemeStore((s) => s.setThemeMode)
   const accentColor = useThemeStore((s) => s.accentColor)
   const setAccentColor = useThemeStore((s) => s.setAccentColor)
+  const fontFamily = useThemeStore((s) => s.fontFamily)
+  const setFontFamily = useThemeStore((s) => s.setFontFamily)
+  const density = useThemeStore((s) => s.density)
+  const setDensity = useThemeStore((s) => s.setDensity)
+  const celebrationEnabled = useThemeStore((s) => s.celebrationEnabled)
+  const setCelebrationEnabled = useThemeStore((s) => s.setCelebrationEnabled)
   const expandedUI = useThemeStore((s) => s.expandedUI)
   const setExpandedUI = useThemeStore((s) => s.setExpandedUI)
   const openShortcutSettings = useShortcutStore((s) => s.openSettings)
@@ -76,6 +83,8 @@ export function SettingsPopover() {
   const triggerRef = useRef<HTMLButtonElement>(null)
   const popoverRef = useRef<HTMLDivElement>(null)
   const permEditorRef = useRef<HTMLDivElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const addToast = useNotificationStore((s) => s.addToast)
   const [pos, setPos] = useState<{ right: number; top?: number; bottom?: number; maxHeight?: number }>({ right: 0 })
 
   const updatePos = useCallback(() => {
@@ -164,7 +173,7 @@ export function SettingsPopover() {
           initial={{ opacity: 0, y: isExpanded ? -4 : 4 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: isExpanded ? -4 : 4 }}
-          transition={{ duration: 0.12 }}
+          transition={{ duration: motionTokens.durations.instant }}
           className="rounded-xl"
           style={{
             position: 'fixed',
@@ -284,6 +293,26 @@ export function SettingsPopover() {
 
             <div style={{ height: 1, background: colors.popoverBorder }} />
 
+            {/* Completion celebration */}
+            <div>
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2 min-w-0">
+                  <Confetti size={14} style={{ color: colors.textTertiary }} />
+                  <div className="text-[12px] font-medium" style={{ color: colors.textPrimary }}>
+                    Completion celebration
+                  </div>
+                </div>
+                <RowToggle
+                  checked={celebrationEnabled}
+                  onChange={setCelebrationEnabled}
+                  colors={colors}
+                  label="Toggle completion celebration"
+                />
+              </div>
+            </div>
+
+            <div style={{ height: 1, background: colors.popoverBorder }} />
+
             {/* Sandbox mode */}
             <div>
               <SandboxToggle />
@@ -378,6 +407,125 @@ export function SettingsPopover() {
                   ))}
                 </div>
               </div>
+            </div>
+
+            <div style={{ height: 1, background: colors.popoverBorder }} />
+
+            {/* Font family */}
+            <div>
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2 min-w-0">
+                  <TextT size={14} style={{ color: colors.textTertiary }} />
+                  <div className="text-[12px] font-medium" style={{ color: colors.textPrimary }}>
+                    Code font
+                  </div>
+                </div>
+                <select
+                  data-testid="settings-font-family"
+                  value={fontFamily}
+                  onChange={(e) => setFontFamily(e.target.value)}
+                  style={{
+                    background: colors.surfaceHover,
+                    color: colors.textPrimary,
+                    border: `1px solid ${colors.containerBorder}`,
+                    borderRadius: 6,
+                    padding: '2px 6px',
+                    fontSize: 11,
+                    outline: 'none',
+                    maxWidth: 120,
+                  }}
+                >
+                  {FONT_PRESETS.map((preset) => (
+                    <option key={preset.id} value={preset.id}>{preset.label}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div style={{ height: 1, background: colors.popoverBorder }} />
+
+            {/* Density */}
+            <div>
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2 min-w-0">
+                  <TextAa size={14} style={{ color: colors.textTertiary }} />
+                  <div className="text-[12px] font-medium" style={{ color: colors.textPrimary }}>
+                    Density
+                  </div>
+                </div>
+                <div className="flex items-center gap-1">
+                  {(Object.keys(DENSITY_SCALES) as DensityLevel[]).map((level) => (
+                    <button
+                      key={level}
+                      data-testid={`settings-density-${level}`}
+                      onClick={() => setDensity(level)}
+                      className="clui-focus-ring text-[10px] font-medium px-2 py-0.5 rounded-full transition-colors capitalize"
+                      style={{
+                        background: density === level ? colors.accentLight : 'transparent',
+                        color: density === level ? colors.accent : colors.textTertiary,
+                        border: `1px solid ${density === level ? colors.accentSoft : 'transparent'}`,
+                      }}
+                    >
+                      {level}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div style={{ height: 1, background: colors.popoverBorder }} />
+
+            {/* Theme export / import */}
+            <div className="flex items-center gap-2">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".json"
+                className="hidden"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0]
+                  if (!file) return
+                  try {
+                    const theme = await importTheme(file)
+                    applyImportedTheme(theme)
+                    addToast({ type: 'success', title: 'Theme imported', message: `Applied "${theme.name}"` })
+                  } catch (err) {
+                    addToast({ type: 'error', title: 'Import failed', message: err instanceof Error ? err.message : 'Unknown error' })
+                  }
+                  // Reset so re-selecting same file triggers onChange
+                  e.target.value = ''
+                }}
+              />
+              <button
+                data-testid="settings-export-theme"
+                onClick={() => {
+                  const theme = exportTheme()
+                  downloadTheme(theme)
+                  addToast({ type: 'success', title: 'Theme exported' })
+                }}
+                className="flex items-center gap-1.5 text-[11px] font-medium px-2 py-1 rounded-md transition-colors"
+                style={{
+                  background: colors.surfaceHover,
+                  color: colors.textSecondary,
+                  border: `1px solid ${colors.containerBorder}`,
+                }}
+              >
+                <DownloadSimple size={12} />
+                Export Theme
+              </button>
+              <button
+                data-testid="settings-import-theme"
+                onClick={() => fileInputRef.current?.click()}
+                className="flex items-center gap-1.5 text-[11px] font-medium px-2 py-1 rounded-md transition-colors"
+                style={{
+                  background: colors.surfaceHover,
+                  color: colors.textSecondary,
+                  border: `1px solid ${colors.containerBorder}`,
+                }}
+              >
+                <UploadSimple size={12} />
+                Import Theme
+              </button>
             </div>
 
             <div style={{ height: 1, background: colors.popoverBorder }} />

@@ -13,6 +13,7 @@ html, body, #root {
   overflow: hidden;
   user-select: none;
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', system-ui, sans-serif;
+  font-size: var(--clui-font-base, 13px);
   -webkit-font-smoothing: antialiased;
 }
 
@@ -77,18 +78,18 @@ input::placeholder {
 /* ─── Prose overrides for markdown ─── */
 .prose-cloud {
   color: var(--clui-text-primary);
-  line-height: 1.6;
+  line-height: var(--clui-line-height, 1.6);
   overflow-wrap: break-word;
   word-break: break-word;
 }
 .prose-cloud p {
-  margin: 0.5em 0;
+  margin: var(--clui-gap-sm, 4px) 0;
 }
 .prose-cloud pre {
   background: var(--clui-code-block-bg);
   border: 1px solid var(--clui-container-border);
   border-radius: 10px;
-  padding: 0.75em 1em;
+  padding: var(--clui-padding-sm, 8px) var(--clui-padding-md, 12px);
   font-size: 12px;
   font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
   color: var(--clui-code-block-text);
@@ -357,6 +358,26 @@ input::placeholder {
 }
 .prose-cloud pre::-webkit-scrollbar-thumb:hover {
   background: var(--clui-scroll-thumb-hover);
+}
+
+/* ─── Confetti celebration animation ─── */
+.clui-confetti-particle {
+  position: absolute;
+  top: 0;
+  border-radius: 2px;
+  animation: clui-confetti-fall ease-out forwards;
+  pointer-events: none;
+}
+
+@keyframes clui-confetti-fall {
+  0% {
+    transform: translateY(0) rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(120px) rotate(720deg);
+    opacity: 0;
+  }
 }
 
 /* ─── Conversation-input visual separator ─── */

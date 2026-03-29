@@ -7,7 +7,7 @@ import {
   TerminalWindow, Broom, Brain, FolderOpen, Archive, ArrowsLeftRight, Trash,
 } from '@phosphor-icons/react'
 import { usePopoverLayer } from './PopoverLayer'
-import { useColors } from '../theme'
+import { useColors, motion as motionTokens } from '../theme'
 import { useThemeStore } from '../theme'
 import { useCommandPaletteStore } from '../stores/commandPaletteStore'
 import { useSessionStore, AVAILABLE_MODELS } from '../stores/sessionStore'
@@ -363,7 +363,7 @@ export function CommandPalette() {
         initial={{ opacity: 0, y: -8, scale: 0.98 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: -8, scale: 0.98 }}
-        transition={{ duration: 0.1 }}
+        transition={{ duration: motionTokens.durations.instant }}
         style={{
           position: 'relative',
           width: 400,

@@ -20,6 +20,10 @@ const darkColors = {
   surfaceSecondary: '#42423d',
   surfaceHover: 'rgba(255, 255, 255, 0.05)',
   surfaceActive: 'rgba(255, 255, 255, 0.08)',
+  surfaceElevated: '#3d3d38',   // between surfacePrimary and surfaceSecondary
+  surfaceDepressed: '#1e1e1c',  // below containerBg
+  surfaceOverlay: '#484843',    // above surfaceSecondary
+  surfaceCard: '#2e2e2b',       // between containerBg and surfacePrimary
 
   // Input
   inputBg: 'transparent',
@@ -63,7 +67,7 @@ const darkColors = {
 
   // Assistant message
   messageBgAssistant: 'rgba(217, 119, 87, 0.08)',
-  messageBgUser: 'rgba(255, 255, 255, 0.03)',
+  messageBgUser: 'rgba(255, 255, 255, 0.06)',
   messageAccentBorder: '#d97757',
   cardShadowMd: '0 2px 8px rgba(0,0,0,0.15)',
   accentGlow: '0 0 12px rgba(217,119,87,0.15)',
@@ -190,6 +194,10 @@ const lightColors = {
   surfaceSecondary: '#dddad2',
   surfaceHover: 'rgba(0, 0, 0, 0.04)',
   surfaceActive: 'rgba(0, 0, 0, 0.06)',
+  surfaceElevated: '#e8e6e0',
+  surfaceDepressed: '#f2f1ed',
+  surfaceOverlay: '#d8d6d0',
+  surfaceCard: '#eeedea',
 
   // Input
   inputBg: 'transparent',
@@ -201,12 +209,12 @@ const lightColors = {
   textPrimary: '#3c3929',
   textSecondary: '#5a5749',
   textTertiary: '#8a8a80',
-  textMuted: '#dddad2',
+  textMuted: '#8a8780',
 
   // Accent — orange (darkened for text contrast on light bg)
   accent: '#c4613d',
-  accentLight: 'rgba(217, 119, 87, 0.1)',
-  accentSoft: 'rgba(217, 119, 87, 0.12)',
+  accentLight: 'rgba(217, 119, 87, 0.15)',
+  accentSoft: 'rgba(217, 119, 87, 0.18)',
 
   // Status dots
   statusIdle: '#8a8a80',
@@ -233,7 +241,7 @@ const lightColors = {
 
   // Assistant message
   messageBgAssistant: 'rgba(217, 119, 87, 0.10)',
-  messageBgUser: 'rgba(0, 0, 0, 0.03)',
+  messageBgUser: 'rgba(0, 0, 0, 0.05)',
   messageAccentBorder: '#d97757',
   cardShadowMd: '0 2px 8px rgba(0,0,0,0.08)',
   accentGlow: '0 0 12px rgba(217,119,87,0.15)',
@@ -260,7 +268,7 @@ const lightColors = {
   // Send button
   sendBg: '#d97757',
   sendHover: '#c96442',
-  sendDisabled: 'rgba(217, 119, 87, 0.3)',
+  sendDisabled: 'rgba(217, 119, 87, 0.5)',
 
   // Popover
   popoverBg: '#f9f8f5',
@@ -278,7 +286,7 @@ const lightColors = {
   micDisabled: '#c8c5bc',
 
   // Placeholder
-  placeholder: '#b0ada4',
+  placeholder: '#7a7770',
 
   // Disabled button color
   btnDisabled: '#c8c5bc',
@@ -323,14 +331,14 @@ const lightColors = {
 
   // Session freshness indicator
   freshnessActive: '#5a9e6f',
-  freshnessStale: '#c49a3c',
+  freshnessStale: '#96762a',
   freshnessNew: '#8a8a80',
 
   // Subtle border
   borderSubtle: '#dddad2',
 
   // Accent primary (alias for accent)
-  accentPrimary: '#d97757',
+  accentPrimary: '#b8522e',
 
   // Surface tertiary
   surfaceTertiary: '#e4e1d8',
@@ -347,6 +355,56 @@ const lightColors = {
 } as const
 
 export type ColorPalette = { [K in keyof typeof darkColors]: string }
+
+// ─── Font presets ───
+
+export const FONT_PRESETS = [
+  { id: 'system', label: 'System Default', monoStack: "ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" },
+  { id: 'jetbrains', label: 'JetBrains Mono', monoStack: "'JetBrains Mono', ui-monospace, monospace" },
+  { id: 'fira', label: 'Fira Code', monoStack: "'Fira Code', ui-monospace, monospace" },
+  { id: 'cascadia', label: 'Cascadia Code', monoStack: "'Cascadia Code', ui-monospace, monospace" },
+  { id: 'sfmono', label: 'SF Mono', monoStack: "'SF Mono', ui-monospace, monospace" },
+  { id: 'menlo', label: 'Menlo', monoStack: "Menlo, ui-monospace, monospace" },
+  { id: 'consolas', label: 'Consolas', monoStack: "Consolas, ui-monospace, monospace" },
+  { id: 'monaco', label: 'Monaco', monoStack: "Monaco, ui-monospace, monospace" },
+] as const
+
+export type FontPresetId = (typeof FONT_PRESETS)[number]['id']
+
+/** Apply the mono font CSS variable based on the given preset id */
+function syncFontToCss(fontFamily: string): void {
+  if (typeof document === 'undefined') return
+  const preset = FONT_PRESETS.find((f) => f.id === fontFamily) ?? FONT_PRESETS[0]
+  document.documentElement.style.setProperty('--clui-font-mono', preset.monoStack)
+}
+
+// ─── Density presets ───
+
+export const DENSITY_SCALES = {
+  compact: 0.85,
+  normal: 1.0,
+  spacious: 1.15,
+} as const
+
+export type DensityLevel = keyof typeof DENSITY_SCALES
+
+/** Apply density CSS variables to :root based on the given density level */
+export function applyDensity(density: DensityLevel): void {
+  if (typeof document === 'undefined') return
+  const scale = DENSITY_SCALES[density]
+  const root = document.documentElement.style
+  root.setProperty('--clui-density', String(scale))
+  root.setProperty('--clui-font-base', `${Math.round(13 * scale)}px`)
+  root.setProperty('--clui-font-sm', `${Math.round(11 * scale)}px`)
+  root.setProperty('--clui-font-xs', `${Math.round(10 * scale)}px`)
+  root.setProperty('--clui-gap-sm', `${Math.round(4 * scale)}px`)
+  root.setProperty('--clui-gap-md', `${Math.round(8 * scale)}px`)
+  root.setProperty('--clui-gap-lg', `${Math.round(12 * scale)}px`)
+  root.setProperty('--clui-padding-sm', `${Math.round(8 * scale)}px`)
+  root.setProperty('--clui-padding-md', `${Math.round(12 * scale)}px`)
+  root.setProperty('--clui-padding-lg', `${Math.round(16 * scale)}px`)
+  root.setProperty('--clui-line-height', String(1.5 + (scale - 1) * 0.5))
+}
 
 // ─── Accent presets ───
 
@@ -404,20 +462,26 @@ export type ThemeMode = 'system' | 'light' | 'dark'
 interface ThemeState {
   isDark: boolean
   themeMode: ThemeMode
+  density: DensityLevel
   soundEnabled: boolean
   expandedUI: boolean
   autoResumeEnabled: boolean
   autoResumeMaxRetries: number
   accentColor: AccentPresetName
+  fontFamily: string
+  celebrationEnabled: boolean
   /** OS-reported dark mode — used when themeMode is 'system' */
   _systemIsDark: boolean
   setIsDark: (isDark: boolean) => void
   setThemeMode: (mode: ThemeMode) => void
+  setDensity: (density: DensityLevel) => void
   setSoundEnabled: (enabled: boolean) => void
   setExpandedUI: (expanded: boolean) => void
   setAutoResumeEnabled: (enabled: boolean) => void
   setAutoResumeMaxRetries: (retries: number) => void
   setAccentColor: (color: AccentPresetName) => void
+  setFontFamily: (id: string) => void
+  setCelebrationEnabled: (enabled: boolean) => void
   /** Called by OS theme change listener — updates system value */
   setSystemTheme: (isDark: boolean) => void
 }
@@ -452,27 +516,43 @@ function isValidAccentPreset(v: unknown): v is AccentPresetName {
   return typeof v === 'string' && v in ACCENT_PRESETS
 }
 
-function loadSettings(): { themeMode: ThemeMode; soundEnabled: boolean; expandedUI: boolean; autoResumeEnabled: boolean; autoResumeMaxRetries: number; accentColor: AccentPresetName } {
+interface SavedSettings {
+  themeMode: ThemeMode
+  density: DensityLevel
+  soundEnabled: boolean
+  expandedUI: boolean
+  autoResumeEnabled: boolean
+  autoResumeMaxRetries: number
+  accentColor: AccentPresetName
+  fontFamily: string
+  celebrationEnabled: boolean
+}
+
+function loadSettings(): SavedSettings {
   try {
     const raw = localStorage.getItem(SETTINGS_KEY)
     if (raw) {
       const parsed = JSON.parse(raw)
+      const validFontIds = FONT_PRESETS.map((f) => f.id) as readonly string[]
       return {
         themeMode: ['light', 'dark'].includes(parsed.themeMode) ? parsed.themeMode : 'dark',
+        density: parsed.density in DENSITY_SCALES ? parsed.density : 'normal',
         soundEnabled: typeof parsed.soundEnabled === 'boolean' ? parsed.soundEnabled : true,
         expandedUI: typeof parsed.expandedUI === 'boolean' ? parsed.expandedUI : false,
         autoResumeEnabled: typeof parsed.autoResumeEnabled === 'boolean' ? parsed.autoResumeEnabled : true,
         autoResumeMaxRetries: typeof parsed.autoResumeMaxRetries === 'number' ? parsed.autoResumeMaxRetries : 3,
         accentColor: isValidAccentPreset(parsed.accentColor) ? parsed.accentColor : 'orange',
+        fontFamily: typeof parsed.fontFamily === 'string' && validFontIds.includes(parsed.fontFamily) ? parsed.fontFamily : 'system',
+        celebrationEnabled: typeof parsed.celebrationEnabled === 'boolean' ? parsed.celebrationEnabled : true,
       }
     }
   } catch (err) {
     console.warn('[theme] loadSettings failed:', err)
   }
-  return { themeMode: 'dark', soundEnabled: true, expandedUI: false, autoResumeEnabled: true, autoResumeMaxRetries: 3, accentColor: 'orange' }
+  return { themeMode: 'dark', density: 'normal', soundEnabled: true, expandedUI: false, autoResumeEnabled: true, autoResumeMaxRetries: 3, accentColor: 'orange', fontFamily: 'system', celebrationEnabled: true }
 }
 
-function saveSettings(s: { themeMode: ThemeMode; soundEnabled: boolean; expandedUI: boolean; autoResumeEnabled: boolean; autoResumeMaxRetries: number; accentColor: AccentPresetName }): void {
+function saveSettings(s: SavedSettings): void {
   try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)) } catch (err) { console.warn('[theme] saveSettings failed:', err) }
 }
 
@@ -480,25 +560,31 @@ function saveSettings(s: { themeMode: ThemeMode; soundEnabled: boolean; expanded
 const saved = { ...loadSettings(), expandedUI: false }
 
 /** Helper to collect current settings for saving */
-function currentSettings(get: () => ThemeState): Parameters<typeof saveSettings>[0] {
+function currentSettings(get: () => ThemeState): SavedSettings {
   return {
     themeMode: get().themeMode,
+    density: get().density,
     soundEnabled: get().soundEnabled,
     expandedUI: get().expandedUI,
     autoResumeEnabled: get().autoResumeEnabled,
     autoResumeMaxRetries: get().autoResumeMaxRetries,
     accentColor: get().accentColor,
+    fontFamily: get().fontFamily,
+    celebrationEnabled: get().celebrationEnabled,
   }
 }
 
 export const useThemeStore = create<ThemeState>((set, get) => ({
   isDark: saved.themeMode === 'dark' ? true : saved.themeMode === 'light' ? false : true,
   themeMode: saved.themeMode,
+  density: saved.density,
   soundEnabled: saved.soundEnabled,
   expandedUI: saved.expandedUI,
   autoResumeEnabled: saved.autoResumeEnabled,
   autoResumeMaxRetries: saved.autoResumeMaxRetries,
   accentColor: saved.accentColor,
+  fontFamily: saved.fontFamily,
+  celebrationEnabled: saved.celebrationEnabled,
   _systemIsDark: true,
   setIsDark: (isDark) => {
     set({ isDark })
@@ -527,10 +613,26 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
     set({ autoResumeMaxRetries: next })
     saveSettings({ ...currentSettings(get), autoResumeMaxRetries: next })
   },
+  setDensity: (density) => {
+    set({ density })
+    applyDensity(density)
+    saveSettings({ ...currentSettings(get), density })
+  },
   setAccentColor: (color) => {
     set({ accentColor: color })
     applyTheme(get().isDark, color)
     saveSettings({ ...currentSettings(get), accentColor: color })
+  },
+  setFontFamily: (id) => {
+    const validIds = FONT_PRESETS.map((f) => f.id) as readonly string[]
+    const resolved = validIds.includes(id) ? id : 'system'
+    set({ fontFamily: resolved })
+    syncFontToCss(resolved)
+    saveSettings({ ...currentSettings(get), fontFamily: resolved })
+  },
+  setCelebrationEnabled: (enabled) => {
+    set({ celebrationEnabled: enabled })
+    saveSettings({ ...currentSettings(get), celebrationEnabled: enabled })
   },
   setSystemTheme: (isDark) => {
     set({ _systemIsDark: isDark })
@@ -542,11 +644,13 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
   },
 }))
 
-// Initialize CSS vars with saved theme (including accent)
+// Initialize CSS vars with saved theme (including accent, font, density)
 {
   const initIsDark = saved.themeMode !== 'light'
   applyTheme(initIsDark, saved.accentColor)
 }
+syncFontToCss(saved.fontFamily)
+applyDensity(saved.density)
 
 /** Build merged palette with accent overrides */
 function getMergedPalette(isDark: boolean, accentColor: AccentPresetName): ColorPalette {
@@ -592,6 +696,44 @@ export const spacing = {
 // ─── Animation ───
 
 export const motion = {
+  durations: {
+    instant: 0.1,
+    quick: 0.15,
+    normal: 0.2,
+    smooth: 0.3,
+    slow: 0.5,
+  },
+  easings: {
+    easeOut: [0.25, 0.46, 0.45, 0.94] as const,
+    easeInOut: [0.4, 0, 0.2, 1] as const,
+    snappy: [0.34, 1.3, 0.64, 1] as const,
+  },
+  springs: {
+    snappy: { type: 'spring' as const, stiffness: 500, damping: 30 },
+    bouncy: { type: 'spring' as const, stiffness: 320, damping: 28 },
+    gentle: { type: 'spring' as const, stiffness: 200, damping: 25 },
+  },
+  transitions: {
+    fadeUp: {
+      initial: { opacity: 0, y: 8 },
+      animate: { opacity: 1, y: 0 },
+      exit: { opacity: 0, y: -4 },
+      transition: { duration: 0.15 },
+    },
+    fadeDown: {
+      initial: { opacity: 0, y: -8 },
+      animate: { opacity: 1, y: 0 },
+      exit: { opacity: 0, y: 8 },
+      transition: { duration: 0.15 },
+    },
+    fadeScale: {
+      initial: { opacity: 0, scale: 0.95 },
+      animate: { opacity: 1, scale: 1 },
+      exit: { opacity: 0, scale: 0.95 },
+      transition: { duration: 0.15 },
+    },
+  },
+  // Keep backward compat with existing exports
   spring: { type: 'spring' as const, stiffness: 500, damping: 30 },
   easeOut: { duration: 0.2, ease: [0.25, 0.46, 0.45, 0.94] as const },
   fadeIn: {
