@@ -166,7 +166,12 @@ export function TerminalView({ termTabId, isActive }: TerminalViewProps) {
       terminal.loadAddon(searchAddon)
       searchAddonRef.current = searchAddon
 
+      // Open terminal in DOM first — WebGL and other addons require an attached canvas
+      terminal.open(containerRef.current!)
+      fitAddon.fit()
+
       // TERM-001: WebGL GPU-accelerated renderer with DOM fallback
+      // Must load AFTER terminal.open() — requires canvas context
       try {
         const { WebglAddon } = await import('@xterm/addon-webgl')
         const webglAddon = new WebglAddon()
@@ -208,9 +213,6 @@ export function TerminalView({ termTabId, isActive }: TerminalViewProps) {
       } catch (err) {
         console.warn('[TerminalView] Serialize addon unavailable:', err)
       }
-
-      terminal.open(containerRef.current!)
-      fitAddon.fit()
 
       // TERM-007: Restore persisted scrollback if available
       if (serializeAddonRef.current) {

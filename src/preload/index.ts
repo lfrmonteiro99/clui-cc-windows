@@ -146,6 +146,15 @@ export interface CluiAPI {
   contextDeleteMemory(memoryId: string): Promise<void>
   contextGetFilesTouched(projectPath: string, limit?: number): Promise<ContextFileTouched[]>
   contextGetMemoryPacketPreview(projectPath: string, tabId: string, prompt: string): Promise<string | null>
+  // Session digests
+  sessionDigestGetSetting(): Promise<boolean>
+  sessionDigestSetSetting(enabled: boolean): Promise<boolean>
+  sessionDigestGetDigests(projectPath: string): Promise<SessionDigest[]>
+  sessionDigestGetStats(): Promise<SessionDigestStats>
+  // Companion narrator
+  companionGetSetting(): Promise<boolean>
+  companionSetSetting(enabled: boolean): Promise<boolean>
+
   onContextMemoryCreated(callback: (memory: ContextMemory) => void): () => void
   onContextSessionRecorded(callback: (session: ContextSessionSummary) => void): () => void
 
@@ -326,6 +335,16 @@ const api: CluiAPI = {
   wslStatus: () => ipcRenderer.invoke(IPC.WSL_STATUS),
   wslCheckClaude: (distro: string) => ipcRenderer.invoke(IPC.WSL_CHECK_CLAUDE, distro),
   wslBrowse: (distro: string) => ipcRenderer.invoke(IPC.WSL_BROWSE, distro),
+
+  // Session digests
+  sessionDigestGetSetting: () => ipcRenderer.invoke(IPC.SESSION_DIGEST_SETTING),
+  sessionDigestSetSetting: (enabled: boolean) => ipcRenderer.invoke(IPC.SESSION_DIGEST_SETTING, enabled),
+  sessionDigestGetDigests: (projectPath: string) => ipcRenderer.invoke(IPC.SESSION_DIGEST_GET, projectPath),
+  sessionDigestGetStats: () => ipcRenderer.invoke(IPC.SESSION_DIGEST_STATS),
+
+  // Companion narrator
+  companionGetSetting: () => ipcRenderer.invoke(IPC.COMPANION_SETTING_GET),
+  companionSetSetting: (enabled: boolean) => ipcRenderer.invoke(IPC.COMPANION_SETTING_SET, enabled),
 
   // Context database
   getContextHealth: () => ipcRenderer.invoke(IPC.CONTEXT_HEALTH),

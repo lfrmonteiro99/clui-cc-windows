@@ -4,19 +4,27 @@ import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import {
   Copy, Check, ArrowCounterClockwise, Square, Globe, ArrowDown,
-  Sparkle, FolderOpen, Warning, Plus, ArrowClockwise,
+  Sparkle, FolderOpen, Warning, Plus, ArrowClockwise, BookmarkSimple,
 } from '@phosphor-icons/react'
 import { useSessionStore } from '../stores/sessionStore'
+import { BookmarkButton } from './BookmarkButton'
+import { BookmarkPanel } from './BookmarkPanel'
+import { SmartScrollAnchors } from './SmartScrollAnchors'
 import { FilePath } from './FilePath'
+import { EnrichedText } from './EnrichedText'
 import { isLikelyFilePath } from '../utils/file-path-detect'
 import { PermissionCard } from './PermissionCard'
+import { CompanionMessage } from './CompanionMessage'
 import { PermissionDeniedCard } from './PermissionDeniedCard'
 import { RetryBanner } from './RetryBanner'
 import { DirectoryPicker } from './DirectoryPicker'
 import { ToolTimeline } from './ToolTimeline'
 import { ShellOutput } from './ShellOutput'
 import { ResumeBrief } from './ResumeBrief'
+import { CompletionSummary } from './CompletionSummary'
 import { CodeBlock } from './CodeBlock'
+import { StreamingStatsBar } from './StreamingStatsBar'
+import { ResponseOutline } from './ResponseOutline'
 import { useColors, useThemeStore } from '../theme'
 import { generateResumeBrief, RESUME_INACTIVITY_MS, CATCH_ME_UP_PROMPT } from '../../shared/session-resume'
 import type { ResumeBrief as ResumeBriefData } from '../../shared/session-resume'
@@ -123,6 +131,8 @@ export function ConversationView({ overrideTabId }: { overrideTabId?: string } =
   const [renderOffset, setRenderOffset] = useState(0) // 0 = show from tail
   const isNearBottomRef = useRef(true)
   const [isNearBottom, setIsNearBottom] = useState(true)
+  const [bookmarkPanelOpen, setBookmarkPanelOpen] = useState(false)
+  const [scrollDistance, setScrollDistance] = useState(0)
   const prevTabIdRef = useRef(resolvedTabId)
   const colors = useColors()
   const expandedUI = useThemeStore((s) => s.expandedUI)
@@ -185,9 +195,11 @@ export function ConversationView({ overrideTabId }: { overrideTabId?: string } =
   const handleScroll = useCallback(() => {
     const el = scrollRef.current
     if (!el) return
-    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < NEAR_BOTTOM_THRESHOLD
+    const dist = el.scrollHeight - el.scrollTop - el.clientHeight
+    const nearBottom = dist < NEAR_BOTTOM_THRESHOLD
     isNearBottomRef.current = nearBottom
     setIsNearBottom(nearBottom)
+    setScrollDistance(dist)
   }, [])
 
   // Auto-scroll when content changes and user is near bottom.
@@ -229,6 +241,19 @@ export function ConversationView({ overrideTabId }: { overrideTabId?: string } =
     el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
     isNearBottomRef.current = true
     setIsNearBottom(true)
+  }, [])
+
+  const handleScrollToMessage = useCallback((messageId: string) => {
+    const el = scrollRef.current
+    if (!el) return
+    const target = el.querySelector(`[data-message-id="${messageId}"]`)
+    if (target) {
+      target.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
+  }, [])
+
+  const handleToggleBookmarkPanel = useCallback(() => {
+    setBookmarkPanelOpen((prev) => !prev)
   }, [])
 
   if (!tab) return null
@@ -313,18 +338,43 @@ export function ConversationView({ overrideTabId }: { overrideTabId?: string } =
 
             switch (item.kind) {
               case 'user':
-                return <UserMessage key={item.message.id} message={item.message} skipMotion={isHistorical} />
+                return (
+                  <div key={item.message.id} data-message-id={item.message.id} className="relative group/msg">
+                    <UserMessage message={item.message} skipMotion={isHistorical} />
+                    {resolvedTabId && <BookmarkButton messageId={item.message.id} tabId={resolvedTabId} messageContent={item.message.content} />}
+                  </div>
+                )
               case 'assistant':
-                return <AssistantMessage key={item.message.id} message={item.message} skipMotion={isHistorical} isStreaming={idx === lastAssistantGroupIdx} />
+                return (
+                  <div key={item.message.id} data-message-id={item.message.id} className="relative group/msg">
+                    <AssistantMessage message={item.message} skipMotion={isHistorical} isStreaming={idx === lastAssistantGroupIdx} />
+                    {resolvedTabId && <BookmarkButton messageId={item.message.id} tabId={resolvedTabId} messageContent={item.message.content} />}
+                  </div>
+                )
               case 'tool-group':
                 return <ToolTimeline key={`tg-${item.messages[0].id}`} tools={item.messages} skipMotion={isHistorical} />
               case 'system':
+                if (item.message.isCompanion) {
+                  return <CompanionMessage key={item.message.id} message={item.message} />
+                }
                 return <SystemMessage key={item.message.id} message={item.message} skipMotion={isHistorical} />
               default:
                 return null
             }
           })}
         </div>
+
+        {/* Streaming stats bar — live word count, tokens, cost, elapsed */}
+        {resolvedTabId && (
+          <StreamingStatsBar tabId={resolvedTabId} elapsedSeconds={elapsed} />
+        )}
+
+        {/* Post-completion summary card */}
+        <AnimatePresence>
+          {tab.status === 'completed' && resolvedTabId && (
+            <CompletionSummary tabId={resolvedTabId} />
+          )}
+        </AnimatePresence>
 
         {/* Permission card (shows first item from queue) */}
         <AnimatePresence>
@@ -364,6 +414,23 @@ export function ConversationView({ overrideTabId }: { overrideTabId?: string } =
 
         <div ref={bottomRef} />
       </div>
+
+      {/* Smart scroll anchors — visible when scrolled up significantly */}
+      <SmartScrollAnchors
+        messages={allMessages}
+        scrollRef={scrollRef}
+        distanceFromBottom={scrollDistance}
+      />
+
+      {/* Bookmark panel — slide-out from right */}
+      {resolvedTabId && (
+        <BookmarkPanel
+          tabId={resolvedTabId}
+          open={bookmarkPanelOpen}
+          onClose={() => setBookmarkPanelOpen(false)}
+          onScrollToMessage={handleScrollToMessage}
+        />
+      )}
 
       {/* Jump to bottom button — shown when scrolled up during streaming */}
       <AnimatePresence>
@@ -440,8 +507,20 @@ export function ConversationView({ overrideTabId }: { overrideTabId?: string } =
           )}
         </div>
 
-        {/* Right: interrupt button when running */}
-        <div className="flex items-center flex-shrink-0">
+        {/* Right: bookmark toggle + interrupt button when running */}
+        <div className="flex items-center gap-1 flex-shrink-0">
+          <button
+            data-testid="bookmark-toggle"
+            onClick={handleToggleBookmarkPanel}
+            className="p-1 rounded-md cursor-pointer transition-colors"
+            style={{
+              color: bookmarkPanelOpen ? colors.accent : colors.textTertiary,
+              background: bookmarkPanelOpen ? colors.accentLight : 'transparent',
+            }}
+            title="Bookmarks"
+          >
+            <BookmarkSimple size={13} weight={bookmarkPanelOpen ? 'fill' : 'regular'} />
+          </button>
           <AnimatePresence>
             {showInterrupt && (
               <InterruptButton tabId={tab.id} />
@@ -846,8 +925,42 @@ export const AssistantMessage = React.memo(function AssistantMessage({
   isStreaming?: boolean
 }) {
   const colors = useColors()
+  const messageRef = useRef<HTMLDivElement>(null)
 
-  const markdownComponents = useMemo(() => ({
+  const handleScrollToOffset = useCallback((offset: number) => {
+    const container = messageRef.current
+    if (!container) return
+    // Find all heading elements in the rendered markdown
+    const headings = container.querySelectorAll('h1, h2, h3, h4')
+    // Match the heading by finding the one whose text content corresponds
+    // to the header at the given offset in the source text
+    const sourceLine = message.content.substring(offset).split('\n')[0]
+    const cleanedSource = sourceLine.replace(/^#{1,4}\s+/, '').replace(/[*_`~]/g, '').trim()
+    for (const heading of headings) {
+      const headingText = (heading.textContent || '').trim()
+      if (headingText === cleanedSource) {
+        heading.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        return
+      }
+    }
+    // Fallback: scroll first heading into view
+    if (headings.length > 0) {
+      headings[0].scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  }, [message.content])
+
+  const markdownComponents = useMemo(() => {
+  // Replace plain-text children with EnrichedText, leave non-string children untouched
+  const enrichChildren = (children: React.ReactNode): React.ReactNode => {
+    if (!Array.isArray(children)) {
+      return typeof children === 'string' ? <EnrichedText text={children} /> : children
+    }
+    return children.map((child, i) =>
+      typeof child === 'string' ? <EnrichedText key={i} text={child} /> : child,
+    )
+  }
+
+  return ({
     table: ({ children }: any) => <TableScrollWrapper>{children}</TableScrollWrapper>,
     // Strip default <pre> styling when CodeBlock handles its own wrapper
     pre: ({ children }: any) => <>{children}</>,
@@ -879,10 +992,13 @@ export const AssistantMessage = React.memo(function AssistantMessage({
       </button>
     ),
     img: ({ src, alt }: any) => <ImageCard src={src} alt={alt} colors={colors} />,
-  }), [colors])
+    p: ({ children }: any) => <p>{enrichChildren(children)}</p>,
+    li: ({ children, ...props }: any) => <li {...props}>{enrichChildren(children)}</li>,
+  })}, [colors])
 
   const inner = (
     <div
+      ref={messageRef}
       data-testid="message-assistant"
       className="group/msg relative px-4 py-3 transition-shadow duration-150"
       style={{
@@ -904,6 +1020,12 @@ export const AssistantMessage = React.memo(function AssistantMessage({
           <CopyButton text={message.content} />
         </div>
       )}
+      {/* Live response outline — floating mini-TOC during streaming */}
+      <ResponseOutline
+        content={message.content}
+        isStreaming={!!isStreaming}
+        onScrollToOffset={handleScrollToOffset}
+      />
     </div>
   )
 

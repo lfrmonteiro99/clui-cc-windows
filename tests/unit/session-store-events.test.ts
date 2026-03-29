@@ -1,4 +1,7 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi, test } from 'vitest'
+
+// Increase timeout for this file — some tests are slow on Linux Node 22 CI
+vi.setConfig({ testTimeout: 30_000 })
 import type { NormalizedEvent, TabState, Message } from '../../src/shared/types'
 
 // vi.hoisted runs before vi.mock factories — define Audio and window.clui

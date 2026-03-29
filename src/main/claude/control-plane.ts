@@ -3,6 +3,8 @@ import { RunManager } from './run-manager'
 import { PtyRunManager } from './pty-run-manager'
 import { PermissionServer, maskSensitiveFields } from '../hooks/permission-server'
 import { AgentMemory } from '../agent-memory'
+import type { SessionDigestManager } from './session-digest'
+import type { CompanionNarrator } from './companion-narrator'
 import type { RetrievalService } from '../context/retrieval-service'
 import type { GitContextProvider } from '../git-context'
 import { BudgetEnforcer } from '../budget-enforcer'
@@ -87,6 +89,10 @@ export class ControlPlane extends EventEmitter {
   private hookServerReady: Promise<void>
   /** Optional persisted coordination memory shared across tabs/agents. */
   private agentMemory: AgentMemory | null = null
+  /** Optional session digest manager for cross-session context. */
+  private digestManager: SessionDigestManager | null = null
+  /** Optional companion narrator for idle-time commentary. */
+  private companionNarrator: CompanionNarrator | null = null
   /** Optional context database retrieval service for memory packet injection. */
   private retrievalService: RetrievalService | null = null
   /** Optional git context provider for injecting git status into smart packets. */
@@ -339,6 +345,14 @@ export class ControlPlane extends EventEmitter {
   setAgentMemory(agentMemory: AgentMemory): void {
     this.agentMemory = agentMemory
     this.agentMemory.pruneStaleTabs(this.tabs.keys())
+  }
+
+  setDigestManager(manager: SessionDigestManager): void {
+    this.digestManager = manager
+  }
+
+  setCompanionNarrator(narrator: CompanionNarrator): void {
+    this.companionNarrator = narrator
   }
 
   setRetrievalService(service: RetrievalService): void {

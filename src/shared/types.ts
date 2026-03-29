@@ -274,6 +274,8 @@ export interface Message {
   timestamp: number
   /** Internal: streaming text chunk accumulator. Joined into `content` on flush. */
   _textChunks?: string[]
+  /** Companion narrator message (Haiku-powered idle-time commentary) */
+  isCompanion?: boolean
 }
 
 export interface RunResult {
@@ -341,6 +343,7 @@ export type NormalizedEvent =
   | { type: 'sandbox_dirty_warning'; runId: string; dirty: import('./sandbox-types').DirtyState }
   | { type: 'token_usage'; inputTokens: number; outputTokens: number; totalTokens: number; cacheReadTokens?: number; cacheWriteTokens?: number }
   | { type: 'context_management'; data: unknown }
+  | { type: 'companion_message'; content: string }
 
 // ─── Token Usage Tracking ───
 
@@ -481,6 +484,30 @@ export interface CostSummary {
   byDay: Array<{ date: string; costUsd: number; runs: number }>
 }
 
+// ─── Session Digest Types ───
+
+export interface SessionDigest {
+  id: string
+  tabId: string
+  tabTitle: string
+  projectPath: string
+  digest: string
+  filesModified: string[]
+  generatedAt: number
+  costUsd: number
+}
+
+export interface SessionDigestSettings {
+  enabled: boolean
+}
+
+export interface SessionDigestStats {
+  totalDigests: number
+  totalCostUsd: number
+  monthlyDigests: number
+  monthlyCostUsd: number
+}
+
 // ─── Marketplace / Plugin Types ───
 
 export type PluginStatus = 'not_installed' | 'checking' | 'installing' | 'installed' | 'failed'
@@ -614,6 +641,8 @@ export const IPC = {
   CREATE_AGENT_TAB: 'clui:create-agent-tab',
   LIST_AGENTS: 'clui:list-agents',
   SHELL_EXEC: 'clui:shell-exec',
+  COMPANION_SETTING_GET: 'clui:companion-setting-get',
+  COMPANION_SETTING_SET: 'clui:companion-setting-set',
 
   // One-way events (main → renderer)
   TEXT_CHUNK: 'clui:text-chunk',
@@ -743,6 +772,12 @@ export const IPC = {
   CONTEXT_MEMORY_CREATED: 'clui:context-memory-created',
   CONTEXT_SESSION_RECORDED: 'clui:context-session-recorded',
   CONTEXT_HEALTH: 'clui:context-health',
+
+  // Session digest
+  SESSION_DIGEST_GENERATE: 'clui:session-digest-generate',
+  SESSION_DIGEST_GET: 'clui:session-digest-get',
+  SESSION_DIGEST_SETTING: 'clui:session-digest-setting',
+  SESSION_DIGEST_STATS: 'clui:session-digest-stats',
 
   // Legacy (kept for backward compat during migration)
   STREAM_EVENT: 'clui:stream-event',

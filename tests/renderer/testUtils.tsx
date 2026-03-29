@@ -12,6 +12,7 @@ import { useSnippetStore } from '../../src/renderer/stores/snippetStore'
 import { useTabGroupStore } from '../../src/renderer/stores/tabGroupStore'
 import { useTokenBudgetStore } from '../../src/renderer/stores/tokenBudgetStore'
 import { useWorkflowStore, type Workflow } from '../../src/renderer/stores/workflowStore'
+import { useBookmarkStore } from '../../src/renderer/stores/bookmarkStore'
 import { useThemeStore } from '../../src/renderer/theme'
 import type { CostSummary, Message, TabState } from '../../src/shared/types'
 
@@ -36,6 +37,7 @@ const stores: ResettableStore[] = [
   useTabGroupStore,
   useTokenBudgetStore,
   useWorkflowStore,
+  useBookmarkStore,
 ]
 
 export function makeMessage(overrides: Partial<Message> & Pick<Message, 'role' | 'content'>): Message {
@@ -76,6 +78,9 @@ export function makeTab(overrides: Partial<TabState> = {}): TabState {
     runtime: 'native',
     wslDistro: null,
     lastActivityAt: 0,
+    sandboxState: { enabled: false, activeWorktree: null, pendingDiff: null, mergeStatus: 'idle' },
+    tokenUsage: null,
+    contextNotificationShown: false,
     ...overrides,
   }
 }
@@ -133,8 +138,8 @@ export function installCluiMock(overrides: Partial<typeof window.clui> = {}) {
     onThemeChange: vi.fn(() => () => {}),
     transcribeAudio: vi.fn().mockResolvedValue('transcribed'),
     isVisible: vi.fn().mockResolvedValue(true),
-    agentMemoryFocus: vi.fn().mockResolvedValue(undefined),
-    agentMemoryGet: vi.fn().mockResolvedValue(null),
+    agentMemoryFocus: vi.fn().mockResolvedValue({ snapshot: { active: [], done: [], projectPath: '' } }),
+    agentMemoryGet: vi.fn().mockResolvedValue({ snapshot: { active: [], done: [], projectPath: '' } }),
     agentMemoryClaim: vi.fn().mockResolvedValue(undefined),
     agentMemoryDone: vi.fn().mockResolvedValue(undefined),
     agentMemoryRelease: vi.fn().mockResolvedValue(undefined),

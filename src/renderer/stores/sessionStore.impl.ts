@@ -25,6 +25,7 @@ import { useTokenBudgetStore } from './tokenBudgetStore'
 import { useFaultMemoryStore } from './faultMemoryStore'
 import { useSandboxStore } from './sandboxStore'
 import { detectCorrection } from '../../shared/fault-detector'
+import { detectContentType } from '../../shared/content-detect'
 import { analyzeForPruning } from '../../shared/context-pruner'
 import {
   loadStoredTabOrder,
@@ -109,6 +110,7 @@ export interface State {
   buildYourOwn: () => void
   resumeSession: (sessionId: string, title?: string, projectPath?: string) => Promise<string>
   addSystemMessage: (content: string) => void
+  dismissCompanionMessage: (messageId: string) => void
   sendMessage: (prompt: string, projectPath?: string) => void
   respondPermission: (tabId: string, questionId: string, optionId: string) => void
   addDirectory: (dir: string) => void
@@ -729,6 +731,17 @@ export const useSessionStore = create<State>((set, get) => ({
     }))
   },
 
+  dismissCompanionMessage: (messageId) => {
+    const { activeTabId } = get()
+    set((s) => ({
+      tabs: s.tabs.map((t) =>
+        t.id === activeTabId
+          ? { ...t, messages: t.messages.filter((m) => m.id !== messageId) }
+          : t
+      ),
+    }))
+  },
+
   // ─── Permission response ───
 
   respondPermission: (tabId, questionId, optionId) => {
@@ -1156,8 +1169,15 @@ export const useSessionStore = create<State>((set, get) => ({
           break
 
         case 'text_chunk': {
-          updated.currentActivity = 'Writing...'
           const lastMsg = updated.messages[updated.messages.length - 1]
+          // Throttle content-type detection: run every 5 chunks
+          const prevChunkCount = lastMsg?.role === 'assistant' && lastMsg._textChunks ? lastMsg._textChunks.length : 0
+          if (prevChunkCount % 5 === 0) {
+            const allText = lastMsg?.role === 'assistant' && lastMsg._textChunks
+              ? lastMsg._textChunks.join('') + event.text
+              : event.text
+            updated.currentActivity = detectContentType(allText)
+          }
           if (lastMsg?.role === 'assistant' && !lastMsg.toolName) {
             // ── Optimization 1: buffer chunks to avoid O(n²) string concatenation ──
             // Chunks are joined by getMessageContent() during rendering and flushed
@@ -1407,6 +1427,14 @@ export const useSessionStore = create<State>((set, get) => ({
               timestamp: Date.now(),
             },
           ])
+          break
+        }
+
+        case 'companion_message': {
+          updated.messages = [
+            ...updated.messages,
+            { id: nextMsgId(), role: 'system' as const, content: event.content, timestamp: Date.now(), isCompanion: true },
+          ]
           break
         }
 

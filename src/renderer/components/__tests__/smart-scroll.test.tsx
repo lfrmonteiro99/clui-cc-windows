@@ -72,6 +72,9 @@ vi.mock('../DirectoryPicker', () => ({ DirectoryPicker: () => null }))
 vi.mock('../ToolTimeline', () => ({ ToolTimeline: () => null }))
 vi.mock('../ShellOutput', () => ({ ShellOutput: () => null }))
 vi.mock('../ResumeBrief', () => ({ ResumeBrief: () => null }))
+vi.mock('../BookmarkButton', () => ({ BookmarkButton: () => null }))
+vi.mock('../BookmarkPanel', () => ({ BookmarkPanel: () => null }))
+vi.mock('../SmartScrollAnchors', () => ({ SmartScrollAnchors: () => null }))
 vi.mock('../../utils/file-path-detect', () => ({ isLikelyFilePath: () => false }))
 vi.mock('../../../shared/session-resume', () => ({
   generateResumeBrief: () => null,
