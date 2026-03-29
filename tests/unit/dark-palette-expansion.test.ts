@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * Tests for expanded dark theme palette with intermediate gray tones (#302).
  *
