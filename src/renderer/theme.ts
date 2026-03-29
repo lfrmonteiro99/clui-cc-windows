@@ -348,6 +348,55 @@ const lightColors = {
 
 export type ColorPalette = { [K in keyof typeof darkColors]: string }
 
+// ─── Accent presets ───
+
+export const ACCENT_PRESETS = {
+  orange: { dark: '#d97757', light: '#c4613d' },
+  blue:   { dark: '#5b8dd9', light: '#3d6bc4' },
+  teal:   { dark: '#57b9a5', light: '#3d9e8a' },
+  purple: { dark: '#9b7dd4', light: '#7d5fb8' },
+  rose:   { dark: '#d9577a', light: '#c43d5e' },
+  green:  { dark: '#7aac6d', light: '#5e9451' },
+} as const
+
+export type AccentPresetName = keyof typeof ACCENT_PRESETS
+
+export function hexToRgb(hex: string): { r: number; g: number; b: number } {
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)
+  if (!result) return { r: 217, g: 119, b: 87 } // fallback to orange
+  return { r: parseInt(result[1], 16), g: parseInt(result[2], 16), b: parseInt(result[3], 16) }
+}
+
+export function deriveAccentTokens(baseHex: string, isDark: boolean): Partial<ColorPalette> {
+  const { r, g, b } = hexToRgb(baseHex)
+  return {
+    accent: baseHex,
+    accentLight: `rgba(${r}, ${g}, ${b}, ${isDark ? 0.1 : 0.1})`,
+    accentSoft: `rgba(${r}, ${g}, ${b}, ${isDark ? 0.15 : 0.12})`,
+    accentSolid: baseHex,
+    accentMuted: `rgba(${r}, ${g}, ${b}, 0.2)`,
+    accentGhost: `rgba(${r}, ${g}, ${b}, 0.05)`,
+    accentPrimary: baseHex,
+    accentBorder: `rgba(${r}, ${g}, ${b}, 0.19)`,
+    accentBorderMedium: `rgba(${r}, ${g}, ${b}, 0.25)`,
+    accentGlow: `0 0 12px rgba(${r}, ${g}, ${b}, 0.15)`,
+    inputFocusBorder: `rgba(${r}, ${g}, ${b}, 0.4)`,
+    statusRunning: baseHex,
+    statusRunningBg: `rgba(${r}, ${g}, ${b}, 0.1)`,
+    statusPermission: baseHex,
+    statusPermissionGlow: `rgba(${r}, ${g}, ${b}, ${isDark ? 0.4 : 0.3})`,
+    messageBgAssistant: `rgba(${r}, ${g}, ${b}, ${isDark ? 0.08 : 0.1})`,
+    messageAccentBorder: baseHex,
+    toolRunningBorder: `rgba(${r}, ${g}, ${b}, 0.3)`,
+    toolRunningBg: `rgba(${r}, ${g}, ${b}, 0.05)`,
+    timelineNode: `rgba(${r}, ${g}, ${b}, 0.2)`,
+    timelineNodeActive: baseHex,
+    sendBg: baseHex,
+    sendHover: `rgba(${r}, ${g}, ${b}, 0.85)`,
+    sendDisabled: `rgba(${r}, ${g}, ${b}, 0.3)`,
+  }
+}
+
 // ─── Theme store ───
 
 export type ThemeMode = 'system' | 'light' | 'dark'
@@ -359,6 +408,7 @@ interface ThemeState {
   expandedUI: boolean
   autoResumeEnabled: boolean
   autoResumeMaxRetries: number
+  accentColor: AccentPresetName
   /** OS-reported dark mode — used when themeMode is 'system' */
   _systemIsDark: boolean
   setIsDark: (isDark: boolean) => void
@@ -367,6 +417,7 @@ interface ThemeState {
   setExpandedUI: (expanded: boolean) => void
   setAutoResumeEnabled: (enabled: boolean) => void
   setAutoResumeMaxRetries: (retries: number) => void
+  setAccentColor: (color: AccentPresetName) => void
   /** Called by OS theme change listener — updates system value */
   setSystemTheme: (isDark: boolean) => void
 }
@@ -384,15 +435,24 @@ function syncTokensToCss(tokens: ColorPalette): void {
   }
 }
 
-function applyTheme(isDark: boolean): void {
+function applyTheme(isDark: boolean, accentColor: AccentPresetName = 'orange'): void {
+  if (typeof document === 'undefined') return
   document.documentElement.classList.toggle('dark', isDark)
   document.documentElement.classList.toggle('light', !isDark)
-  syncTokensToCss(isDark ? darkColors : lightColors)
+  const base = isDark ? darkColors : lightColors
+  const preset = ACCENT_PRESETS[accentColor]
+  const accentHex = isDark ? preset.dark : preset.light
+  const overrides = deriveAccentTokens(accentHex, isDark)
+  syncTokensToCss({ ...base, ...overrides } as ColorPalette)
 }
 
 const SETTINGS_KEY = 'clui-settings'
 
-function loadSettings(): { themeMode: ThemeMode; soundEnabled: boolean; expandedUI: boolean; autoResumeEnabled: boolean; autoResumeMaxRetries: number } {
+function isValidAccentPreset(v: unknown): v is AccentPresetName {
+  return typeof v === 'string' && v in ACCENT_PRESETS
+}
+
+function loadSettings(): { themeMode: ThemeMode; soundEnabled: boolean; expandedUI: boolean; autoResumeEnabled: boolean; autoResumeMaxRetries: number; accentColor: AccentPresetName } {
   try {
     const raw = localStorage.getItem(SETTINGS_KEY)
     if (raw) {
@@ -403,20 +463,33 @@ function loadSettings(): { themeMode: ThemeMode; soundEnabled: boolean; expanded
         expandedUI: typeof parsed.expandedUI === 'boolean' ? parsed.expandedUI : false,
         autoResumeEnabled: typeof parsed.autoResumeEnabled === 'boolean' ? parsed.autoResumeEnabled : true,
         autoResumeMaxRetries: typeof parsed.autoResumeMaxRetries === 'number' ? parsed.autoResumeMaxRetries : 3,
+        accentColor: isValidAccentPreset(parsed.accentColor) ? parsed.accentColor : 'orange',
       }
     }
   } catch (err) {
     console.warn('[theme] loadSettings failed:', err)
   }
-  return { themeMode: 'dark', soundEnabled: true, expandedUI: false, autoResumeEnabled: true, autoResumeMaxRetries: 3 }
+  return { themeMode: 'dark', soundEnabled: true, expandedUI: false, autoResumeEnabled: true, autoResumeMaxRetries: 3, accentColor: 'orange' }
 }
 
-function saveSettings(s: { themeMode: ThemeMode; soundEnabled: boolean; expandedUI: boolean; autoResumeEnabled: boolean; autoResumeMaxRetries: number }): void {
+function saveSettings(s: { themeMode: ThemeMode; soundEnabled: boolean; expandedUI: boolean; autoResumeEnabled: boolean; autoResumeMaxRetries: number; accentColor: AccentPresetName }): void {
   try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)) } catch (err) { console.warn('[theme] saveSettings failed:', err) }
 }
 
 // Always start in compact UI mode on launch.
 const saved = { ...loadSettings(), expandedUI: false }
+
+/** Helper to collect current settings for saving */
+function currentSettings(get: () => ThemeState): Parameters<typeof saveSettings>[0] {
+  return {
+    themeMode: get().themeMode,
+    soundEnabled: get().soundEnabled,
+    expandedUI: get().expandedUI,
+    autoResumeEnabled: get().autoResumeEnabled,
+    autoResumeMaxRetries: get().autoResumeMaxRetries,
+    accentColor: get().accentColor,
+  }
+}
 
 export const useThemeStore = create<ThemeState>((set, get) => ({
   isDark: saved.themeMode === 'dark' ? true : saved.themeMode === 'light' ? false : true,
@@ -425,56 +498,76 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
   expandedUI: saved.expandedUI,
   autoResumeEnabled: saved.autoResumeEnabled,
   autoResumeMaxRetries: saved.autoResumeMaxRetries,
+  accentColor: saved.accentColor,
   _systemIsDark: true,
   setIsDark: (isDark) => {
     set({ isDark })
-    applyTheme(isDark)
+    applyTheme(isDark, get().accentColor)
   },
   setThemeMode: (mode) => {
     const resolved = mode === 'system' ? get()._systemIsDark : mode === 'dark'
     set({ themeMode: mode, isDark: resolved })
-    applyTheme(resolved)
-    saveSettings({ themeMode: mode, soundEnabled: get().soundEnabled, expandedUI: get().expandedUI, autoResumeEnabled: get().autoResumeEnabled, autoResumeMaxRetries: get().autoResumeMaxRetries })
+    applyTheme(resolved, get().accentColor)
+    saveSettings({ ...currentSettings(get), themeMode: mode })
   },
   setSoundEnabled: (enabled) => {
     set({ soundEnabled: enabled })
-    saveSettings({ themeMode: get().themeMode, soundEnabled: enabled, expandedUI: get().expandedUI, autoResumeEnabled: get().autoResumeEnabled, autoResumeMaxRetries: get().autoResumeMaxRetries })
+    saveSettings({ ...currentSettings(get), soundEnabled: enabled })
   },
   setExpandedUI: (expanded) => {
     set({ expandedUI: expanded })
-    saveSettings({ themeMode: get().themeMode, soundEnabled: get().soundEnabled, expandedUI: expanded, autoResumeEnabled: get().autoResumeEnabled, autoResumeMaxRetries: get().autoResumeMaxRetries })
+    saveSettings({ ...currentSettings(get), expandedUI: expanded })
   },
   setAutoResumeEnabled: (enabled) => {
     set({ autoResumeEnabled: enabled })
-    saveSettings({ themeMode: get().themeMode, soundEnabled: get().soundEnabled, expandedUI: get().expandedUI, autoResumeEnabled: enabled, autoResumeMaxRetries: get().autoResumeMaxRetries })
+    saveSettings({ ...currentSettings(get), autoResumeEnabled: enabled })
   },
   setAutoResumeMaxRetries: (retries) => {
     const next = Math.max(1, Math.floor(retries))
     set({ autoResumeMaxRetries: next })
-    saveSettings({ themeMode: get().themeMode, soundEnabled: get().soundEnabled, expandedUI: get().expandedUI, autoResumeEnabled: get().autoResumeEnabled, autoResumeMaxRetries: next })
+    saveSettings({ ...currentSettings(get), autoResumeMaxRetries: next })
+  },
+  setAccentColor: (color) => {
+    set({ accentColor: color })
+    applyTheme(get().isDark, color)
+    saveSettings({ ...currentSettings(get), accentColor: color })
   },
   setSystemTheme: (isDark) => {
     set({ _systemIsDark: isDark })
     // Only apply if following system
     if (get().themeMode === 'system') {
       set({ isDark })
-      applyTheme(isDark)
+      applyTheme(isDark, get().accentColor)
     }
   },
 }))
 
-// Initialize CSS vars with saved theme
-syncTokensToCss(saved.themeMode === 'light' ? lightColors : darkColors)
+// Initialize CSS vars with saved theme (including accent)
+{
+  const initIsDark = saved.themeMode !== 'light'
+  applyTheme(initIsDark, saved.accentColor)
+}
+
+/** Build merged palette with accent overrides */
+function getMergedPalette(isDark: boolean, accentColor: AccentPresetName): ColorPalette {
+  const base = isDark ? darkColors : lightColors
+  const preset = ACCENT_PRESETS[accentColor]
+  const accentHex = isDark ? preset.dark : preset.light
+  const overrides = deriveAccentTokens(accentHex, isDark)
+  return { ...base, ...overrides } as ColorPalette
+}
 
 /** Reactive hook — returns the active color palette */
 export function useColors(): ColorPalette {
   const isDark = useThemeStore((s) => s.isDark)
-  return isDark ? darkColors : lightColors
+  const accentColor = useThemeStore((s) => s.accentColor)
+  return getMergedPalette(isDark, accentColor)
 }
 
 /** Non-reactive getter — use outside React components */
 export function getColors(isDark: boolean): ColorPalette {
-  return isDark ? darkColors : lightColors
+  const accentColor = useThemeStore.getState().accentColor
+  return getMergedPalette(isDark, accentColor)
 }
 
 // ─── Backward compatibility ───
