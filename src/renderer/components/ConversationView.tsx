@@ -340,14 +340,14 @@ export function ConversationView({ overrideTabId }: { overrideTabId?: string } =
               case 'user':
                 return (
                   <div key={item.message.id} data-message-id={item.message.id} className="relative group/msg">
-                    <UserMessage message={item.message} skipMotion={isHistorical} />
+                    <UserMessage message={item.message} skipMotion={isHistorical} isFirstInGroup={idx === 0 || grouped[idx - 1].kind !== 'user'} />
                     {resolvedTabId && <BookmarkButton messageId={item.message.id} tabId={resolvedTabId} messageContent={item.message.content} />}
                   </div>
                 )
               case 'assistant':
                 return (
                   <div key={item.message.id} data-message-id={item.message.id} className="relative group/msg">
-                    <AssistantMessage message={item.message} skipMotion={isHistorical} isStreaming={idx === lastAssistantGroupIdx} />
+                    <AssistantMessage message={item.message} skipMotion={isHistorical} isStreaming={idx === lastAssistantGroupIdx} isFirstInGroup={idx === 0 || grouped[idx - 1].kind !== 'assistant'} />
                     {resolvedTabId && <BookmarkButton messageId={item.message.id} tabId={resolvedTabId} messageContent={item.message.content} />}
                   </div>
                 )
@@ -743,22 +743,33 @@ const InterruptButton = React.memo(function InterruptButton({ tabId }: { tabId: 
 
 // ─── User Message (memoized — only re-renders when message reference changes) ───
 
-export const UserMessage = React.memo(function UserMessage({ message, skipMotion }: { message: Message; skipMotion?: boolean }) {
+export const UserMessage = React.memo(function UserMessage({ message, skipMotion, isFirstInGroup }: { message: Message; skipMotion?: boolean; isFirstInGroup?: boolean }) {
   const colors = useColors()
   const content = (
-    <div
-      data-testid="message-user"
-      className="text-[13px] leading-[1.6] max-w-[85%]"
-      style={{
-        background: colors.messageBgUser,
-        color: colors.userBubbleText,
-        border: `1px solid ${colors.userBubbleBorder}`,
-        borderRadius: '12px',
-        padding: '12px 16px',
-        boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
-      }}
-    >
-      {message.content}
+    <div className="flex flex-col items-end max-w-[85%]">
+      {isFirstInGroup && (
+        <div
+          data-testid="message-user-label"
+          className="text-[10px] mb-1 mr-1"
+          style={{ color: colors.textTertiary }}
+        >
+          You
+        </div>
+      )}
+      <div
+        data-testid="message-user"
+        className="text-[13px] leading-[1.6]"
+        style={{
+          background: colors.messageBgUser,
+          color: colors.userBubbleText,
+          border: `1px solid ${colors.userBubbleBorder}`,
+          borderRadius: '12px 12px 4px 12px',
+          padding: '12px 16px',
+          boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
+        }}
+      >
+        {message.content}
+      </div>
     </div>
   )
 
@@ -919,10 +930,12 @@ export const AssistantMessage = React.memo(function AssistantMessage({
   message,
   skipMotion,
   isStreaming,
+  isFirstInGroup,
 }: {
   message: Message
   skipMotion?: boolean
   isStreaming?: boolean
+  isFirstInGroup?: boolean
 }) {
   const colors = useColors()
   const messageRef = useRef<HTMLDivElement>(null)
@@ -997,17 +1010,28 @@ export const AssistantMessage = React.memo(function AssistantMessage({
   })}, [colors])
 
   const inner = (
-    <div
-      ref={messageRef}
-      data-testid="message-assistant"
-      className="group/msg relative px-4 py-3 transition-shadow duration-150"
-      style={{
-        background: colors.messageBgAssistant,
-        borderLeft: `4px solid ${colors.messageAccentBorder}`,
-        borderRadius: '12px',
-        boxShadow: colors.cardShadowMd,
-      }}
-    >
+    <div>
+      {isFirstInGroup && (
+        <div
+          data-testid="message-assistant-label"
+          className="flex items-center gap-1 mb-1 ml-1 text-[10px]"
+          style={{ color: colors.accent }}
+        >
+          <Sparkle size={10} weight="fill" />
+          Claude
+        </div>
+      )}
+      <div
+        ref={messageRef}
+        data-testid="message-assistant"
+        className="group/msg relative px-4 py-3 transition-shadow duration-150"
+        style={{
+          background: colors.messageBgAssistant,
+          borderLeft: `4px solid ${colors.messageAccentBorder}`,
+          borderRadius: '12px 12px 12px 4px',
+          boxShadow: colors.cardShadowMd,
+        }}
+      >
       <div className={`text-[13px] leading-[1.6] prose-cloud min-w-0 max-w-[92%]${isStreaming ? ' streaming-cursor' : ''}`}>
         <Markdown remarkPlugins={REMARK_PLUGINS} components={markdownComponents}>
           {message.content}
@@ -1026,6 +1050,7 @@ export const AssistantMessage = React.memo(function AssistantMessage({
         isStreaming={!!isStreaming}
         onScrollToOffset={handleScrollToOffset}
       />
+      </div>
     </div>
   )
 
@@ -1043,7 +1068,7 @@ export const AssistantMessage = React.memo(function AssistantMessage({
       {inner}
     </motion.div>
   )
-}, (prev, next) => prev.message.content === next.message.content && prev.skipMotion === next.skipMotion && prev.isStreaming === next.isStreaming)
+}, (prev, next) => prev.message.content === next.message.content && prev.skipMotion === next.skipMotion && prev.isStreaming === next.isStreaming && prev.isFirstInGroup === next.isFirstInGroup)
 
 // ─── System Message (memoized) ───
 

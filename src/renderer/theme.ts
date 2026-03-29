@@ -63,7 +63,7 @@ const darkColors = {
 
   // Assistant message
   messageBgAssistant: 'rgba(217, 119, 87, 0.08)',
-  messageBgUser: 'rgba(255, 255, 255, 0.03)',
+  messageBgUser: 'rgba(255, 255, 255, 0.06)',
   messageAccentBorder: '#d97757',
   cardShadowMd: '0 2px 8px rgba(0,0,0,0.15)',
   accentGlow: '0 0 12px rgba(217,119,87,0.15)',
@@ -233,7 +233,7 @@ const lightColors = {
 
   // Assistant message
   messageBgAssistant: 'rgba(217, 119, 87, 0.10)',
-  messageBgUser: 'rgba(0, 0, 0, 0.03)',
+  messageBgUser: 'rgba(0, 0, 0, 0.05)',
   messageAccentBorder: '#d97757',
   cardShadowMd: '0 2px 8px rgba(0,0,0,0.08)',
   accentGlow: '0 0 12px rgba(217,119,87,0.15)',
