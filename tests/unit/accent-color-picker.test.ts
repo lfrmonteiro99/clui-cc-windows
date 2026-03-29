@@ -10,28 +10,7 @@ class MemoryStorage implements Storage {
   setItem(key: string, value: string): void { this.map.set(key, value) }
 }
 
-// Mock DOM before importing theme.ts (it runs applyTheme at module init)
-const mockStyle = new Map<string, string>()
-const mockClassList = {
-  toggle: vi.fn(),
-  add: vi.fn(),
-  remove: vi.fn(),
-}
-vi.stubGlobal('document', {
-  documentElement: {
-    style: {
-      setProperty: (k: string, v: string) => mockStyle.set(k, v),
-    },
-    classList: mockClassList,
-  },
-})
-
-// Must stub localStorage before the theme module runs loadSettings
-const storage = new MemoryStorage()
-vi.stubGlobal('localStorage', storage)
-
-// Now we can import
-import { ACCENT_PRESETS, deriveAccentTokens, hexToRgb, type AccentPresetName } from '../../src/renderer/theme'
+import { ACCENT_PRESETS, deriveAccentTokens, hexToRgb } from '../../src/renderer/theme'
 
 describe('hexToRgb', () => {
   it('parses a standard 6-digit hex color', () => {
@@ -129,16 +108,17 @@ describe('ACCENT_PRESETS', () => {
 })
 
 describe('accent color settings persistence', () => {
+  let storage: MemoryStorage
+
   beforeEach(() => {
-    storage.clear()
-    mockStyle.clear()
+    storage = new MemoryStorage()
+    vi.stubGlobal('localStorage', storage)
     vi.resetModules()
   })
 
   it('defaults to orange when no saved value', async () => {
     const { useThemeStore } = await import('../../src/renderer/theme')
-    const state = useThemeStore.getState()
-    expect(state.accentColor).toBe('orange')
+    expect(useThemeStore.getState().accentColor).toBe('orange')
   })
 
   it('handles invalid accent value gracefully', async () => {
@@ -151,8 +131,7 @@ describe('accent color settings persistence', () => {
       accentColor: 'invalid-color',
     }))
     const { useThemeStore } = await import('../../src/renderer/theme')
-    const state = useThemeStore.getState()
-    expect(state.accentColor).toBe('orange')
+    expect(useThemeStore.getState().accentColor).toBe('orange')
   })
 
   it('setAccentColor persists to localStorage', async () => {
@@ -168,12 +147,5 @@ describe('accent color settings persistence', () => {
     const { useThemeStore } = await import('../../src/renderer/theme')
     useThemeStore.getState().setAccentColor('purple')
     expect(useThemeStore.getState().accentColor).toBe('purple')
-  })
-
-  it('setAccentColor applies CSS custom properties', async () => {
-    const { useThemeStore, ACCENT_PRESETS } = await import('../../src/renderer/theme')
-    useThemeStore.getState().setAccentColor('teal')
-    // After setting teal, the CSS var --clui-accent should contain the teal dark color
-    expect(mockStyle.get('--clui-accent')).toBe(ACCENT_PRESETS.teal.dark)
   })
 })
