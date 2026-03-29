@@ -436,6 +436,7 @@ function syncTokensToCss(tokens: ColorPalette): void {
 }
 
 function applyTheme(isDark: boolean, accentColor: AccentPresetName = 'orange'): void {
+  if (typeof document === 'undefined') return
   document.documentElement.classList.toggle('dark', isDark)
   document.documentElement.classList.toggle('light', !isDark)
   const base = isDark ? darkColors : lightColors
