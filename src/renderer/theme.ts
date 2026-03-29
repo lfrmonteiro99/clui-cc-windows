@@ -359,6 +359,7 @@ interface ThemeState {
   expandedUI: boolean
   autoResumeEnabled: boolean
   autoResumeMaxRetries: number
+  celebrationEnabled: boolean
   /** OS-reported dark mode — used when themeMode is 'system' */
   _systemIsDark: boolean
   setIsDark: (isDark: boolean) => void
@@ -367,6 +368,7 @@ interface ThemeState {
   setExpandedUI: (expanded: boolean) => void
   setAutoResumeEnabled: (enabled: boolean) => void
   setAutoResumeMaxRetries: (retries: number) => void
+  setCelebrationEnabled: (enabled: boolean) => void
   /** Called by OS theme change listener — updates system value */
   setSystemTheme: (isDark: boolean) => void
 }
@@ -392,7 +394,7 @@ function applyTheme(isDark: boolean): void {
 
 const SETTINGS_KEY = 'clui-settings'
 
-function loadSettings(): { themeMode: ThemeMode; soundEnabled: boolean; expandedUI: boolean; autoResumeEnabled: boolean; autoResumeMaxRetries: number } {
+function loadSettings(): { themeMode: ThemeMode; soundEnabled: boolean; expandedUI: boolean; autoResumeEnabled: boolean; autoResumeMaxRetries: number; celebrationEnabled: boolean } {
   try {
     const raw = localStorage.getItem(SETTINGS_KEY)
     if (raw) {
@@ -403,15 +405,16 @@ function loadSettings(): { themeMode: ThemeMode; soundEnabled: boolean; expanded
         expandedUI: typeof parsed.expandedUI === 'boolean' ? parsed.expandedUI : false,
         autoResumeEnabled: typeof parsed.autoResumeEnabled === 'boolean' ? parsed.autoResumeEnabled : true,
         autoResumeMaxRetries: typeof parsed.autoResumeMaxRetries === 'number' ? parsed.autoResumeMaxRetries : 3,
+        celebrationEnabled: typeof parsed.celebrationEnabled === 'boolean' ? parsed.celebrationEnabled : true,
       }
     }
   } catch (err) {
     console.warn('[theme] loadSettings failed:', err)
   }
-  return { themeMode: 'dark', soundEnabled: true, expandedUI: false, autoResumeEnabled: true, autoResumeMaxRetries: 3 }
+  return { themeMode: 'dark', soundEnabled: true, expandedUI: false, autoResumeEnabled: true, autoResumeMaxRetries: 3, celebrationEnabled: true }
 }
 
-function saveSettings(s: { themeMode: ThemeMode; soundEnabled: boolean; expandedUI: boolean; autoResumeEnabled: boolean; autoResumeMaxRetries: number }): void {
+function saveSettings(s: { themeMode: ThemeMode; soundEnabled: boolean; expandedUI: boolean; autoResumeEnabled: boolean; autoResumeMaxRetries: number; celebrationEnabled: boolean }): void {
   try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)) } catch (err) { console.warn('[theme] saveSettings failed:', err) }
 }
 
@@ -425,6 +428,7 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
   expandedUI: saved.expandedUI,
   autoResumeEnabled: saved.autoResumeEnabled,
   autoResumeMaxRetries: saved.autoResumeMaxRetries,
+  celebrationEnabled: saved.celebrationEnabled,
   _systemIsDark: true,
   setIsDark: (isDark) => {
     set({ isDark })
@@ -434,24 +438,28 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
     const resolved = mode === 'system' ? get()._systemIsDark : mode === 'dark'
     set({ themeMode: mode, isDark: resolved })
     applyTheme(resolved)
-    saveSettings({ themeMode: mode, soundEnabled: get().soundEnabled, expandedUI: get().expandedUI, autoResumeEnabled: get().autoResumeEnabled, autoResumeMaxRetries: get().autoResumeMaxRetries })
+    saveSettings({ themeMode: mode, soundEnabled: get().soundEnabled, expandedUI: get().expandedUI, autoResumeEnabled: get().autoResumeEnabled, autoResumeMaxRetries: get().autoResumeMaxRetries, celebrationEnabled: get().celebrationEnabled })
   },
   setSoundEnabled: (enabled) => {
     set({ soundEnabled: enabled })
-    saveSettings({ themeMode: get().themeMode, soundEnabled: enabled, expandedUI: get().expandedUI, autoResumeEnabled: get().autoResumeEnabled, autoResumeMaxRetries: get().autoResumeMaxRetries })
+    saveSettings({ themeMode: get().themeMode, soundEnabled: enabled, expandedUI: get().expandedUI, autoResumeEnabled: get().autoResumeEnabled, autoResumeMaxRetries: get().autoResumeMaxRetries, celebrationEnabled: get().celebrationEnabled })
   },
   setExpandedUI: (expanded) => {
     set({ expandedUI: expanded })
-    saveSettings({ themeMode: get().themeMode, soundEnabled: get().soundEnabled, expandedUI: expanded, autoResumeEnabled: get().autoResumeEnabled, autoResumeMaxRetries: get().autoResumeMaxRetries })
+    saveSettings({ themeMode: get().themeMode, soundEnabled: get().soundEnabled, expandedUI: expanded, autoResumeEnabled: get().autoResumeEnabled, autoResumeMaxRetries: get().autoResumeMaxRetries, celebrationEnabled: get().celebrationEnabled })
   },
   setAutoResumeEnabled: (enabled) => {
     set({ autoResumeEnabled: enabled })
-    saveSettings({ themeMode: get().themeMode, soundEnabled: get().soundEnabled, expandedUI: get().expandedUI, autoResumeEnabled: enabled, autoResumeMaxRetries: get().autoResumeMaxRetries })
+    saveSettings({ themeMode: get().themeMode, soundEnabled: get().soundEnabled, expandedUI: get().expandedUI, autoResumeEnabled: enabled, autoResumeMaxRetries: get().autoResumeMaxRetries, celebrationEnabled: get().celebrationEnabled })
   },
   setAutoResumeMaxRetries: (retries) => {
     const next = Math.max(1, Math.floor(retries))
     set({ autoResumeMaxRetries: next })
-    saveSettings({ themeMode: get().themeMode, soundEnabled: get().soundEnabled, expandedUI: get().expandedUI, autoResumeEnabled: get().autoResumeEnabled, autoResumeMaxRetries: next })
+    saveSettings({ themeMode: get().themeMode, soundEnabled: get().soundEnabled, expandedUI: get().expandedUI, autoResumeEnabled: get().autoResumeEnabled, autoResumeMaxRetries: next, celebrationEnabled: get().celebrationEnabled })
+  },
+  setCelebrationEnabled: (enabled) => {
+    set({ celebrationEnabled: enabled })
+    saveSettings({ themeMode: get().themeMode, soundEnabled: get().soundEnabled, expandedUI: get().expandedUI, autoResumeEnabled: get().autoResumeEnabled, autoResumeMaxRetries: get().autoResumeMaxRetries, celebrationEnabled: enabled })
   },
   setSystemTheme: (isDark) => {
     set({ _systemIsDark: isDark })

@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { motion } from 'framer-motion'
-import { DotsThree, Bell, BellRinging, ChatText, ArrowsOutSimple, Moon, Sun, Monitor, ShieldCheck, NotePencil, Keyboard, ChartBar } from '@phosphor-icons/react'
+import { DotsThree, Bell, BellRinging, ChatText, ArrowsOutSimple, Moon, Sun, Monitor, ShieldCheck, NotePencil, Keyboard, ChartBar, Confetti } from '@phosphor-icons/react'
 import { useThemeStore } from '../theme'
 import { useSessionStore } from '../stores/sessionStore'
 import { useShortcutStore } from '../stores/shortcutStore'
@@ -59,6 +59,8 @@ export function SettingsPopover() {
   const setThemeMode = useThemeStore((s) => s.setThemeMode)
   const expandedUI = useThemeStore((s) => s.expandedUI)
   const setExpandedUI = useThemeStore((s) => s.setExpandedUI)
+  const celebrationEnabled = useThemeStore((s) => s.celebrationEnabled)
+  const setCelebrationEnabled = useThemeStore((s) => s.setCelebrationEnabled)
   const openShortcutSettings = useShortcutStore((s) => s.openSettings)
   const desktopEnabled = useNotificationStore((s) => s.desktopEnabled)
   const setDesktopEnabled = useNotificationStore((s) => s.setDesktopEnabled)
@@ -276,6 +278,26 @@ export function SettingsPopover() {
                   onChange={setAutoResumeEnabled}
                   colors={colors}
                   label="Toggle auto-resume after unexpected session crash"
+                />
+              </div>
+            </div>
+
+            <div style={{ height: 1, background: colors.popoverBorder }} />
+
+            {/* Completion celebration */}
+            <div>
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2 min-w-0">
+                  <Confetti size={14} style={{ color: colors.textTertiary }} />
+                  <div className="text-[12px] font-medium" style={{ color: colors.textPrimary }}>
+                    Completion celebration
+                  </div>
+                </div>
+                <RowToggle
+                  checked={celebrationEnabled}
+                  onChange={setCelebrationEnabled}
+                  colors={colors}
+                  label="Toggle completion celebration"
                 />
               </div>
             </div>
