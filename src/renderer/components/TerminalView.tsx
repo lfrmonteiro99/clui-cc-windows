@@ -5,6 +5,7 @@ import { useColors } from '../theme'
 import { useTerminalStore } from '../stores/terminalStore'
 import { TerminalSearch } from './TerminalSearch'
 import { saveTerminalSession, loadTerminalSessions, deleteTerminalSession } from '../utils/terminal-persistence'
+import { TERMINAL_SCHEMES } from '../utils/terminal-schemes'
 
 /** TERM-005: Maximum image storage size in bytes (2 MB) */
 const MAX_IMAGE_SIZE = 2 * 1024 * 1024
@@ -51,6 +52,7 @@ export function TerminalView({ termTabId, isActive }: TerminalViewProps) {
       const scrollbackSize = storeState.scrollbackSize ?? 5000
       const backgroundOpacity = storeState.backgroundOpacity ?? 1
       const backgroundBlur = storeState.backgroundBlur ?? 0
+      const terminalScheme = storeState.terminalScheme ?? 'Default'
 
       // TERM-011: Mouse protocol support for TUI apps (vim, less, htop)
       // xterm.js v6 handles SGR1006 mouse protocol automatically. Key behaviors:
@@ -68,7 +70,7 @@ export function TerminalView({ termTabId, isActive }: TerminalViewProps) {
         cursorStyle: 'bar',
         cursorBlink: true,
         scrollback: scrollbackSize,
-        theme: buildXtermTheme(colors, backgroundOpacity),
+        theme: buildXtermTheme(colors, backgroundOpacity, terminalScheme),
         allowTransparency: true,
         allowProposedApi: true, // TERM-011: required for advanced mouse reporting features
       })
@@ -302,7 +304,12 @@ export function TerminalView({ termTabId, isActive }: TerminalViewProps) {
           terminalRef.current.options.scrollback = detail.scrollbackSize
         }
         if (detail?.action === 'opacity-changed' && terminalRef.current) {
-          terminalRef.current.options.theme = buildXtermTheme(colors, detail.opacity)
+          const scheme = useTerminalStore.getState().terminalScheme ?? 'Default'
+          terminalRef.current.options.theme = buildXtermTheme(colors, detail.opacity, scheme)
+        }
+        if (detail?.action === 'scheme-changed' && terminalRef.current) {
+          const opacity = useTerminalStore.getState().backgroundOpacity ?? 1
+          terminalRef.current.options.theme = buildXtermTheme(colors, opacity, detail.scheme)
         }
       }
       window.addEventListener('clui-terminal-shortcut', shortcutHandler)
@@ -423,8 +430,10 @@ export function TerminalView({ termTabId, isActive }: TerminalViewProps) {
   // Update theme
   useEffect(() => {
     if (terminalRef.current) {
-      const opacity = useTerminalStore.getState().backgroundOpacity ?? 1
-      terminalRef.current.options.theme = buildXtermTheme(colors, opacity)
+      const storeState = useTerminalStore.getState()
+      const opacity = storeState.backgroundOpacity ?? 1
+      const scheme = storeState.terminalScheme ?? 'Default'
+      terminalRef.current.options.theme = buildXtermTheme(colors, opacity, scheme)
     }
   }, [colors])
 
@@ -732,8 +741,48 @@ function serializeTerminalBuffer(terminal: any): string {
   }
 }
 
-function buildXtermTheme(colors: ReturnType<typeof useColors>, opacity = 1): Record<string, string> {
-  // Convert hex background to rgba if opacity < 1
+function buildXtermTheme(colors: ReturnType<typeof useColors>, opacity = 1, schemeName?: string): Record<string, string> {
+  const scheme = schemeName && schemeName !== 'Default'
+    ? TERMINAL_SCHEMES.find((s) => s.name === schemeName)
+    : undefined
+
+  if (scheme) {
+    // Use scheme colors, but apply opacity to background
+    let background = scheme.colors.background
+    if (opacity < 1) {
+      const hex = background.replace('#', '')
+      const r = parseInt(hex.slice(0, 2), 16)
+      const g = parseInt(hex.slice(2, 4), 16)
+      const b = parseInt(hex.slice(4, 6), 16)
+      background = `rgba(${r},${g},${b},${Math.max(0.4, opacity)})`
+    }
+    return {
+      background,
+      foreground: scheme.colors.foreground,
+      cursor: scheme.colors.cursor,
+      cursorAccent: scheme.colors.background,
+      selectionBackground: scheme.colors.selectionBackground,
+      selectionForeground: scheme.colors.foreground,
+      black: scheme.colors.black,
+      red: scheme.colors.red,
+      green: scheme.colors.green,
+      yellow: scheme.colors.yellow,
+      blue: scheme.colors.blue,
+      magenta: scheme.colors.magenta,
+      cyan: scheme.colors.cyan,
+      white: scheme.colors.white,
+      brightBlack: scheme.colors.brightBlack,
+      brightRed: scheme.colors.brightRed,
+      brightGreen: scheme.colors.brightGreen,
+      brightYellow: scheme.colors.brightYellow,
+      brightBlue: scheme.colors.brightBlue,
+      brightMagenta: scheme.colors.brightMagenta,
+      brightCyan: scheme.colors.brightCyan,
+      brightWhite: scheme.colors.brightWhite,
+    }
+  }
+
+  // Default: use app theme colors
   let background = colors.containerBg
   if (opacity < 1) {
     const hex = colors.containerBg.replace('#', '')
