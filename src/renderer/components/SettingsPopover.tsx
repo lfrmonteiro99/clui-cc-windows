@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { motion } from 'framer-motion'
-import { DotsThree, Bell, BellRinging, ChatText, ArrowsOutSimple, Moon, Sun, Monitor, ShieldCheck, NotePencil, Keyboard, ChartBar } from '@phosphor-icons/react'
+import { DotsThree, Bell, BellRinging, ChatText, ArrowsOutSimple, Moon, Sun, Monitor, ShieldCheck, NotePencil, Keyboard, ChartBar, DownloadSimple, UploadSimple } from '@phosphor-icons/react'
 import { useThemeStore } from '../theme'
 import { useSessionStore } from '../stores/sessionStore'
 import { useShortcutStore } from '../stores/shortcutStore'
@@ -13,6 +13,7 @@ import { PermissionEditor } from './PermissionEditor'
 import { SandboxToggle } from './SandboxToggle'
 import { SessionDigestSettings } from './SessionDigestSettings'
 import { CompanionSettings } from './CompanionSettings'
+import { exportTheme, downloadTheme, importTheme, applyImportedTheme } from '../utils/theme-io'
 
 function RowToggle({
   checked,
@@ -74,6 +75,8 @@ export function SettingsPopover() {
   const triggerRef = useRef<HTMLButtonElement>(null)
   const popoverRef = useRef<HTMLDivElement>(null)
   const permEditorRef = useRef<HTMLDivElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const addToast = useNotificationStore((s) => s.addToast)
   const [pos, setPos] = useState<{ right: number; top?: number; bottom?: number; maxHeight?: number }>({ right: 0 })
 
   const updatePos = useCallback(() => {
@@ -336,6 +339,61 @@ export function SettingsPopover() {
                   ))}
                 </div>
               </div>
+            </div>
+
+            <div style={{ height: 1, background: colors.popoverBorder }} />
+
+            {/* Theme export / import */}
+            <div className="flex items-center gap-2">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".json"
+                className="hidden"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0]
+                  if (!file) return
+                  try {
+                    const theme = await importTheme(file)
+                    applyImportedTheme(theme)
+                    addToast({ type: 'success', title: 'Theme imported', message: `Applied "${theme.name}"` })
+                  } catch (err) {
+                    addToast({ type: 'error', title: 'Import failed', message: err instanceof Error ? err.message : 'Unknown error' })
+                  }
+                  // Reset so re-selecting same file triggers onChange
+                  e.target.value = ''
+                }}
+              />
+              <button
+                data-testid="settings-export-theme"
+                onClick={() => {
+                  const theme = exportTheme()
+                  downloadTheme(theme)
+                  addToast({ type: 'success', title: 'Theme exported' })
+                }}
+                className="flex items-center gap-1.5 text-[11px] font-medium px-2 py-1 rounded-md transition-colors"
+                style={{
+                  background: colors.surfaceHover,
+                  color: colors.textSecondary,
+                  border: `1px solid ${colors.containerBorder}`,
+                }}
+              >
+                <DownloadSimple size={12} />
+                Export Theme
+              </button>
+              <button
+                data-testid="settings-import-theme"
+                onClick={() => fileInputRef.current?.click()}
+                className="flex items-center gap-1.5 text-[11px] font-medium px-2 py-1 rounded-md transition-colors"
+                style={{
+                  background: colors.surfaceHover,
+                  color: colors.textSecondary,
+                  border: `1px solid ${colors.containerBorder}`,
+                }}
+              >
+                <UploadSimple size={12} />
+                Import Theme
+              </button>
             </div>
 
             <div style={{ height: 1, background: colors.popoverBorder }} />
