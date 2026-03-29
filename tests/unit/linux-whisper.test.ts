@@ -44,6 +44,7 @@ describe('Whisper Linux support (#263)', () => {
   describe('whisper-paths — Linux paths', () => {
     it('includes Linux-specific binary paths on Linux', async () => {
       restorePlatform = mockPlatform('linux')
+      vi.resetModules()
 
       const { getWhisperBinaryCandidates } = await import('../../src/main/whisper-paths')
       const candidates = getWhisperBinaryCandidates()
