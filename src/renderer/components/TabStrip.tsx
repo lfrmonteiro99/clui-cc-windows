@@ -1,5 +1,5 @@
-import React from 'react'
-import { AnimatePresence, Reorder } from 'framer-motion'
+import React, { useState, useEffect } from 'react'
+import { AnimatePresence, Reorder, motion } from 'framer-motion'
 import { Plus, X, GitFork, GitPullRequest } from '@phosphor-icons/react'
 import { useSessionStore } from '../stores/sessionStore'
 import { useTabGroupStore } from '../stores/tabGroupStore'
@@ -98,6 +98,38 @@ function StatusDot({ status, hasUnread, hasPermission, lastActivityAt, messageCo
       }}
       title={tooltip}
     />
+  )
+}
+
+function RestoredBadge() {
+  const colors = useColors()
+  const [showBadge, setShowBadge] = useState(true)
+
+  useEffect(() => {
+    const t = setTimeout(() => setShowBadge(false), 3000)
+    return () => clearTimeout(t)
+  }, [])
+
+  if (!showBadge) return null
+
+  return (
+    <motion.span
+      initial={{ opacity: 1 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.3 }}
+      style={{
+        fontSize: 9,
+        fontWeight: 600,
+        color: colors.accent,
+        backgroundColor: colors.surfaceHover,
+        borderRadius: 3,
+        padding: '1px 4px',
+        flexShrink: 0,
+      }}
+    >
+      Restored
+    </motion.span>
   )
 }
 
@@ -258,6 +290,7 @@ function TabItem({
           {tab.title}
         </span>
       )}
+      {tab.isRestored && <RestoredBadge />}
       {tab.runtime === 'wsl' && (
         <span
           style={{
