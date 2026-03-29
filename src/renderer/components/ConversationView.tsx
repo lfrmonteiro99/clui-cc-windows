@@ -26,6 +26,8 @@ import { CodeBlock } from './CodeBlock'
 import { StreamingStatsBar } from './StreamingStatsBar'
 import { ResponseOutline } from './ResponseOutline'
 import { useColors, useThemeStore } from '../theme'
+import { useOnboardingStore } from '../stores/onboardingStore'
+import { OnboardingWelcome } from './OnboardingWelcome'
 import { generateResumeBrief, RESUME_INACTIVITY_MS, CATCH_ME_UP_PROMPT } from '../../shared/session-resume'
 import type { ResumeBrief as ResumeBriefData } from '../../shared/session-resume'
 import type { Message, ShellOutput as ShellOutputType } from '../../shared/types'
@@ -256,6 +258,8 @@ export function ConversationView({ overrideTabId }: { overrideTabId?: string } =
     setBookmarkPanelOpen((prev) => !prev)
   }, [])
 
+  const onboardingCompleted = useOnboardingStore((s) => s.completed)
+
   if (!tab) return null
 
   const isRunning = tab.status === 'running' || tab.status === 'connecting'
@@ -266,6 +270,9 @@ export function ConversationView({ overrideTabId }: { overrideTabId?: string } =
   const showInterrupt = isRunning && tab.messages.some((m) => m.role === 'user')
 
   if (tab.messages.length === 0) {
+    if (!onboardingCompleted) {
+      return <OnboardingWelcome onTryAsking={(text) => sendMessage(text)} />
+    }
     return <EmptyState />
   }
 
