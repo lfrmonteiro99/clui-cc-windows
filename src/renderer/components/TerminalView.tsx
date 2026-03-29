@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X } from '@phosphor-icons/react'
-import { useColors } from '../theme'
+import { useColors, useThemeStore, FONT_PRESETS } from '../theme'
 import { useTerminalStore } from '../stores/terminalStore'
 import { TerminalSearch } from './TerminalSearch'
 import { saveTerminalSession, loadTerminalSessions, deleteTerminalSession } from '../utils/terminal-persistence'
@@ -61,8 +61,12 @@ export function TerminalView({ termTabId, isActive }: TerminalViewProps) {
       //   - No interference with copy/paste shortcuts (handled by attachCustomKeyEventHandler)
       // No explicit mouse options needed — xterm.js v6 enables them by default.
       // Do NOT set disableStdin or any mouse-blocking options here.
+      // Read mono font preference from theme store
+      const fontFamilyId = useThemeStore.getState().fontFamily ?? 'system'
+      const fontPreset = FONT_PRESETS.find((f) => f.id === fontFamilyId) ?? FONT_PRESETS[0]
+
       const terminal = new Terminal({
-        fontFamily: '"JetBrains Mono", "Cascadia Code", "Fira Code", Consolas, "Courier New", monospace',
+        fontFamily: fontPreset.monoStack,
         fontSize: 13,
         lineHeight: 1.3,
         cursorStyle: 'bar',
@@ -427,6 +431,18 @@ export function TerminalView({ termTabId, isActive }: TerminalViewProps) {
       terminalRef.current.options.theme = buildXtermTheme(colors, opacity)
     }
   }, [colors])
+
+  // Update terminal font family when preference changes
+  const fontFamily = useThemeStore((s) => s.fontFamily)
+  useEffect(() => {
+    if (terminalRef.current && fitAddonRef.current) {
+      const preset = FONT_PRESETS.find((f) => f.id === fontFamily) ?? FONT_PRESETS[0]
+      terminalRef.current.options.fontFamily = preset.monoStack
+      fitAddonRef.current.fit()
+      const dims = fitAddonRef.current.proposeDimensions()
+      if (dims) window.clui.terminalResize(termTabId, dims.cols, dims.rows)
+    }
+  }, [fontFamily, termTabId])
 
   // Search toggle listener
   useEffect(() => {

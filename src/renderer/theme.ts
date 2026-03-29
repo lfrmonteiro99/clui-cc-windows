@@ -348,6 +348,27 @@ const lightColors = {
 
 export type ColorPalette = { [K in keyof typeof darkColors]: string }
 
+// ─── Font presets ───
+
+export const FONT_PRESETS = [
+  { id: 'system', label: 'System Default', monoStack: "ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" },
+  { id: 'jetbrains', label: 'JetBrains Mono', monoStack: "'JetBrains Mono', ui-monospace, monospace" },
+  { id: 'fira', label: 'Fira Code', monoStack: "'Fira Code', ui-monospace, monospace" },
+  { id: 'cascadia', label: 'Cascadia Code', monoStack: "'Cascadia Code', ui-monospace, monospace" },
+  { id: 'sfmono', label: 'SF Mono', monoStack: "'SF Mono', ui-monospace, monospace" },
+  { id: 'menlo', label: 'Menlo', monoStack: "Menlo, ui-monospace, monospace" },
+  { id: 'consolas', label: 'Consolas', monoStack: "Consolas, ui-monospace, monospace" },
+  { id: 'monaco', label: 'Monaco', monoStack: "Monaco, ui-monospace, monospace" },
+] as const
+
+export type FontPresetId = (typeof FONT_PRESETS)[number]['id']
+
+/** Apply the mono font CSS variable based on the given preset id */
+function syncFontToCss(fontFamily: string): void {
+  const preset = FONT_PRESETS.find((f) => f.id === fontFamily) ?? FONT_PRESETS[0]
+  document.documentElement.style.setProperty('--clui-font-mono', preset.monoStack)
+}
+
 // ─── Theme store ───
 
 export type ThemeMode = 'system' | 'light' | 'dark'
@@ -359,6 +380,7 @@ interface ThemeState {
   expandedUI: boolean
   autoResumeEnabled: boolean
   autoResumeMaxRetries: number
+  fontFamily: string
   /** OS-reported dark mode — used when themeMode is 'system' */
   _systemIsDark: boolean
   setIsDark: (isDark: boolean) => void
@@ -367,6 +389,7 @@ interface ThemeState {
   setExpandedUI: (expanded: boolean) => void
   setAutoResumeEnabled: (enabled: boolean) => void
   setAutoResumeMaxRetries: (retries: number) => void
+  setFontFamily: (id: string) => void
   /** Called by OS theme change listener — updates system value */
   setSystemTheme: (isDark: boolean) => void
 }
@@ -392,31 +415,39 @@ function applyTheme(isDark: boolean): void {
 
 const SETTINGS_KEY = 'clui-settings'
 
-function loadSettings(): { themeMode: ThemeMode; soundEnabled: boolean; expandedUI: boolean; autoResumeEnabled: boolean; autoResumeMaxRetries: number } {
+function loadSettings(): { themeMode: ThemeMode; soundEnabled: boolean; expandedUI: boolean; autoResumeEnabled: boolean; autoResumeMaxRetries: number; fontFamily: string } {
   try {
     const raw = localStorage.getItem(SETTINGS_KEY)
     if (raw) {
       const parsed = JSON.parse(raw)
+      const validFontIds = FONT_PRESETS.map((f) => f.id) as readonly string[]
       return {
         themeMode: ['light', 'dark'].includes(parsed.themeMode) ? parsed.themeMode : 'dark',
         soundEnabled: typeof parsed.soundEnabled === 'boolean' ? parsed.soundEnabled : true,
         expandedUI: typeof parsed.expandedUI === 'boolean' ? parsed.expandedUI : false,
         autoResumeEnabled: typeof parsed.autoResumeEnabled === 'boolean' ? parsed.autoResumeEnabled : true,
         autoResumeMaxRetries: typeof parsed.autoResumeMaxRetries === 'number' ? parsed.autoResumeMaxRetries : 3,
+        fontFamily: typeof parsed.fontFamily === 'string' && validFontIds.includes(parsed.fontFamily) ? parsed.fontFamily : 'system',
       }
     }
   } catch (err) {
     console.warn('[theme] loadSettings failed:', err)
   }
-  return { themeMode: 'dark', soundEnabled: true, expandedUI: false, autoResumeEnabled: true, autoResumeMaxRetries: 3 }
+  return { themeMode: 'dark', soundEnabled: true, expandedUI: false, autoResumeEnabled: true, autoResumeMaxRetries: 3, fontFamily: 'system' }
 }
 
-function saveSettings(s: { themeMode: ThemeMode; soundEnabled: boolean; expandedUI: boolean; autoResumeEnabled: boolean; autoResumeMaxRetries: number }): void {
+function saveSettings(s: { themeMode: ThemeMode; soundEnabled: boolean; expandedUI: boolean; autoResumeEnabled: boolean; autoResumeMaxRetries: number; fontFamily: string }): void {
   try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)) } catch (err) { console.warn('[theme] saveSettings failed:', err) }
 }
 
 // Always start in compact UI mode on launch.
 const saved = { ...loadSettings(), expandedUI: false }
+
+/** Helper to build the current settings object for persistence */
+function currentSettings(get: () => ThemeState): { themeMode: ThemeMode; soundEnabled: boolean; expandedUI: boolean; autoResumeEnabled: boolean; autoResumeMaxRetries: number; fontFamily: string } {
+  const s = get()
+  return { themeMode: s.themeMode, soundEnabled: s.soundEnabled, expandedUI: s.expandedUI, autoResumeEnabled: s.autoResumeEnabled, autoResumeMaxRetries: s.autoResumeMaxRetries, fontFamily: s.fontFamily }
+}
 
 export const useThemeStore = create<ThemeState>((set, get) => ({
   isDark: saved.themeMode === 'dark' ? true : saved.themeMode === 'light' ? false : true,
@@ -425,6 +456,7 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
   expandedUI: saved.expandedUI,
   autoResumeEnabled: saved.autoResumeEnabled,
   autoResumeMaxRetries: saved.autoResumeMaxRetries,
+  fontFamily: saved.fontFamily,
   _systemIsDark: true,
   setIsDark: (isDark) => {
     set({ isDark })
@@ -434,24 +466,31 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
     const resolved = mode === 'system' ? get()._systemIsDark : mode === 'dark'
     set({ themeMode: mode, isDark: resolved })
     applyTheme(resolved)
-    saveSettings({ themeMode: mode, soundEnabled: get().soundEnabled, expandedUI: get().expandedUI, autoResumeEnabled: get().autoResumeEnabled, autoResumeMaxRetries: get().autoResumeMaxRetries })
+    saveSettings({ ...currentSettings(get), themeMode: mode })
   },
   setSoundEnabled: (enabled) => {
     set({ soundEnabled: enabled })
-    saveSettings({ themeMode: get().themeMode, soundEnabled: enabled, expandedUI: get().expandedUI, autoResumeEnabled: get().autoResumeEnabled, autoResumeMaxRetries: get().autoResumeMaxRetries })
+    saveSettings({ ...currentSettings(get), soundEnabled: enabled })
   },
   setExpandedUI: (expanded) => {
     set({ expandedUI: expanded })
-    saveSettings({ themeMode: get().themeMode, soundEnabled: get().soundEnabled, expandedUI: expanded, autoResumeEnabled: get().autoResumeEnabled, autoResumeMaxRetries: get().autoResumeMaxRetries })
+    saveSettings({ ...currentSettings(get), expandedUI: expanded })
   },
   setAutoResumeEnabled: (enabled) => {
     set({ autoResumeEnabled: enabled })
-    saveSettings({ themeMode: get().themeMode, soundEnabled: get().soundEnabled, expandedUI: get().expandedUI, autoResumeEnabled: enabled, autoResumeMaxRetries: get().autoResumeMaxRetries })
+    saveSettings({ ...currentSettings(get), autoResumeEnabled: enabled })
   },
   setAutoResumeMaxRetries: (retries) => {
     const next = Math.max(1, Math.floor(retries))
     set({ autoResumeMaxRetries: next })
-    saveSettings({ themeMode: get().themeMode, soundEnabled: get().soundEnabled, expandedUI: get().expandedUI, autoResumeEnabled: get().autoResumeEnabled, autoResumeMaxRetries: next })
+    saveSettings({ ...currentSettings(get), autoResumeMaxRetries: next })
+  },
+  setFontFamily: (id) => {
+    const validIds = FONT_PRESETS.map((f) => f.id) as readonly string[]
+    const resolved = validIds.includes(id) ? id : 'system'
+    set({ fontFamily: resolved })
+    syncFontToCss(resolved)
+    saveSettings({ ...currentSettings(get), fontFamily: resolved })
   },
   setSystemTheme: (isDark) => {
     set({ _systemIsDark: isDark })
@@ -465,6 +504,7 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
 
 // Initialize CSS vars with saved theme
 syncTokensToCss(saved.themeMode === 'light' ? lightColors : darkColors)
+syncFontToCss(saved.fontFamily)
 
 /** Reactive hook — returns the active color palette */
 export function useColors(): ColorPalette {

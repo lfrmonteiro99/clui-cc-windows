@@ -90,7 +90,7 @@ input::placeholder {
   border-radius: 10px;
   padding: 0.75em 1em;
   font-size: 12px;
-  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+  font-family: var(--clui-font-mono, ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace);
   color: var(--clui-code-block-text);
   overflow-x: auto;
 }

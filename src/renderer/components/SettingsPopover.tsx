@@ -1,8 +1,8 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { motion } from 'framer-motion'
-import { DotsThree, Bell, BellRinging, ChatText, ArrowsOutSimple, Moon, Sun, Monitor, ShieldCheck, NotePencil, Keyboard, ChartBar } from '@phosphor-icons/react'
-import { useThemeStore } from '../theme'
+import { DotsThree, Bell, BellRinging, ChatText, ArrowsOutSimple, Moon, Sun, Monitor, ShieldCheck, NotePencil, Keyboard, ChartBar, TextT } from '@phosphor-icons/react'
+import { useThemeStore, FONT_PRESETS } from '../theme'
 import { useSessionStore } from '../stores/sessionStore'
 import { useShortcutStore } from '../stores/shortcutStore'
 import { useSnippetStore } from '../stores/snippetStore'
@@ -57,6 +57,8 @@ export function SettingsPopover() {
   const setAutoResumeEnabled = useThemeStore((s) => s.setAutoResumeEnabled)
   const themeMode = useThemeStore((s) => s.themeMode)
   const setThemeMode = useThemeStore((s) => s.setThemeMode)
+  const fontFamily = useThemeStore((s) => s.fontFamily)
+  const setFontFamily = useThemeStore((s) => s.setFontFamily)
   const expandedUI = useThemeStore((s) => s.expandedUI)
   const setExpandedUI = useThemeStore((s) => s.setExpandedUI)
   const openShortcutSettings = useShortcutStore((s) => s.openSettings)
@@ -335,6 +337,39 @@ export function SettingsPopover() {
                     </button>
                   ))}
                 </div>
+              </div>
+            </div>
+
+            <div style={{ height: 1, background: colors.popoverBorder }} />
+
+            {/* Font family */}
+            <div>
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2 min-w-0">
+                  <TextT size={14} style={{ color: colors.textTertiary }} />
+                  <div className="text-[12px] font-medium" style={{ color: colors.textPrimary }}>
+                    Code font
+                  </div>
+                </div>
+                <select
+                  data-testid="settings-font-family"
+                  value={fontFamily}
+                  onChange={(e) => setFontFamily(e.target.value)}
+                  style={{
+                    background: colors.surfaceHover,
+                    color: colors.textPrimary,
+                    border: `1px solid ${colors.containerBorder}`,
+                    borderRadius: 6,
+                    padding: '2px 6px',
+                    fontSize: 11,
+                    outline: 'none',
+                    maxWidth: 120,
+                  }}
+                >
+                  {FONT_PRESETS.map((preset) => (
+                    <option key={preset.id} value={preset.id}>{preset.label}</option>
+                  ))}
+                </select>
               </div>
             </div>
 

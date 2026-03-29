@@ -148,7 +148,7 @@ export function CodeBlock({ code, language }: { code: string; language: string }
         <div className={`flex ${showLineNumbers ? 'flex-row' : ''}`}>
           {showLineNumbers && <LineNumbers count={lineCount} colors={colors} />}
 
-          <div className="flex-1 min-w-0 overflow-x-auto text-[12px] font-mono" style={{ lineHeight: 1.6 }}>
+          <div className="flex-1 min-w-0 overflow-x-auto text-[12px]" style={{ lineHeight: 1.6, fontFamily: 'var(--clui-font-mono, ui-monospace, monospace)' }}>
             {html ? (
               <div
                 data-testid="codeblock-highlighted"
