@@ -184,7 +184,7 @@ describe('Visual Foundation', () => {
       const msg = makeMsg({ role: 'assistant', content: 'Hello' })
       render(<AssistantMessage message={msg} skipMotion />)
       const el = screen.getByTestId('message-assistant')
-      expect(el.style.borderRadius).toBe('12px')
+      expect(el.style.borderRadius).toBe('12px 12px 12px 4px')
     })
   })
 

@@ -89,6 +89,8 @@ vi.mock('../../src/renderer/stores/permissionStore', () => ({
     getState: () => ({
       setPermissionMode: vi.fn(),
       respondPermission: vi.fn(),
+      isToolTrusted: vi.fn().mockReturnValue(false),
+      isBatchApproveActive: vi.fn().mockReturnValue(false),
     }),
     setState: vi.fn(),
     subscribe: vi.fn(),

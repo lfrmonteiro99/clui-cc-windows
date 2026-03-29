@@ -9,6 +9,7 @@ import { PermissionCard } from '../../../src/renderer/components/PermissionCard'
 import { useSessionStore } from '../../../src/renderer/stores/sessionStore'
 import { useNotificationStore } from '../../../src/renderer/stores/notificationStore'
 import { usePermissionStore } from '../../../src/renderer/stores/permissionStore'
+import { useOnboardingStore } from '../../../src/renderer/stores/onboardingStore'
 import { renderWithProviders, resetTestState, makeMessage, makeTab } from '../testUtils'
 
 // ─── UX-012: Empty conversation welcome state ───
@@ -16,6 +17,9 @@ import { renderWithProviders, resetTestState, makeMessage, makeTab } from '../te
 describe('UX-012: Empty conversation welcome state', () => {
   beforeEach(() => {
     resetTestState()
+    // Mark onboarding as completed so ConversationView shows the normal EmptyState
+    // instead of OnboardingWelcome (added in #307)
+    useOnboardingStore.setState({ completed: true })
   })
 
   it('renders a welcome card with tagline when conversation is empty', () => {

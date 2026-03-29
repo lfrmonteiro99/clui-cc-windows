@@ -34,13 +34,17 @@ const mockColors: Record<string, string> = {
   accentLight: 'rgba(217, 119, 87, 0.1)',
 }
 
-vi.mock('../../theme', () => ({
-  useColors: () => mockColors,
-  useThemeStore: (selector: any) => {
-    const state = { isDark: true, expandedUI: false }
-    return selector ? selector(state) : state
-  },
-}))
+vi.mock('../../theme', async () => {
+  const actual = await vi.importActual('../../theme')
+  return {
+    ...actual,
+    useColors: () => mockColors,
+    useThemeStore: (selector: any) => {
+      const state = { isDark: true, expandedUI: false }
+      return selector ? selector(state) : state
+    },
+  }
+})
 
 vi.mock('framer-motion', () => ({
   motion: {
