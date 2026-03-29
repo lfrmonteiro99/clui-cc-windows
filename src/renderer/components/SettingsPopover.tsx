@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { motion } from 'framer-motion'
 import { DotsThree, Bell, BellRinging, ChatText, ArrowsOutSimple, Moon, Sun, Monitor, ShieldCheck, NotePencil, Keyboard, ChartBar } from '@phosphor-icons/react'
-import { useThemeStore } from '../theme'
+import { useThemeStore, motion as motionTokens } from '../theme'
 import { useSessionStore } from '../stores/sessionStore'
 import { useShortcutStore } from '../stores/shortcutStore'
 import { useSnippetStore } from '../stores/snippetStore'
@@ -162,7 +162,7 @@ export function SettingsPopover() {
           initial={{ opacity: 0, y: isExpanded ? -4 : 4 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: isExpanded ? -4 : 4 }}
-          transition={{ duration: 0.12 }}
+          transition={{ duration: motionTokens.durations.instant }}
           className="rounded-xl"
           style={{
             position: 'fixed',

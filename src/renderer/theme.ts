@@ -499,6 +499,44 @@ export const spacing = {
 // ─── Animation ───
 
 export const motion = {
+  durations: {
+    instant: 0.1,
+    quick: 0.15,
+    normal: 0.2,
+    smooth: 0.3,
+    slow: 0.5,
+  },
+  easings: {
+    easeOut: [0.25, 0.46, 0.45, 0.94] as const,
+    easeInOut: [0.4, 0, 0.2, 1] as const,
+    snappy: [0.34, 1.3, 0.64, 1] as const,
+  },
+  springs: {
+    snappy: { type: 'spring' as const, stiffness: 500, damping: 30 },
+    bouncy: { type: 'spring' as const, stiffness: 320, damping: 28 },
+    gentle: { type: 'spring' as const, stiffness: 200, damping: 25 },
+  },
+  transitions: {
+    fadeUp: {
+      initial: { opacity: 0, y: 8 },
+      animate: { opacity: 1, y: 0 },
+      exit: { opacity: 0, y: -4 },
+      transition: { duration: 0.15 },
+    },
+    fadeDown: {
+      initial: { opacity: 0, y: -8 },
+      animate: { opacity: 1, y: 0 },
+      exit: { opacity: 0, y: 8 },
+      transition: { duration: 0.15 },
+    },
+    fadeScale: {
+      initial: { opacity: 0, scale: 0.95 },
+      animate: { opacity: 1, scale: 1 },
+      exit: { opacity: 0, scale: 0.95 },
+      transition: { duration: 0.15 },
+    },
+  },
+  // Keep backward compat with existing exports
   spring: { type: 'spring' as const, stiffness: 500, damping: 30 },
   easeOut: { duration: 0.2, ease: [0.25, 0.46, 0.45, 0.94] as const },
   fadeIn: {

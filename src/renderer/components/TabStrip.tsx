@@ -8,7 +8,7 @@ import { HistoryPicker } from './HistoryPicker'
 import { SettingsPopover } from './SettingsPopover'
 import { TabGroupHeader } from './TabGroupHeader'
 import { TabContextMenu } from './TabContextMenu'
-import { useColors } from '../theme'
+import { useColors, motion as motionTokens } from '../theme'
 import type { TabState, TabStatus } from '../../shared/types'
 
 /** Thresholds for session freshness (in milliseconds) */
@@ -156,7 +156,7 @@ function TabItem({
       initial={{ opacity: 0, scale: 0.9 }}
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.9 }}
-      transition={{ duration: 0.15, type: 'spring', stiffness: 320, damping: 28 }}
+      transition={{ duration: motionTokens.durations.quick, ...motionTokens.springs.bouncy }}
       onClick={() => onSelect(tab.id)}
       onDragStart={() => onDragStart(tab.id)}
       onDragEnd={onDragEnd}

@@ -25,7 +25,7 @@ import { CompletionSummary } from './CompletionSummary'
 import { CodeBlock } from './CodeBlock'
 import { StreamingStatsBar } from './StreamingStatsBar'
 import { ResponseOutline } from './ResponseOutline'
-import { useColors, useThemeStore } from '../theme'
+import { useColors, useThemeStore, motion as motionTokens } from '../theme'
 import { generateResumeBrief, RESUME_INACTIVITY_MS, CATCH_ME_UP_PROMPT } from '../../shared/session-resume'
 import type { ResumeBrief as ResumeBriefData } from '../../shared/session-resume'
 import type { Message, ShellOutput as ShellOutputType } from '../../shared/types'
@@ -440,7 +440,7 @@ export function ConversationView({ overrideTabId }: { overrideTabId?: string } =
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 8 }}
-            transition={{ duration: 0.15 }}
+            transition={{ duration: motionTokens.durations.quick }}
             onClick={handleJumpToBottom}
             className="absolute left-1/2 -translate-x-1/2 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] cursor-pointer z-10"
             style={{
@@ -571,7 +571,7 @@ function EmptyState() {
       data-testid="welcome-card"
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.25 }}
+      transition={{ duration: motionTokens.durations.normal }}
       className="flex flex-col items-center justify-center py-6 px-4"
       style={{ minHeight: 120 }}
     >
@@ -637,7 +637,7 @@ function DeadRecoveryCard({ tabId, sessionId }: { tabId: string; sessionId: stri
       data-testid="dead-recovery-card"
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.2 }}
+      transition={{ duration: motionTokens.durations.normal }}
       className="flex items-center gap-2"
     >
       <Warning size={14} weight="fill" style={{ color: colors.statusError }} />
@@ -693,7 +693,7 @@ const CopyButton = React.memo(function CopyButton({ text }: { text: string }) {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      transition={{ duration: 0.12 }}
+      transition={{ duration: motionTokens.durations.instant }}
       onClick={handleCopy}
       className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] cursor-pointer flex-shrink-0"
       style={{
@@ -723,7 +723,7 @@ const InterruptButton = React.memo(function InterruptButton({ tabId }: { tabId: 
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      transition={{ duration: 0.12 }}
+      transition={{ duration: motionTokens.durations.instant }}
       onClick={handleStop}
       className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] cursor-pointer flex-shrink-0 transition-colors"
       style={{
@@ -770,7 +770,7 @@ export const UserMessage = React.memo(function UserMessage({ message, skipMotion
     <motion.div
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.2 }}
+      transition={{ duration: motionTokens.durations.normal }}
       className="flex justify-end py-1.5"
     >
       {content}
@@ -788,7 +788,7 @@ const QueuedMessage = React.memo(function QueuedMessage({ content }: { content: 
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.95 }}
-      transition={{ duration: 0.15 }}
+      transition={{ duration: motionTokens.durations.quick }}
       className="flex justify-end py-1.5"
     >
       <div
@@ -1037,7 +1037,7 @@ export const AssistantMessage = React.memo(function AssistantMessage({
     <motion.div
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.2 }}
+      transition={{ duration: motionTokens.durations.normal }}
       className="py-1"
     >
       {inner}
@@ -1075,7 +1075,7 @@ export const SystemMessage = React.memo(function SystemMessage({ message, skipMo
       <motion.div
         initial={{ opacity: 0, y: 6 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.15 }}
+        transition={{ duration: motionTokens.durations.quick }}
         className="py-1"
       >
         {shellInner}
@@ -1103,7 +1103,7 @@ export const SystemMessage = React.memo(function SystemMessage({ message, skipMo
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      transition={{ duration: 0.15 }}
+      transition={{ duration: motionTokens.durations.quick }}
       className="py-0.5 text-center"
     >
       {inner}
