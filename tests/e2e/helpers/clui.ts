@@ -54,8 +54,11 @@ export async function launchCluiApp(testInfo: TestInfo, homeDirOrOptions?: strin
   fs.mkdirSync(isolated.localAppDataDir, { recursive: true })
   fs.mkdirSync(path.dirname(isolated.settingsPath), { recursive: true })
 
+  const ciArgs = process.env.CI || process.env.ELECTRON_DISABLE_SANDBOX
+    ? ['--no-sandbox', '--disable-gpu-sandbox', '--disable-setuid-sandbox', '.']
+    : ['.']
   const electronApp = await electron.launch({
-    args: process.env.CI ? ['--no-sandbox', '.'] : ['.'],
+    args: ciArgs,
     cwd: process.cwd(),
     env: {
       ...process.env,

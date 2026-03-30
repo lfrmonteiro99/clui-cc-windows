@@ -77,7 +77,10 @@ jobs:
         run: npm ci
 
       - name: Run Electron E2E smoke tests
-        run: xvfb-run npm run test:e2e
+        env:
+          DISPLAY: ':99'
+          ELECTRON_DISABLE_SANDBOX: '1'
+        run: xvfb-run --auto-servernum --server-args="-screen 0 1280x960x24" npm run test:e2e
 
       - name: Upload Playwright artifacts
         if: failure()
