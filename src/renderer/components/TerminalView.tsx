@@ -524,7 +524,9 @@ export function TerminalView({ termTabId, isActive }: TerminalViewProps) {
       setLightboxSrc(target.src)
       return
     }
-    if (target instanceof HTMLCanvasElement) {
+    // Only open lightbox for image-protocol canvases, NOT xterm's own render canvas.
+    // xterm.js places its WebGL/canvas renderer inside .xterm-screen — skip those.
+    if (target instanceof HTMLCanvasElement && !target.closest('.xterm-screen')) {
       try {
         const dataUrl = target.toDataURL('image/png')
         if (dataUrl && dataUrl !== 'data:,') {
