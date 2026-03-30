@@ -54,8 +54,11 @@ export async function launchCluiApp(testInfo: TestInfo, homeDirOrOptions?: strin
   fs.mkdirSync(isolated.localAppDataDir, { recursive: true })
   fs.mkdirSync(path.dirname(isolated.settingsPath), { recursive: true })
 
+  // Always pass --no-sandbox in CI to avoid AppArmor/namespace restrictions
+  // on Ubuntu 24.04+ and headless Windows runners.
+  // --disable-gpu prevents GPU process crashes in headless/virtual framebuffer environments.
   const ciArgs = process.env.CI || process.env.ELECTRON_DISABLE_SANDBOX
-    ? ['--no-sandbox', '--disable-gpu-sandbox', '--disable-setuid-sandbox', '.']
+    ? ['--no-sandbox', '--disable-gpu-sandbox', '--disable-setuid-sandbox', '--disable-gpu', '--disable-dev-shm-usage', '.']
     : ['.']
   const electronApp = await electron.launch({
     args: ciArgs,
@@ -73,11 +76,13 @@ export async function launchCluiApp(testInfo: TestInfo, homeDirOrOptions?: strin
       APPDATA: isolated.appDataDir,
       LOCALAPPDATA: isolated.localAppDataDir,
       CLUI_SETTINGS_PATH: isolated.settingsPath,
+      // Ensure Electron doesn't try to use hardware GPU in CI
+      ELECTRON_DISABLE_GPU: '1',
     },
   })
 
-  const page = await electronApp.firstWindow()
-  await page.waitForSelector('[data-testid="app-root"]')
+  const page = await electronApp.firstWindow({ timeout: 30_000 })
+  await page.waitForSelector('[data-testid="app-root"]', { timeout: 20_000 })
 
   return {
     electronApp,
