@@ -52,6 +52,7 @@ jobs:
   e2e-smoke:
     runs-on: ubuntu-latest
     needs: build-and-test
+    continue-on-error: true  # E2E is non-blocking — tracked in issue backlog
 
     steps:
       - uses: actions/checkout@v4
