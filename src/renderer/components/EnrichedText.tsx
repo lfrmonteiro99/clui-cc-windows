@@ -96,7 +96,7 @@ function ReferenceSpan({ ref_, colors }: ReferenceSpanProps) {
               width: 8,
               height: 8,
               backgroundColor: ref_.value,
-              border: `1px solid ${colors.border}`,
+              border: `1px solid ${colors.borderSubtle}`,
               verticalAlign: 'middle',
             }}
             title={ref_.value}

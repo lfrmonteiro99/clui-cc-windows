@@ -9,10 +9,11 @@ import { useExportStore } from '../stores/exportStore'
 import { useSnippetStore } from '../stores/snippetStore'
 import { useWorkflowStore } from '../stores/workflowStore'
 import { useModelRouterStore } from '../stores/modelRouterStore'
+import { usePromptHistoryStore } from '../stores/promptHistoryStore'
 import { AttachmentChips } from './AttachmentChips'
 import { PromptLintBar } from './PromptLintBar'
 import { SlashCommandMenu, getFilteredCommandsWithExtras, type SlashCommand } from './SlashCommandMenu'
-import { useColors } from '../theme'
+import { useColors, motion as motionTokens } from '../theme'
 import { lintPrompt, type PromptLintWarning } from '../../shared/prompt-linter'
 import { parseTemplate, findNextSlot, findPreviousSlot, resolveVariables, hasSlots as textHasSlots } from '../../shared/template-engine'
 import type { AgentAssignment, AgentMemorySnapshot, SessionExportData } from '../../shared/types'
@@ -732,6 +733,13 @@ export function InputBar() {
 
     if (!prompt && attachments.length === 0) return
     if (isConnecting) return
+
+    // Save prompt to history before clearing
+    if (prompt) {
+      usePromptHistoryStore.getState().pushPrompt(activeTabId, prompt)
+      usePromptHistoryStore.getState().resetIndex(activeTabId)
+    }
+
     clearComposer()
 
     // Route through comparison store when a comparison is active
@@ -767,6 +775,29 @@ export function InputBar() {
 
   // ─── Keyboard ───
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    // Prompt history navigation (before slash menu checks)
+    if (e.key === 'ArrowUp' && !showSlashMenu) {
+      const textarea = textareaRef.current
+      const cursorAtStart = !textarea || textarea.selectionStart === 0
+      if (cursorAtStart || !input) {
+        const prev = usePromptHistoryStore.getState().navigateUp(activeTabId, input)
+        if (prev !== null) {
+          e.preventDefault()
+          setInput(prev)
+        }
+      }
+    }
+    if (e.key === 'ArrowDown' && !showSlashMenu) {
+      const textarea = textareaRef.current
+      const cursorAtEnd = !textarea || textarea.selectionStart === textarea.value.length
+      if (cursorAtEnd) {
+        const next = usePromptHistoryStore.getState().navigateDown(activeTabId)
+        if (next !== null) {
+          e.preventDefault()
+          setInput(next)
+        }
+      }
+    }
     if (showSlashMenu) {
       const filtered = getFilteredCommandsWithExtras(slashFilter!, [...snippetCommands, ...skillCommands])
       if (e.key === 'ArrowDown' && filtered.length > 0) { e.preventDefault(); setSlashIndex((i) => (i + 1) % filtered.length); return }
@@ -920,7 +951,7 @@ export function InputBar() {
             initial={{ opacity: 0, y: 4 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 4 }}
-            transition={{ duration: 0.1 }}
+            transition={{ duration: motionTokens.durations.instant }}
             data-testid="shell-badge"
             className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium"
             style={{
@@ -1029,7 +1060,7 @@ export function InputBar() {
               />
               <AnimatePresence>
                 {canSend && voiceState !== 'recording' && (
-                  <motion.div key="send" initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.8 }} transition={{ duration: 0.1 }}>
+                  <motion.div key="send" initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.8 }} transition={{ duration: motionTokens.durations.instant }}>
                     <button
                       data-testid="composer-send"
                       onMouseDown={(e) => e.preventDefault()}
@@ -1097,7 +1128,7 @@ export function InputBar() {
               />
               <AnimatePresence>
                 {canSend && voiceState !== 'recording' && (
-                  <motion.div key="send" initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.8 }} transition={{ duration: 0.1 }}>
+                  <motion.div key="send" initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.8 }} transition={{ duration: motionTokens.durations.instant }}>
                     <button
                       data-testid="composer-send"
                       onMouseDown={(e) => e.preventDefault()}
@@ -1163,7 +1194,7 @@ function VoiceButtons({ voiceState, isConnecting, colors, onToggle, onCancel, on
           initial={{ opacity: 0, scale: 0.8 }}
           animate={{ opacity: 1, scale: 1 }}
           exit={{ opacity: 0, scale: 0.8 }}
-          transition={{ duration: 0.12 }}
+          transition={{ duration: motionTokens.durations.instant }}
           className="flex items-center gap-1"
         >
           <button
@@ -1186,7 +1217,7 @@ function VoiceButtons({ voiceState, isConnecting, colors, onToggle, onCancel, on
           </button>
         </motion.div>
       ) : voiceState === 'transcribing' ? (
-        <motion.div key="transcribing" initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.8 }} transition={{ duration: 0.1 }}>
+        <motion.div key="transcribing" initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.8 }} transition={{ duration: motionTokens.durations.instant }}>
           <button
             disabled
             className="w-9 h-9 rounded-full flex items-center justify-center"
@@ -1196,7 +1227,7 @@ function VoiceButtons({ voiceState, isConnecting, colors, onToggle, onCancel, on
           </button>
         </motion.div>
       ) : (
-        <motion.div key="mic" initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.8 }} transition={{ duration: 0.1 }}>
+        <motion.div key="mic" initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.8 }} transition={{ duration: motionTokens.durations.instant }}>
           <button
             onMouseDown={(e) => e.preventDefault()}
             onClick={onToggle}

@@ -1,5 +1,5 @@
-import React from 'react'
-import { AnimatePresence, Reorder } from 'framer-motion'
+import React, { useState, useEffect } from 'react'
+import { AnimatePresence, Reorder, motion } from 'framer-motion'
 import { Plus, X, GitFork, GitPullRequest } from '@phosphor-icons/react'
 import { useSessionStore } from '../stores/sessionStore'
 import { useTabGroupStore } from '../stores/tabGroupStore'
@@ -8,7 +8,7 @@ import { HistoryPicker } from './HistoryPicker'
 import { SettingsPopover } from './SettingsPopover'
 import { TabGroupHeader } from './TabGroupHeader'
 import { TabContextMenu } from './TabContextMenu'
-import { useColors } from '../theme'
+import { useColors, motion as motionTokens } from '../theme'
 import type { TabState, TabStatus } from '../../shared/types'
 
 /** Thresholds for session freshness (in milliseconds) */
@@ -101,6 +101,38 @@ function StatusDot({ status, hasUnread, hasPermission, lastActivityAt, messageCo
   )
 }
 
+function RestoredBadge() {
+  const colors = useColors()
+  const [showBadge, setShowBadge] = useState(true)
+
+  useEffect(() => {
+    const t = setTimeout(() => setShowBadge(false), 3000)
+    return () => clearTimeout(t)
+  }, [])
+
+  if (!showBadge) return null
+
+  return (
+    <motion.span
+      initial={{ opacity: 1 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.3 }}
+      style={{
+        fontSize: 9,
+        fontWeight: 600,
+        color: colors.accent,
+        backgroundColor: colors.surfaceHover,
+        borderRadius: 3,
+        padding: '1px 4px',
+        flexShrink: 0,
+      }}
+    >
+      Restored
+    </motion.span>
+  )
+}
+
 interface TabItemProps {
   tab: TabState
   isActive: boolean
@@ -156,7 +188,7 @@ function TabItem({
       initial={{ opacity: 0, scale: 0.9 }}
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.9 }}
-      transition={{ duration: 0.15, type: 'spring', stiffness: 320, damping: 28 }}
+      transition={{ duration: motionTokens.durations.quick, ...motionTokens.springs.bouncy }}
       onClick={() => onSelect(tab.id)}
       onDragStart={() => onDragStart(tab.id)}
       onDragEnd={onDragEnd}
@@ -258,6 +290,7 @@ function TabItem({
           {tab.title}
         </span>
       )}
+      {tab.isRestored && <RestoredBadge />}
       {tab.runtime === 'wsl' && (
         <span
           style={{
@@ -449,7 +482,7 @@ export function TabStrip() {
         <button
           data-testid="tab-new-button"
           onClick={() => createTab()}
-          className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-full transition-colors"
+          className="clui-btn-ghost flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-full"
           style={{ color: colors.textTertiary }}
           title="New tab"
         >

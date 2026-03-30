@@ -30,13 +30,17 @@ const mockColors: Record<string, string> = {
   messageAccentBorder: '#d97757',
 }
 
-vi.mock('../../theme', () => ({
-  useColors: () => mockColors,
-  useThemeStore: (selector: any) => {
-    const state = { isDark: true, expandedUI: false }
-    return selector ? selector(state) : state
-  },
-}))
+vi.mock('../../theme', async () => {
+  const actual = await vi.importActual('../../theme')
+  return {
+    ...actual,
+    useColors: () => mockColors,
+    useThemeStore: (selector: any) => {
+      const state = { isDark: true, expandedUI: false }
+      return selector ? selector(state) : state
+    },
+  }
+})
 
 vi.mock('react-markdown', () => ({
   default: ({ children }: { children: string }) =>

@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { X, ArrowCounterClockwise } from '@phosphor-icons/react'
 import { useTerminalStore } from '../stores/terminalStore'
 import { useColors } from '../theme'
+import { TERMINAL_SCHEMES } from '../utils/terminal-schemes'
 
 const SCROLLBACK_PRESETS = [1000, 5000, 10000, 50000]
 
@@ -21,6 +22,8 @@ export function TerminalSettings() {
   const setBackgroundBlur = useTerminalStore((s) => s.setBackgroundBlur)
   const imageProtocolEnabled = useTerminalStore((s) => s.imageProtocolEnabled)
   const setImageProtocolEnabled = useTerminalStore((s) => s.setImageProtocolEnabled)
+  const terminalScheme = useTerminalStore((s) => s.terminalScheme)
+  const setTerminalScheme = useTerminalStore((s) => s.setTerminalScheme)
   const resetSettings = useTerminalStore((s) => s.resetSettings)
   const colors = useColors()
 
@@ -81,6 +84,19 @@ export function TerminalSettings() {
               >
                 {SCROLLBACK_PRESETS.map((v) => (
                   <option key={v} value={v}>{v.toLocaleString()} lines</option>
+                ))}
+              </select>
+            </SettingRow>
+
+            {/* Color scheme */}
+            <SettingRow label="Color Scheme" hint="ANSI color palette for terminal">
+              <select
+                value={terminalScheme}
+                onChange={(e) => setTerminalScheme(e.target.value)}
+                style={selectStyle(colors)}
+              >
+                {TERMINAL_SCHEMES.map((s) => (
+                  <option key={s.name} value={s.name}>{s.name}</option>
                 ))}
               </select>
             </SettingRow>

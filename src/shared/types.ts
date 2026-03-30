@@ -262,6 +262,8 @@ export interface TabState {
   agentName?: string
   /** Parent tab ID for agent tab grouping */
   parentTabId?: string
+  /** Whether this tab was restored from IndexedDB persistence */
+  isRestored?: boolean
 }
 
 export interface Message {

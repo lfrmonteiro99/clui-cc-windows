@@ -1,8 +1,8 @@
 import React from 'react'
 import { motion } from 'framer-motion'
-import { ShieldWarning, Terminal, PencilSimple, Globe, Wrench } from '@phosphor-icons/react'
+import { ShieldWarning, Terminal, PencilSimple, Globe, Wrench, Clock } from '@phosphor-icons/react'
 import { usePermissionStore } from '../stores/permissionStore'
-import { useColors } from '../theme'
+import { useColors, motion as motionTokens } from '../theme'
 import type { PermissionRequest } from '../../shared/types'
 
 interface Props {
@@ -44,20 +44,59 @@ function formatInput(input?: Record<string, unknown>): string | null {
   return parts.join('\n')
 }
 
+const BATCH_APPROVE_DURATION_MS = 30 * 60 * 1000 // 30 minutes
+
 export function PermissionCard({ tabId, permission, queueLength = 1 }: Props) {
   const respondPermission = usePermissionStore((s) => s.respondPermission)
+  const enableBatchApprove = usePermissionStore((s) => s.enableBatchApprove)
+  const addTrustedTool = usePermissionStore((s) => s.addTrustedTool)
+  const isToolTrusted = usePermissionStore((s) => s.isToolTrusted)
   const colors = useColors()
   const [responded, setResponded] = React.useState(false)
+  const [alwaysAllow, setAlwaysAllow] = React.useState(false)
+
+  // Sync checkbox with trusted tools on mount / permission change
+  React.useEffect(() => {
+    setAlwaysAllow(isToolTrusted(permission.toolTitle))
+  }, [permission.toolTitle, isToolTrusted])
 
   // Reset responded flag when the displayed permission changes (queue advancing)
   React.useEffect(() => {
     setResponded(false)
   }, [permission.questionId])
 
+  const findAllowOptionId = (): string | null => {
+    const allowOpt = permission.options.find(
+      (o) => o.kind === 'allow' || o.label.toLowerCase().includes('allow') || o.label.toLowerCase().includes('yes')
+    )
+    return allowOpt?.optionId ?? null
+  }
+
   const handleOption = (optionId: string) => {
     if (responded) return // Prevent double-send
     setResponded(true)
     respondPermission(tabId, permission.questionId, optionId)
+  }
+
+  const handleAlwaysAllowToggle = () => {
+    if (alwaysAllow) return // Already trusted, don't un-trust from card (use settings)
+    setAlwaysAllow(true)
+    addTrustedTool(permission.toolTitle)
+    // Auto-approve this permission
+    const allowId = findAllowOptionId()
+    if (allowId) {
+      handleOption(allowId)
+    }
+  }
+
+  const handleBatchApprove = () => {
+    if (responded) return
+    enableBatchApprove(BATCH_APPROVE_DURATION_MS)
+    // Approve this current permission
+    const allowId = findAllowOptionId()
+    if (allowId) {
+      handleOption(allowId)
+    }
   }
 
   const inputPreview = formatInput(permission.toolInput)
@@ -67,7 +106,7 @@ export function PermissionCard({ tabId, permission, queueLength = 1 }: Props) {
       initial={{ opacity: 0, y: 8, scale: 0.97 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, y: -4, scale: 0.97 }}
-      transition={{ duration: 0.2 }}
+      transition={{ duration: motionTokens.durations.normal }}
       className="mx-4 mt-2 mb-2"
     >
       <div
@@ -100,6 +139,25 @@ export function PermissionCard({ tabId, permission, queueLength = 1 }: Props) {
               {permission.toolTitle}
             </span>
           </div>
+
+          {/* Always allow checkbox */}
+          <label
+            data-testid="always-allow-checkbox"
+            className="flex items-center gap-1.5 mb-1.5 cursor-pointer select-none"
+            style={{ color: colors.textTertiary }}
+          >
+            <input
+              type="checkbox"
+              checked={alwaysAllow}
+              onChange={handleAlwaysAllowToggle}
+              disabled={responded || alwaysAllow}
+              className="w-3 h-3 rounded cursor-pointer accent-current"
+              style={{ accentColor: colors.accent }}
+            />
+            <span className="text-[10px]">
+              Always allow {permission.toolTitle}
+            </span>
+          </label>
 
           {permission.toolDescription && (
             <p className="text-[11px] leading-[1.4] mb-1.5" style={{ color: colors.textSecondary }}>
@@ -169,7 +227,7 @@ export function PermissionCard({ tabId, permission, queueLength = 1 }: Props) {
                   key={opt.optionId}
                   onClick={() => handleOption(opt.optionId)}
                   disabled={responded}
-                  className="clui-focus-ring text-[11px] font-medium px-3 py-1.5 rounded-full transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="clui-btn clui-focus-ring text-[11px] font-medium px-3 py-1.5 rounded-full disabled:opacity-40 disabled:cursor-not-allowed"
                   style={{
                     background: bg,
                     color: textColor,
@@ -186,6 +244,30 @@ export function PermissionCard({ tabId, permission, queueLength = 1 }: Props) {
                 </button>
               )
             })}
+
+            {/* Batch approve button — only when multiple permissions queued */}
+            {queueLength > 1 && (
+              <button
+                data-testid="batch-approve-button"
+                onClick={handleBatchApprove}
+                disabled={responded}
+                className="clui-focus-ring text-[11px] font-medium px-3 py-1.5 rounded-full transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1"
+                style={{
+                  background: colors.accentLight,
+                  color: colors.accent,
+                  border: `1px solid ${colors.accentSoft}`,
+                }}
+                onMouseEnter={(e) => {
+                  if (!responded) e.currentTarget.style.background = colors.accentSoft
+                }}
+                onMouseLeave={(e) => {
+                  if (!responded) e.currentTarget.style.background = colors.accentLight
+                }}
+              >
+                <Clock size={12} />
+                Allow all for 30 min
+              </button>
+            )}
 
             {queueLength > 1 && (
               <span

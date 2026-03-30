@@ -18,8 +18,8 @@ import { useBudgetStore } from './budgetStore'
 import { canScheduleAutoResume, DEFAULT_AUTO_RESUME_MAX_RETRIES, getAutoResumeDelayMs } from '../../shared/retry-policy'
 import { useThemeStore } from '../theme'
 import { useNotificationStore } from './notificationStore'
-import { useMarketplaceStore } from './marketplaceStore'
 import { usePermissionStore } from './permissionStore'
+import { useMarketplaceStore } from './marketplaceStore'
 import { useAgentMemoryStore } from './agentMemoryStore'
 import { useTokenBudgetStore } from './tokenBudgetStore'
 import { useFaultMemoryStore } from './faultMemoryStore'
@@ -35,6 +35,7 @@ import {
   replaceTabOrderId,
   saveStoredTabOrder,
 } from './tabOrder'
+import { saveChatSession, loadChatSessions, deleteChatSession, purgeOldSessions } from '../utils/session-persistence'
 import notificationSrc from '../../../resources/notification.mp3'
 
 // ─── Known models ───
@@ -164,6 +165,29 @@ function clearRetryTimer(tabId: string) {
     clearTimeout(timer)
     retryTimers.delete(tabId)
   }
+}
+
+// ─── Debounced session persistence (#313) ───
+
+const saveTimers = new Map<string, ReturnType<typeof setTimeout>>()
+
+function debouncedSave(tabId: string) {
+  const existing = saveTimers.get(tabId)
+  if (existing) clearTimeout(existing)
+  saveTimers.set(tabId, setTimeout(() => {
+    saveTimers.delete(tabId)
+    const tab = useSessionStore.getState().tabs.find((t) => t.id === tabId)
+    if (tab && tab.messages.length > 0) {
+      saveChatSession({
+        tabId,
+        claudeSessionId: tab.claudeSessionId ?? null,
+        messages: tab.messages.map((m) => ({ id: m.id, role: m.role, content: m.content, timestamp: m.timestamp })),
+        title: tab.title || 'Untitled',
+        workingDirectory: tab.workingDirectory || '',
+        savedAt: Date.now(),
+      }).catch(() => {}) // non-blocking
+    }
+  }, 500))
 }
 
 /**
@@ -588,6 +612,7 @@ export const useSessionStore = create<State>((set, get) => ({
     clearRetryTimer(tabId)
     useTokenBudgetStore.getState().resetTab(tabId)
     get().clearComposeDraft(tabId)
+    deleteChatSession(tabId).catch(() => {}) // Remove persisted session
     window.clui.closeTab(tabId).catch(() => {})
 
     const s = get()
@@ -1383,6 +1408,23 @@ export const useSessionStore = create<State>((set, get) => ({
               label: o.label,
             })),
           }
+
+          // Auto-approve if tool is trusted or batch approve is active
+          const permStore = usePermissionStore.getState()
+          const shouldAutoApprove = permStore.isToolTrusted(event.toolName) || permStore.isBatchApproveActive()
+          if (shouldAutoApprove) {
+            const allowOpt = newReq.options.find(
+              (o) => o.kind === 'allow' || o.label.toLowerCase().includes('allow') || o.label.toLowerCase().includes('yes')
+            )
+            if (allowOpt) {
+              // Schedule auto-respond outside of setState to avoid re-entrancy
+              queueMicrotask(() => {
+                permStore.respondPermission(tabId, newReq.questionId, allowOpt.optionId)
+              })
+              break
+            }
+          }
+
           updated.permissionQueue = [...updated.permissionQueue, newReq]
           updated.currentActivity = `Waiting for permission: ${event.toolName}`
           break
@@ -1463,6 +1505,18 @@ export const useSessionStore = create<State>((set, get) => ({
       nextTabs[tabIndex] = updated
       return { tabs: nextTabs }
     })
+
+    // ── Persist session to IndexedDB on meaningful changes (#313) ──
+    if (
+      event.type === 'text_chunk' ||
+      event.type === 'tool_call' ||
+      event.type === 'tool_call_complete' ||
+      event.type === 'task_complete' ||
+      event.type === 'session_dead' ||
+      event.type === 'error'
+    ) {
+      debouncedSave(tabId)
+    }
 
     // ── Token budget sync (outside set() — mutates tokenBudgetStore, not sessionStore) ──
     if (event.type === 'token_usage') {
@@ -1662,6 +1716,7 @@ export const useSessionStore = create<State>((set, get) => ({
           : t
       ),
     }))
+    debouncedSave(tabId)
   },
 
   handleError: (tabId, error) => {
@@ -1701,3 +1756,45 @@ export const useSessionStore = create<State>((set, get) => ({
     })
   },
 }))
+
+// ─── Restore persisted sessions from IndexedDB on startup (#313) ───
+
+void (async () => {
+  try {
+    const persisted = await loadChatSessions()
+    void purgeOldSessions()
+    if (persisted.length === 0) return
+
+    const restoredTabs: TabState[] = persisted.map((session) => ({
+      ...makeLocalTab(),
+      id: session.tabId,
+      claudeSessionId: session.claudeSessionId,
+      status: 'dead' as TabStatus,
+      title: session.title || 'Restored Session',
+      workingDirectory: session.workingDirectory || '~',
+      hasChosenDirectory: !!session.workingDirectory,
+      isRestored: true,
+      messages: session.messages.map((m) => ({
+        id: m.id,
+        role: m.role as Message['role'],
+        content: m.content,
+        timestamp: m.timestamp,
+      })),
+    }))
+
+    useSessionStore.setState((s) => {
+      const newTabs = [...restoredTabs, ...s.tabs]
+      const newOrder = reconcileTabOrder(
+        [...restoredTabs.map((t) => t.id), ...s.tabOrder],
+        newTabs,
+      )
+      return {
+        tabs: orderTabsByTabOrder(newTabs, newOrder),
+        tabOrder: newOrder,
+      }
+    })
+    saveStoredTabOrder(useSessionStore.getState().tabOrder)
+  } catch (err) {
+    console.warn('[sessionStore] Failed to restore persisted sessions:', err)
+  }
+})()

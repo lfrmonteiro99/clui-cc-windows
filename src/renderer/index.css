@@ -13,6 +13,7 @@ html, body, #root {
   overflow: hidden;
   user-select: none;
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', system-ui, sans-serif;
+  font-size: var(--clui-font-base, 13px);
   -webkit-font-smoothing: antialiased;
 }
 
@@ -77,18 +78,18 @@ input::placeholder {
 /* ─── Prose overrides for markdown ─── */
 .prose-cloud {
   color: var(--clui-text-primary);
-  line-height: 1.6;
+  line-height: var(--clui-line-height, 1.6);
   overflow-wrap: break-word;
   word-break: break-word;
 }
 .prose-cloud p {
-  margin: 0.5em 0;
+  margin: var(--clui-gap-sm, 4px) 0;
 }
 .prose-cloud pre {
   background: var(--clui-code-block-bg);
   border: 1px solid var(--clui-container-border);
   border-radius: 10px;
-  padding: 0.75em 1em;
+  padding: var(--clui-padding-sm, 8px) var(--clui-padding-md, 12px);
   font-size: 12px;
   font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
   color: var(--clui-code-block-text);
@@ -270,6 +271,53 @@ input::placeholder {
   box-shadow: 0 0 0 2px var(--clui-accent-glow, rgba(217,119,87,0.25));
 }
 
+/* ─── Button base with hover/active feedback ─── */
+.clui-btn {
+  transition: background-color 0.15s ease, transform 0.1s ease, opacity 0.15s ease;
+  cursor: pointer;
+}
+.clui-btn:hover {
+  filter: brightness(1.1);
+}
+.clui-btn:active {
+  transform: scale(0.96);
+}
+.clui-btn:disabled,
+.clui-btn:disabled:hover,
+.clui-btn:disabled:active {
+  transform: none;
+  filter: none;
+  cursor: default;
+  opacity: 0.5;
+}
+
+/* Ghost button variant */
+.clui-btn-ghost {
+  transition: background-color 0.15s ease, transform 0.1s ease;
+  cursor: pointer;
+}
+.clui-btn-ghost:hover {
+  background-color: var(--clui-surface-hover);
+}
+.clui-btn-ghost:active {
+  transform: scale(0.97);
+}
+.clui-btn-ghost:disabled,
+.clui-btn-ghost:disabled:hover {
+  transform: none;
+  background-color: transparent;
+  cursor: default;
+}
+
+/* Interactive row (settings, menus) */
+.clui-row-interactive {
+  transition: background-color 0.12s ease;
+  cursor: pointer;
+}
+.clui-row-interactive:hover {
+  background-color: var(--clui-surface-hover);
+}
+
 /* ─── Conversation search highlights ─── */
 .search-highlight {
   background: var(--clui-accent-light, rgba(217, 119, 87, 0.2));
@@ -310,6 +358,26 @@ input::placeholder {
 }
 .prose-cloud pre::-webkit-scrollbar-thumb:hover {
   background: var(--clui-scroll-thumb-hover);
+}
+
+/* ─── Confetti celebration animation ─── */
+.clui-confetti-particle {
+  position: absolute;
+  top: 0;
+  border-radius: 2px;
+  animation: clui-confetti-fall ease-out forwards;
+  pointer-events: none;
+}
+
+@keyframes clui-confetti-fall {
+  0% {
+    transform: translateY(0) rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(120px) rotate(720deg);
+    opacity: 0;
+  }
 }
 
 /* ─── Conversation-input visual separator ─── */

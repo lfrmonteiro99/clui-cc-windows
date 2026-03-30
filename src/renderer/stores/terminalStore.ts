@@ -13,6 +13,7 @@ interface TerminalSettings {
   backgroundOpacity: number
   backgroundBlur: number
   imageProtocolEnabled: boolean
+  terminalScheme: string
 }
 
 const DEFAULT_SETTINGS: TerminalSettings = {
@@ -22,6 +23,7 @@ const DEFAULT_SETTINGS: TerminalSettings = {
   backgroundOpacity: 1,
   backgroundBlur: 0,
   imageProtocolEnabled: false,
+  terminalScheme: 'Default',
 }
 
 function loadSettings(): TerminalSettings {
@@ -57,6 +59,7 @@ interface TerminalState {
   backgroundOpacity: number
   backgroundBlur: number
   imageProtocolEnabled: boolean
+  terminalScheme: string
   settingsOpen: boolean
 
   // Tab overview (TERM-006)
@@ -92,6 +95,7 @@ interface TerminalState {
   setBellEnabled: (enabled: boolean) => void
   setAutoNaming: (enabled: boolean) => void
   setImageProtocolEnabled: (enabled: boolean) => void
+  setTerminalScheme: (name: string) => void
   resetSettings: () => void
 
   // TERM-006: Tab overview
@@ -145,6 +149,7 @@ export const useTerminalStore = create<TerminalState>((set, get) => {
     backgroundOpacity: settings.backgroundOpacity,
     backgroundBlur: settings.backgroundBlur,
     imageProtocolEnabled: settings.imageProtocolEnabled,
+    terminalScheme: settings.terminalScheme,
     settingsOpen: false,
 
     overviewOpen: false,
@@ -297,6 +302,12 @@ export const useTerminalStore = create<TerminalState>((set, get) => {
       saveSettings({ imageProtocolEnabled: enabled })
     },
 
+    setTerminalScheme: (name: string) => {
+      set({ terminalScheme: name })
+      saveSettings({ terminalScheme: name })
+      window.dispatchEvent(new CustomEvent('clui-terminal-shortcut', { detail: { action: 'scheme-changed', scheme: name } }))
+    },
+
     resetSettings: () => {
       set({
         scrollbackSize: DEFAULT_SETTINGS.scrollbackSize,
@@ -305,7 +316,9 @@ export const useTerminalStore = create<TerminalState>((set, get) => {
         backgroundOpacity: DEFAULT_SETTINGS.backgroundOpacity,
         backgroundBlur: DEFAULT_SETTINGS.backgroundBlur,
         imageProtocolEnabled: DEFAULT_SETTINGS.imageProtocolEnabled,
+        terminalScheme: DEFAULT_SETTINGS.terminalScheme,
       })
+      window.dispatchEvent(new CustomEvent('clui-terminal-shortcut', { detail: { action: 'scheme-changed', scheme: DEFAULT_SETTINGS.terminalScheme } }))
       try { localStorage.removeItem(SETTINGS_KEY) } catch (err) { console.warn('[terminalStore] reset settings failed:', err) }
     },
 

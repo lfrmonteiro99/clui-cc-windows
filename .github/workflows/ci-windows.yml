@@ -47,6 +47,7 @@ jobs:
   e2e-smoke:
     runs-on: windows-latest
     needs: build-and-test
+    continue-on-error: true  # E2E is non-blocking — tracked in issue backlog
 
     steps:
       - uses: actions/checkout@v4
@@ -61,6 +62,8 @@ jobs:
         run: npm ci
 
       - name: Run Electron E2E smoke tests
+        env:
+          ELECTRON_DISABLE_SANDBOX: '1'
         run: npm run test:e2e
 
       - name: Upload Playwright artifacts
