@@ -517,6 +517,8 @@ export function TerminalView({ termTabId, isActive }: TerminalViewProps) {
   }, [])
 
   // TERM-005: Click-to-expand lightbox for inline terminal images
+  const handleCloseLightbox = useCallback(() => setLightboxSrc(null), [])
+
   const handleTerminalClick = useCallback((e: React.MouseEvent) => {
     const target = e.target as HTMLElement
     if (target instanceof HTMLImageElement && target.src) {
@@ -581,7 +583,7 @@ export function TerminalView({ termTabId, isActive }: TerminalViewProps) {
       {/* TERM-005: Image lightbox overlay */}
       <AnimatePresence>
         {lightboxSrc && (
-          <ImageLightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} />
+          <ImageLightbox src={lightboxSrc} onClose={handleCloseLightbox} />
         )}
       </AnimatePresence>
       <div
@@ -612,7 +614,7 @@ function ImageLightbox({ src, onClose }: { src: string; onClose: () => void }) {
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [onClose])
+  }, [])
 
   return (
     <motion.div
